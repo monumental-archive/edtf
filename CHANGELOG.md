@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 over the public APIs of the crates this repository publishes.
 
+## [1.3.3](https://github.com/monumental-archive/edtf/compare/v1.3.2...v1.3.3) - 2026-09-16
+
+### Fixed
+
+- conform the extension crate to the org clippy ladder ([#200](https://github.com/monumental-archive/edtf/pull/200))
+- lock file maintenance ([#205](https://github.com/monumental-archive/edtf/pull/205))
+- lock file maintenance ([#207](https://github.com/monumental-archive/edtf/pull/207))
+- lock file maintenance ([#208](https://github.com/monumental-archive/edtf/pull/208))
+
+### Dependencies
+
+- update github/codeql-action to v4.37.8 ([#204](https://github.com/monumental-archive/edtf/pull/204))
+- update github/codeql-action to v4.37.9 ([#206](https://github.com/monumental-archive/edtf/pull/206))
+- update github/codeql-action to v4.38.0 ([#209](https://github.com/monumental-archive/edtf/pull/209))
+
 ## [1.3.2](https://github.com/monumental-archive/edtf/compare/v1.3.1...v1.3.2) - 2026-08-24
 
 ### Fixed
