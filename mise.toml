@@ -59,7 +59,7 @@ rust = [
 # dependency, which Cargo.lock resolves to 0.19.2.
 "cargo:cargo-pgrx" = "0.19.2"
 # Build input of the rust build classes: auditable binaries (.dep-v0).
-"cargo:cargo-auditable" = "0.7.5"
+"cargo:cargo-auditable" = "0.7.6"
 # Build input of lint:fuzz-build and audit:fuzz; no upstream binaries and
 # no aqua package, so the cargo backend builds it with the toolchain.
 "cargo:cargo-fuzz" = "0.13.2"
