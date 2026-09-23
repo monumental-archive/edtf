@@ -65,7 +65,7 @@ rust = [
 "cargo:cargo-fuzz" = "0.13.2"
 # Build input of the wasm-npm class.
 "aqua:rustwasm/wasm-pack" = "0.15.0"
-node = "26.5.1"
+node = "26.9.0"
 
 [tasks.test]
 description = "The workspace test suite, every feature, minus the extension"
