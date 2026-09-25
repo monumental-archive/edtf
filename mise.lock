@@ -57,15 +57,15 @@ checksum = "sha256:06b2e742ed9025dc84adc830243b3f731956eac9c321bccd0ede384209af0
 url = "https://nodejs.org/dist/v26.9.0/node-v26.9.0-darwin-x64.tar.gz"
 
 [[tools.rust]]
-version = "1.97.1"
-backend = "core:rust"
-
-[tools.rust.options]
-components = "clippy,llvm-tools,rustfmt"
-
-[[tools.rust]]
 version = "nightly-2026-07-20"
 backend = "core:rust"
 
 [tools.rust.options]
 components = "rust-src"
+
+[[tools.rust]]
+version = "1.98.1"
+backend = "core:rust"
+
+[tools.rust.options]
+components = "clippy,llvm-tools,rustfmt"
