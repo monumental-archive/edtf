@@ -445,7 +445,7 @@ dependencies = [
 
 [[package]]
 name = "edtf-calendars"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "edtf-core",
  "proptest",
@@ -454,7 +454,7 @@ dependencies = [
 
 [[package]]
 name = "edtf-cli"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "edtf-calendars",
  "edtf-core",
@@ -463,7 +463,7 @@ dependencies = [
 
 [[package]]
 name = "edtf-core"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "criterion",
  "proptest",
@@ -473,7 +473,7 @@ dependencies = [
 
 [[package]]
 name = "edtf-normalize"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "edtf-core",
  "proptest",
@@ -482,7 +482,7 @@ dependencies = [
 
 [[package]]
 name = "edtf-postgres"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "edtf-core",
  "pgrx",
@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "edtf-wasm"
-version = "1.3.2"
+version = "1.3.3"
 dependencies = [
  "edtf-core",
  "edtf-normalize",
