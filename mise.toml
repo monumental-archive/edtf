@@ -50,7 +50,7 @@ FUZZ_SECONDS = "300"
 # No `targets =` here: the wasm-npm class runs `rustup target add
 # wasm32-unknown-unknown` itself before wasm-pack.
 rust = [
-  { version = "1.97.1", components = "clippy,rustfmt,llvm-tools" },
+  { version = "1.98.1", components = "clippy,rustfmt,llvm-tools" },
   # rust-src is not optional on the nightly: audit:fuzz runs `--careful`,
   # which implies -Zbuild-std and rebuilds the standard library.
   { version = "nightly-2026-07-20", components = "rust-src" },
