@@ -33,7 +33,7 @@ version = "0.13.2"
 backend = "cargo:cargo-fuzz"
 
 [[tools."cargo:cargo-pgrx"]]
-version = "0.19.2"
+version = "0.19.3"
 backend = "cargo:cargo-pgrx"
 
 [[tools.node]]
