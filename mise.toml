@@ -57,7 +57,7 @@ rust = [
 ]
 # Build input of the pgrx-extension class; must equal the pgrx crate
 # dependency, which Cargo.lock resolves to 0.19.2.
-"cargo:cargo-pgrx" = "0.19.2"
+"cargo:cargo-pgrx" = "0.19.3"
 # Build input of the rust build classes: auditable binaries (.dep-v0).
 "cargo:cargo-auditable" = "0.7.6"
 # Build input of lint:fuzz-build and audit:fuzz; no upstream binaries and
