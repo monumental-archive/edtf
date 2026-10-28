@@ -57,7 +57,7 @@ checksum = "sha256:b85c2ea4420ad0bc4abf2dc6cf1f55130ed681f1cabf60cf3f526e4c9e271
 url = "https://nodejs.org/dist/v26.12.1/node-v26.12.1-darwin-x64.tar.gz"
 
 [[tools.rust]]
-version = "1.97.1"
+version = "1.99.1"
 backend = "core:rust"
 
 [tools.rust.options]
