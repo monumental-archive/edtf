@@ -8,7 +8,7 @@
 [![SLSA dependency](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmonumental-archive%2Fedtf%2Flevels%2Fedtf%2Fdependency.shield.json)](https://raw.githubusercontent.com/monumental-archive/edtf/levels/edtf/dependency.report.json)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13992/badge)](https://www.bestpractices.dev/projects/13992)
 [![OpenSSF Baseline](https://www.bestpractices.dev/projects/13992/baseline)](https://www.bestpractices.dev/projects/13992)
-<!-- pending (human step): REUSE — register at https://api.reuse.software/register (no account: name, email, project URL, confirmation link), then set 'reuse registered' in .badge-states and re-run fix:badges -->
+[![REUSE status](https://api.reuse.software/badge/github.com/monumental-archive/edtf)](https://api.reuse.software/info/github.com/monumental-archive/edtf)
 [![coverage](https://codecov.io/gh/monumental-archive/edtf/branch/main/graph/badge.svg)](https://codecov.io/gh/monumental-archive/edtf)
 <!-- pending (first mint): DOI — the concept DOI lands in CITATION.cff after the first release mints it; re-run fix:badges -->
 [![crates.io](https://img.shields.io/crates/v/edtf-core.svg)](https://crates.io/crates/edtf-core)

@@ -10,11 +10,10 @@
 # bestpractices: edtf earned this before the transfer — project 13992, at
 # Silver. The entry binds to a repository URL, so it is re-pointed rather
 # than re-earned; the id does not change.
-# reuse: pending. The pre-transfer registration named
-# github.com/CarlAllenn/edtf, and api.reuse.software binds the badge to
-# that URL, so the org path needs its own registration and crawl before
-# this may read 'registered'. lint:reuse already proves the tree compliant.
+# reuse: registered 2026-11-14 at the org path. The pre-transfer
+# registration named github.com/CarlAllenn/edtf, and api.reuse.software
+# binds the badge to that URL, so the org path needed its own.
 crates edtf-core
 npm edtf-wasm
 bestpractices 13992
-reuse pending
+reuse registered
