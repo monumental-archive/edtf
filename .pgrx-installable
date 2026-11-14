@@ -1,0 +1,24 @@
+# pgrx installable versions -- DERIVED STATE, not a list to edit (#825).
+#
+# Which extension versions a non-draft release still CARRIES tarballs
+# for, and therefore which versions a database can be sitting on.
+# Written by release/generate-pgrx-upgrade.sh on every Release PR, from
+# the same forge walk that picks the upgrade derivation's predecessor,
+# so the two cannot answer differently.
+#
+# lint:pg-upgrade-path reads this instead of asking the forge, because
+# the gate is deterministic. Without it that check cannot tell a burned
+# dead end -- a version whose Release PR committed an upgrade script and
+# whose publish then failed -- from a published version nothing was
+# derived from, whose every installation is stranded. It used to call
+# both "burned", which is green and untrue for the second.
+#
+# The universe here is the upgrade graph: every version named by a
+# tracked <ext>--<from>--<to>.sql was asked about, and nothing else was.
+# A line names an extension and the versions the forge carried, newest
+# first; an extension whose graph is empty is omitted rather than
+# recorded as carrying nothing, since it was never asked.
+#
+# observed: 2026-11-14
+# derived: v1.3.3
+edtf_postgres 1.2.3 1.1.2 1.1.0
