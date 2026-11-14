@@ -55,12 +55,13 @@ Consequences worth knowing before you reach for a knob:
 `edtf-postgres` is a workspace member but **not a default member**: bare
 `cargo build`/`test`/`clippy` skip it, because building it needs
 `cargo pgrx init` and its `pg14`–`pg18` features are mutually exclusive, so
-`--all-features` across it is a hard error. It is excluded from `test`,
-`coverage:check` and `lint:rust` for that reason (`COVERAGE_EXCLUDE` and
-`CLIPPY_EXCLUDE` in `mise.toml`), and its real coverage is the release: the
-pgrx class builds and tests it in containers, per major, on every release.
+`--all-features` across it is a hard error. The belt handles it instead:
+`lint:pg-clippy` lints it and `test:pgrx` runs its suite once per declared
+Postgres major, both in the gate, and the release builds and tests it in
+containers per major as well.
 
-- `mise run pg:lint` / `pg:test` / `pg:package`
+- `mise run pg:test` / `pg:package` (the extension is linted by the
+  belt's `lint:pg-clippy`, in the gate)
 - `mise run pg:schema-snapshot` — diff the generated SQL surface against
   `schema.snapshot.sql`
 - `mise run lint:pg-upgrade-path` — every published extension version must
