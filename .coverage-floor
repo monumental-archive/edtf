@@ -9,6 +9,5 @@
 # drift, and never repairs it.
 #
 # band: 2
-# measured: 99.3
-# derived: v1.3.2
-97.3
+# reset: edtf-postgres joined the measured surface (.github#917): 99.3 was five crates, 95.6 is all six, and an extension's SQL-facing code runs inside the server where llvm-cov cannot see it
+93.6

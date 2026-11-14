@@ -28,6 +28,146 @@ checksum_source = "mise-versions"
 url = "https://github.com/wasm-bindgen/wasm-pack/releases/download/v0.15.1/wasm-pack-v0.15.1-x86_64-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/wasm-bindgen/wasm-pack/releases/assets/691077649"
 
+[[tools."aqua:theseus-rs/postgresql-binaries"]]
+version = "18.6.1"
+backend = "aqua:theseus-rs/postgresql-binaries"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.linux-arm64"]
+checksum = "sha256:1ab47fa2f06ff70454309ad02e5d89c46488300d43977231481fd6b160b9d556"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/654378218"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.linux-x64"]
+checksum = "sha256:e84b02dd8d0ce5879fb697330a789231c8b8f8d958dae3ad4d90fecc710b1315"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/654246574"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.macos-arm64"]
+checksum = "sha256:89e91cc80650a43d22c018b95ca356a0c9e15838a1182fed2880bfb5d7d9c9a6"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653610275"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.macos-x64"]
+checksum = "sha256:4229812543e19c91864ebdf5d8f78883c5816d51d4cc5d065298260c1f64d37e"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/18.6.1/postgresql-18.6.1-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653681678"
+
+[[tools."aqua:theseus-rs/postgresql-binaries"]]
+version = "17.11.1"
+backend = "aqua:theseus-rs/postgresql-binaries"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.linux-arm64"]
+checksum = "sha256:edaab3230a014680ebedd836824962628f66ceabd94c36ba3f953bf9e04dc166"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.11.1/postgresql-17.11.1-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653724964"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.linux-x64"]
+checksum = "sha256:aa8e2e97574bd789119ac01f1dddcd7a038c84e5c308d7b753018618258f0fbd"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.11.1/postgresql-17.11.1-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653765277"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.macos-arm64"]
+checksum = "sha256:f4b2ff0587d80b6f22bf09ec2d133a3c2949b6423318d3fed0f4ddddddf2f004"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.11.1/postgresql-17.11.1-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653612222"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.macos-x64"]
+checksum = "sha256:edb44b25cf8bffec60fa300fbe100fa4238bf2cab4f4bd98d4b7255c61780df3"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/17.11.1/postgresql-17.11.1-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653744102"
+
+[[tools."aqua:theseus-rs/postgresql-binaries"]]
+version = "16.15.1"
+backend = "aqua:theseus-rs/postgresql-binaries"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.linux-arm64"]
+checksum = "sha256:0a6fdf1639ac702fc8a97cd9e4ffeeea6281cf5c9f614beec3e4687525556bd8"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.15.1/postgresql-16.15.1-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/654120297"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.linux-x64"]
+checksum = "sha256:0c42e7c05f0cb596b82ac07990c96fc261ec2e8106055d557c76442d712dbf74"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.15.1/postgresql-16.15.1-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/654361861"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.macos-arm64"]
+checksum = "sha256:0a70b8a3bbb991b5671dc7678ba9a8cf1a389f2fc595ac4834fb1e29e757b89e"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.15.1/postgresql-16.15.1-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653610700"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.macos-x64"]
+checksum = "sha256:1b10aa67f9c111dd288f96d800c995dc424ab1e474fb8dd60ea6d05edb055f4c"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/16.15.1/postgresql-16.15.1-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653719095"
+
+[[tools."aqua:theseus-rs/postgresql-binaries"]]
+version = "15.19.1"
+backend = "aqua:theseus-rs/postgresql-binaries"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.linux-arm64"]
+checksum = "sha256:d38b8cfd65e02fd6f08b2368b2d607c70d0d0527b1ca12baeee780cc2a947b07"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.19.1/postgresql-15.19.1-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/654541838"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.linux-x64"]
+checksum = "sha256:f34ebfdbff9029f47011709fe8ef68d4a65ea5caadfd065e68a1161e2a021565"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.19.1/postgresql-15.19.1-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/654294788"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.macos-arm64"]
+checksum = "sha256:02214be6486ec1be214eae66664f384be218b0893d29a9c151408afe5646a8ab"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.19.1/postgresql-15.19.1-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653684998"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.macos-x64"]
+checksum = "sha256:4e8149811d40eb09fdbcef532d1fea177b2b267132a188450af0139969bc96f0"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/15.19.1/postgresql-15.19.1-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653631803"
+
+[[tools."aqua:theseus-rs/postgresql-binaries"]]
+version = "14.24.1"
+backend = "aqua:theseus-rs/postgresql-binaries"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.linux-arm64"]
+checksum = "sha256:a07f4b138e11e65e9c5dd32b84961ce54bbd9aed0ef7b6c04be602f10cf55415"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/14.24.1/postgresql-14.24.1-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653920641"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.linux-x64"]
+checksum = "sha256:79e7c2e7cf1c914e0b0d55bb83f13b10be959cf2e4608dac368a0e538f93fda5"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/14.24.1/postgresql-14.24.1-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/654094172"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.macos-arm64"]
+checksum = "sha256:cd6e9c9b2ab665c5b4231d41bd9098c6ac13ed6409c94feb05a5c7b8aa5cb020"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/14.24.1/postgresql-14.24.1-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653691309"
+
+[tools."aqua:theseus-rs/postgresql-binaries"."platforms.macos-x64"]
+checksum = "sha256:9058d2e7a753f9ef6fd5b86a20ad1f92a07c15cf318f86f815d9fc54f4a2a3c2"
+checksum_source = "mise-versions"
+url = "https://github.com/theseus-rs/postgresql-binaries/releases/download/14.24.1/postgresql-14.24.1-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/assets/653650371"
+
 [[tools."cargo:cargo-auditable"]]
 version = "0.7.7"
 backend = "cargo:cargo-auditable"
@@ -39,6 +179,26 @@ backend = "cargo:cargo-fuzz"
 [[tools."cargo:cargo-pgrx"]]
 version = "0.19.3"
 backend = "cargo:cargo-pgrx"
+
+[[tools."github:unicode-org/icu"]]
+version = "78.3"
+backend = "github:unicode-org/icu"
+
+[tools."github:unicode-org/icu".options]
+asset_pattern = "icu4c-*-sources.tgz"
+version_prefix = "release-"
+
+[tools."github:unicode-org/icu"."platforms.macos-arm64"]
+checksum = "sha256:3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0"
+checksum_source = "mise-versions"
+url = "https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz"
+url_api = "https://api.github.com/repos/unicode-org/icu/releases/assets/375896815"
+
+[tools."github:unicode-org/icu"."platforms.macos-x64"]
+checksum = "sha256:3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0"
+checksum_source = "mise-versions"
+url = "https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz"
+url_api = "https://api.github.com/repos/unicode-org/icu/releases/assets/375896815"
 
 [[tools.node]]
 version = "26.13.0"
@@ -73,3 +233,11 @@ backend = "core:rust"
 
 [tools.rust.options]
 components = "rust-src"
+
+[[tools.rust]]
+version = "1.82.0"
+backend = "core:rust"
+
+[[tools.rust]]
+version = "1.96.0"
+backend = "core:rust"
