@@ -113,8 +113,3 @@ run = "cargo pgrx test pg18"
 description = "Package the Postgres extension for installation"
 dir = "crates/edtf-postgres"
 run = "cargo pgrx package"
-
-[tasks."pg:schema-snapshot"]
-description = "Diff the generated SQL surface against the snapshot (requires `cargo pgrx init`)"
-env = { PG = "18" }
-run = ".github/scripts/schema-snapshot.sh"

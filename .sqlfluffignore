@@ -5,8 +5,8 @@
 # silence a finding that is simply inconvenient. Recorded upward as
 # monumental-archive/.github#708.
 
-# pgrx GENERATES this file, and .github/scripts/schema-snapshot.sh exists to
-# diff freshly-generated SQL against it. sqlfluff wants LT01/RF06/LT05/CP05
+# pgrx GENERATES this file, and the belt's lint:pg-schema exists to diff
+# freshly-generated SQL against it. sqlfluff wants LT01/RF06/LT05/CP05
 # changes — quoted identifiers unquoted, whitespace moved, types upper-cased
 # — and applying any of them means the snapshot is no longer what pgrx emits,
 # so every later snapshot run diffs dirty forever. Same reasoning the canon

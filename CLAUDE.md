@@ -62,8 +62,9 @@ containers per major as well.
 
 - `mise run pg:test` / `pg:package` (the extension is linted by the
   belt's `lint:pg-clippy`, in the gate)
-- `mise run pg:schema-snapshot` — diff the generated SQL surface against
-  `schema.snapshot.sql`
+- `mise run lint:pg-schema` — diff the generated SQL surface against
+  `schema.snapshot.sql`, in the gate; `fix:pg-schema` rewrites it after
+  a surface change you intend (read the diff first)
 - `mise run lint:pg-upgrade-path` — every published extension version must
   still reach the current one by `ALTER EXTENSION UPDATE`. This one IS in
   the gate: it is a pure filename-graph walk, no pgrx and no database.
