@@ -9,12 +9,14 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13992/badge)](https://www.bestpractices.dev/projects/13992)
 [![OpenSSF Baseline](https://www.bestpractices.dev/projects/13992/baseline)](https://www.bestpractices.dev/projects/13992)
 [![REUSE status](https://api.reuse.software/badge/github.com/monumental-archive/edtf)](https://api.reuse.software/info/github.com/monumental-archive/edtf)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](LICENSES/)
 [![coverage](https://codecov.io/gh/monumental-archive/edtf/branch/main/graph/badge.svg)](https://codecov.io/gh/monumental-archive/edtf)
 <!-- pending (first mint): DOI — the concept DOI lands in CITATION.cff after the first release mints it; re-run fix:badges -->
+[![release](https://img.shields.io/github/v/release/monumental-archive/edtf)](https://github.com/monumental-archive/edtf/releases/latest)
 [![crates.io](https://img.shields.io/crates/v/edtf-core.svg)](https://crates.io/crates/edtf-core)
 [![docs.rs](https://img.shields.io/docsrs/edtf-core)](https://docs.rs/edtf-core)
 [![npm](https://img.shields.io/npm/v/%40monumental-archive%2Fedtf-wasm.svg)](https://www.npmjs.com/package/@monumental-archive/edtf-wasm)
-[![ghcr edtf](https://img.shields.io/badge/ghcr.io-monumental--archive%2Fedtf-blue)](https://github.com/orgs/monumental-archive/packages/container/package/edtf)
+[![ghcr edtf-postgres](https://img.shields.io/badge/ghcr.io-monumental--archive%2Fedtf--postgres-blue)](https://github.com/orgs/monumental-archive/packages/container/package/edtf-postgres)
 [![fair-software](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%E2%97%8F%20%E2%97%8F%20%E2%97%8F%20%E2%97%8F-green)](https://fair-software.eu)
 <!-- badges:end -->
 
