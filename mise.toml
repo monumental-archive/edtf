@@ -19,16 +19,6 @@ lockfile = true
 shell = "bash -euo pipefail -c"
 
 [env]
-# Workspace members whose tests cannot run on the gate runner; consumed
-# by coverage:check and coverage:report. edtf-postgres is a pgrx
-# extension: its pg14..pg18 features are mutually exclusive and it needs
-# an initialised $PGRX_HOME, so its tests run in the extension class's
-# own containers, never under `cargo test` here.
-COVERAGE_EXCLUDE = "edtf-postgres"
-# Same member, same reason, for lint:rust — --all-features cannot
-# compile a crate whose features contradict each other. Declared rather
-# than inferred from default-members, so a reviewer sees it.
-CLIPPY_EXCLUDE = "edtf-postgres"
 # Which nightly audit:fuzz runs the sanitized targets under. Declared,
 # never discovered: AddressSanitizer is cargo-fuzz's default and needs
 # -Zsanitizer, which stable refuses. Must match the dated nightly in the
@@ -54,10 +44,36 @@ rust = [
   # rust-src is not optional on the nightly: audit:fuzz runs `--careful`,
   # which implies -Zbuild-std and rebuilds the standard library.
   { version = "nightly-2026-07-20", components = "rust-src" },
+  # The MSRV toolchains, one per declared minimum: lint:msrv compiles
+  # each crate at exactly the rust-version it promises rather than
+  # trusting the stable pin to stand in for it. 1.82 is the workspace's;
+  # 1.96 is edtf-postgres's, because pgrx requires it (#197). Move a
+  # line and its rust-version together, never one alone.
+  { version = "1.82.0" },
+  { version = "1.96.0" },
 ]
 # Build input of the pgrx-extension class; must equal the pgrx crate
-# dependency, which Cargo.lock resolves to 0.19.2.
+# dependency, which Cargo.lock resolves to 0.19.3.
 "cargo:cargo-pgrx" = "0.19.3"
+# The Postgres edtf-postgres is compiled and tested against in the gate,
+# one entry per major the crate's features declare (.github#813). The
+# belt derives the majors from Cargo.toml and reds if a declared one is
+# not pinned here.
+"aqua:theseus-rs/postgresql-binaries" = [
+  "18.6.1",
+  "17.11.1",
+  "16.15.1",
+  "15.19.1",
+  "14.24.1",
+]
+# ICU's headers, for building edtf-postgres on a Mac: the prebuilt
+# Postgres is built against ICU and ships no headers, and pgrx binds
+# every Postgres header from 0.19.3. macOS only — the runner has
+# libicu-dev. The belt holds this to the major Postgres was built
+# against, so it moves with the Postgres pin above, never on its own.
+"github:unicode-org/icu" = { version = "78.3", version_prefix = "release-", asset_pattern = "icu4c-*-sources.tgz", os = [
+  "macos",
+] }
 # Build input of the rust build classes: auditable binaries (.dep-v0).
 "cargo:cargo-auditable" = "0.7.7"
 # Build input of lint:fuzz-build and audit:fuzz; no upstream binaries and

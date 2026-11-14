@@ -6,7 +6,9 @@ description = "Postgres extension (pgrx) exposing edtf-core: EDTF validation, le
 keywords = ["edtf", "date", "iso8601", "postgres", "pgrx"]
 categories = ["date-and-time", "database"]
 edition.workspace = true
-rust-version.workspace = true
+# Not the workspace's 1.82: pgrx declares 1.96 itself, so this crate
+# cannot promise less than its own dependency does (#197).
+rust-version = "1.96"
 license.workspace = true
 repository.workspace = true
 
