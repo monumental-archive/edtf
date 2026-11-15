@@ -144,17 +144,19 @@ needs no Rust toolchain and no `cargo-pgrx`. **Verify before extracting** —
 the archive unpacks into `/` as root, so checking the signature afterwards
 is a postmortem, not verification.
 
-From **v1.3.0** on, releases are unified (one `v*` tag for the repository)
-and are signed by the organisation's signer, not by this repository:
+From **v1.3.4** on, releases are unified (one `v*` tag for the repository)
+and are signed by the organisation's signer, not by this repository.
+v1.3.0 to v1.3.3 were never published: nothing can be downloaded from
+them.
 
 ```bash
-VERSION=1.3.0
+VERSION=1.3.4
 PG=18                 # 14, 15, 16, 17 or 18
 ARCH=amd64            # amd64 or arm64 — dpkg's spelling, not uname's
 FILE="edtf_postgres-${VERSION}-pg${PG}-linux-${ARCH}.tar.gz"
 
 gh release download "v${VERSION}" --repo monumental-archive/edtf \
-  --pattern "${FILE}" --pattern SHA256SUMS
+  --pattern "${FILE}" --pattern checksums.txt
 
 # <signer-commit> is looked up fresh: it is the sign.yml@<sha> `uses:` pin
 # in the tree that produced this release — the tree's one statement of
@@ -165,9 +167,11 @@ gh attestation verify "${FILE}" --owner monumental-archive \
   --source-ref "refs/tags/v${VERSION}" \
   --deny-self-hosted-runners
 
-sha256sum --check --ignore-missing SHA256SUMS
+sha256sum --check --ignore-missing checksums.txt
 
-sudo tar -xzf "${FILE}" -C /
+# The archive holds two trees: pkgroot/ (the filesystem layout, installed
+# here) and cnpgroot/ (the CloudNativePG layout, for image builds).
+sudo tar -xzf "${FILE}" -C / --strip-components=1 pkgroot
 ```
 
 Every release also carries a verification verdict (an artifact VSA) in the
@@ -198,13 +202,13 @@ Then, as any user with `CREATE` on the database — the extension is marked
 CREATE EXTENSION edtf_postgres;
 ```
 
-From **v1.2.0** the shipped library is stripped; each cell also publishes an
-`edtf_postgres-dbgsym-…` tarball carrying the full debug info. It is only
-needed for debugging a crash: extract it into `/` and gdb finds the
-symbols via the library's `.gnu_debuglink` under `/usr/lib/debug`. From
-the same release each crate's CycloneDX SBOM is attested against the
-tarball bytes — `gh attestation verify` as above proves both provenance
-and the dependency list.
+From **v1.3.4** the shipped library carries its own debug info, so a
+backend crash gives a real backtrace with nothing else installed. v1.2.x
+shipped a stripped library and a separate `edtf_postgres-dbgsym-…`
+tarball; that tarball is no longer published. Each release also attaches
+one SPDX SBOM per Postgres major
+(`sbom-pgrx-edtf-postgres-pg<major>-<version>.spdx.json`), listed in
+`checksums.txt` beside the tarballs.
 
 Upgrading a previously installed copy: extract the new tarball over the old
 one, then `ALTER EXTENSION edtf_postgres UPDATE;`. Extracting without
