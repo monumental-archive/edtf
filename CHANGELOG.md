@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 over the public APIs of the crates this repository publishes.
 
+## [1.3.4](https://github.com/monumental-archive/edtf/compare/v1.3.3...v1.3.4) - 2026-11-15
+
+### Fixed
+
+- update proptest to =1.12.0 ([#224](https://github.com/monumental-archive/edtf/pull/224))
+
 ## [1.3.3](https://github.com/monumental-archive/edtf/compare/v1.3.2...v1.3.3) - 2026-11-14
 
 ### Fixed
