@@ -23,7 +23,9 @@ CREATE EXTENSION edtf_postgres;
 ```
 
 The extension is `trusted`, so any user with `CREATE` on the database can
-install it. The shipped library carries its own debug info. The exact
+install it. v1.3.4 ships the library with its debug info inside; releases
+after it ship it stripped, with a `…-debug.tar.gz` sibling beside each
+tarball. The exact
 commands, the support matrix and the glibc floor are in
 the [repository README](https://github.com/monumental-archive/edtf#installing-the-postgres-extension).
 
@@ -46,14 +48,15 @@ should not wait on an extension release.
 ```dockerfile
 FROM ghcr.io/monumental-archive/edtf-postgres:1.3.4-pg18-artifact AS ext
 FROM postgres:18-trixie
-COPY --from=ext /usr/lib/postgresql/18/lib/ /usr/lib/postgresql/18/lib/
-COPY --from=ext /usr/share/postgresql/18/extension/ /usr/share/postgresql/18/extension/
+COPY --from=ext /lib/ /usr/lib/postgresql/18/lib/
+COPY --from=ext /share/extension/ /usr/share/postgresql/18/extension/
 ```
 
-The image also carries a second copy of the same files in the
-[CloudNativePG extension-ImageVolume][cnpg-ext] layout — `lib/` and
-`share/extension/` at the image root — so the same tag can be mounted
-into a CNPG cluster without a repack:
+The image holds the files once, in one layout on every major: `lib/` and
+`share/extension/` at the image root. The `COPY --from` above names your
+server's own directories as the destination; the same layout is the
+[CloudNativePG extension-ImageVolume][cnpg-ext] one, so the same tag can
+be mounted into a CNPG cluster without a repack:
 
 ```yaml
 postgresql:
