@@ -18,7 +18,12 @@
 
 -- Assertions are on by default; a corpus that silently passed because the
 -- default had been changed would be worse than no corpus.
-SET plpgsql.check_asserts = on;
+--
+-- set_config(..., false) is the session-level equivalent of SET, written as a
+-- function call because sqlfluff's postgres dialect cannot parse a namespaced
+-- GUC assignment (`SET plpgsql.check_asserts = on;`), and one unparsable
+-- statement drops the whole file from lint:sql.
+SELECT set_config('plpgsql.check_asserts', 'on', false);
 
 DO $corpus$
 BEGIN
