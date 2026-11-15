@@ -12,63 +12,45 @@ relations).
 
 ## Installing
 
-Prebuilt, attested tarballs are attached to each `edtf-postgres-v*` release
-from v1.1.0 onward, for Postgres 14–18 on `amd64` and `arm64` — no Rust
-toolchain and no
-`cargo-pgrx` required. Download the tarball for your major and architecture,
-verify it, extract into `/`, then:
+Prebuilt, attested tarballs are attached to each release, for Postgres
+14–18 on `amd64` and `arm64` — no Rust toolchain and no `cargo-pgrx`
+required. Releases are `v*` tags from v1.3.4 on; v1.1.0 to v1.2.3 are the
+older `edtf-postgres-v*` tags. Download the tarball for your major and
+architecture, verify it, extract its `pkgroot/` tree into `/`, then:
 
 ```sql
 CREATE EXTENSION edtf_postgres;
 ```
 
 The extension is `trusted`, so any user with `CREATE` on the database can
-install it. The shipped library is stripped; a `-dbgsym` tarball with the
-full debug info sits beside each tarball for crash analysis. Full
-instructions, the support matrix and the glibc floor are in
+install it. The shipped library carries its own debug info. The exact
+commands, the support matrix and the glibc floor are in
 the [repository README](https://github.com/monumental-archive/edtf#installing-the-postgres-extension).
 
-OCI images are also published to `ghcr.io/carlallenn/edtf-postgres`, built
-from the released tarballs and attested the same way — the command that
-checks a digest against its release tag, and the three flags that make it
-mean anything, are in
-[the repository README](https://github.com/monumental-archive/edtf#installing-the-postgres-extension).
-Two variants per Postgres major, both multi-arch, both tagged extension
-version × major (`1.2.3-pg18`) with a floating major tag (`pg18`) tracking
-the latest release for that major. Pin the digest.
+OCI images are also published to
+`ghcr.io/monumental-archive/edtf-postgres`, built from the same release
+and attested the same way. One image per Postgres major, multi-arch,
+tagged extension version × major: `1.3.4-pg18-artifact`. There is no
+floating tag and no runnable image. Pin the digest.
 
-- **`:<version>-pg<major>-artifact`** — `FROM scratch`: the extension
-  files and nothing else. The supported build-stage artifact. It carries
-  no OS packages, so it has no inherited CVE surface, and a cold
-  `COPY --from` pulls only the extension rather than a whole base image.
-- **`:<version>-pg<major>`** — the official `postgres` image with the
-  extension installed. A convenience for `docker run`, local trials and
-  demos; not a supported deployment base. It installs nothing of its own,
-  so its vulnerability posture is exactly its base image's, and that base
-  is refreshed only when a release is cut — expect base-inherited CVEs
-  between releases. Pin the digest and rebuild on your own cadence if you
-  deploy it.
+The image is `FROM scratch`: the extension files and nothing else. It
+carries no OS packages, so it has no inherited CVE surface, and a cold
+`COPY --from` pulls only the extension rather than a whole base image.
 
-Neither floating tag is rebuilt between releases: `pg18` means "the latest
-release for Postgres 18", not "the latest base".
-
-**To deploy, build your own image from the `-artifact` variant** onto a
-base you pin and refresh on your own cadence — the `COPY --from` above is
-the whole of it. That keeps the extension's currency and your base's
-currency independent, which is the point: an extension release should not
-be what ships you a base image update, and a base image update should not
-wait on an extension release.
-
-Take the `-artifact` tag for a build stage:
+**To deploy, build your own image from it** onto a base you pin and
+refresh on your own cadence. That keeps the extension's currency and your
+base's currency independent, which is the point: an extension release
+should not be what ships you a base image update, and a base image update
+should not wait on an extension release.
 
 ```dockerfile
-FROM ghcr.io/carlallenn/edtf-postgres:1.2.3-pg18-artifact AS ext
+FROM ghcr.io/monumental-archive/edtf-postgres:1.3.4-pg18-artifact AS ext
 FROM postgres:18-trixie
 COPY --from=ext /usr/lib/postgresql/18/lib/ /usr/lib/postgresql/18/lib/
 COPY --from=ext /usr/share/postgresql/18/extension/ /usr/share/postgresql/18/extension/
 ```
 
-The artifact image also carries a second copy of the same files in the
+The image also carries a second copy of the same files in the
 [CloudNativePG extension-ImageVolume][cnpg-ext] layout — `lib/` and
 `share/extension/` at the image root — so the same tag can be mounted
 into a CNPG cluster without a repack:
@@ -78,17 +60,21 @@ postgresql:
   extensions:
     - name: edtf
       image:
-        reference: ghcr.io/carlallenn/edtf-postgres:1.2.3-pg18-artifact
+        reference: ghcr.io/monumental-archive/edtf-postgres:1.3.4-pg18-artifact
 ```
 
-That path is tested, not inferred: a weekly job builds a CNPG cluster
-around the published tag and installs the extension into it as a
-non-superuser. It needs PostgreSQL 18 — `extension_control_path` is what
-makes out-of-tree extensions loadable at all — CloudNativePG 1.29 or
-later, and a Kubernetes with image volumes: 1.35 and later have them on by
-default, 1.33 and 1.34 need the `ImageVolume` feature gate. The operand
-image must be Debian 12 or newer, the same glibc 2.36 floor the tarballs
-carry.
+Every release builds that layout into each image. Up to v1.2.3 a
+weekly job also mounted the image into a real CNPG cluster and installed
+the extension as a non-superuser; that end-to-end run is not part of the
+current release path. It needs PostgreSQL 18 — `extension_control_path`
+is what makes out-of-tree extensions loadable at all — CloudNativePG 1.29
+or later, and a Kubernetes with image volumes: 1.35 and later have them
+on by default, 1.33 and 1.34 need the `ImageVolume` feature gate. The
+operand image must be Debian 12 or newer, the same glibc 2.36 floor the
+tarballs carry.
+
+Images published before the move are at
+`ghcr.io/carlallenn/edtf-postgres` and stop at 1.2.3.
 
 The tarballs remain the primary artifact; the images are wrappers around
 them, never a replacement.

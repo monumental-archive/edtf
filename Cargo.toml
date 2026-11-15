@@ -8,8 +8,8 @@ members = [
   "crates/edtf-cli",
   "crates/edtf-postgres",
 ]
-# edtf-postgres is a member so release-plz versions, tags, changelogs and
-# releases it exactly like the other five. It went untagged and unreleased
+# edtf-postgres is a member so the release path versions and tags it
+# exactly like the other five. It went untagged and unreleased
 # at v1.0.0 precisely because it sat outside and nothing owned it (#54).
 #
 # It is NOT a default member: building it needs a locally-initialized pgrx
@@ -127,10 +127,10 @@ panic = "unwind"
 # not minimum bytes — hence opt-level 3. `strip = "none"` is NOT what makes
 # the library loadable: Postgres resolves its functions with dlsym against
 # the dynamic symbol table (.dynsym), which stripping never touches. The
-# symbols are kept at link time so the packaging step
-# (build-extension-inner.sh) can split the full debug info into the -dbgsym
-# tarball and stamp a .gnu_debuglink before stripping the shipped .so —
-# a backend crash then gets a real backtrace from the sibling artifact.
+# symbols are kept so a backend crash gets a real backtrace: the shipped
+# .so carries its own debug info. Up to v1.2.3 a packaging step split it
+# into a -dbgsym tarball and stripped the library; the org release path
+# packages the library as built, so nothing is split off.
 # Per-package overrides accept opt-level and strip (unlike panic/lto/rpath),
 # which is exactly what makes membership possible.
 [profile.release.package.edtf-postgres]
