@@ -31,9 +31,9 @@ resolving through `MODULE_PATHNAME`. A release that did not change the SQL
 surface therefore needs only an **empty** script — the file's existence is
 what creates the path.
 
-`task pg:schema-snapshot` is what tells you whether the surface actually
-moved; a clean diff means an empty script is correct, and a non-empty diff
-is the list of what the script has to do.
+The belt's `lint:pg-schema`, in the gate, is what tells you whether the
+surface actually moved; a clean diff means an empty script is correct,
+and a non-empty diff is the list of what the script has to do.
 
 ## Why this is not optional
 
