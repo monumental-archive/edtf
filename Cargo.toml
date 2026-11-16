@@ -127,10 +127,11 @@ panic = "unwind"
 # not minimum bytes — hence opt-level 3. `strip = "none"` is NOT what makes
 # the library loadable: Postgres resolves its functions with dlsym against
 # the dynamic symbol table (.dynsym), which stripping never touches. The
-# symbols are kept so a backend crash gets a real backtrace: the shipped
-# .so carries its own debug info. Up to v1.2.3 a packaging step split it
-# into a -dbgsym tarball and stripped the library; the org release path
-# packages the library as built, so nothing is split off.
+# build must not strip because the org release path splits the debug info
+# AFTER it: objcopy keeps it in a -debug tarball, strip --strip-unneeded
+# then strips the library and a .gnu_debuglink points back, so a backend
+# crash still gets a real backtrace. A stripped build would leave nothing
+# to split.
 # Per-package overrides accept opt-level and strip (unlike panic/lto/rpath),
 # which is exactly what makes membership possible.
 [profile.release.package.edtf-postgres]

@@ -169,8 +169,8 @@ gh attestation verify "${FILE}" --owner monumental-archive \
 
 sha256sum --check --ignore-missing checksums.txt
 
-# The archive holds two trees: pkgroot/ (the filesystem layout, installed
-# here) and cnpgroot/ (the CloudNativePG layout, for image builds).
+# The filesystem layout is the archive's pkgroot/ tree, installed here.
+# (Releases up to v1.3.4 also carry a cnpgroot/ copy, which this skips.)
 sudo tar -xzf "${FILE}" -C / --strip-components=1 pkgroot
 ```
 
@@ -202,10 +202,19 @@ Then, as any user with `CREATE` on the database — the extension is marked
 CREATE EXTENSION edtf_postgres;
 ```
 
-From **v1.3.4** the shipped library carries its own debug info, so a
-backend crash gives a real backtrace with nothing else installed. v1.2.x
-shipped a stripped library and a separate `edtf_postgres-dbgsym-…`
-tarball; that tarball is no longer published. Each release also attaches
+Debug info depends on the release. v1.2.x shipped a stripped library and
+a separate `edtf_postgres-dbgsym-…` tarball. **v1.3.4** ships the library
+with its debug info inside and no debug tarball. Releases after v1.3.4
+ship a stripped library carrying a `.gnu_debuglink`, with a
+`…-linux-<arch>-debug.tar.gz` sibling beside each tarball, verified the
+same way. Install it for a readable backend backtrace; gdb then finds it
+through the debuglink:
+
+```bash
+sudo tar -xzf "${DEBUG_FILE}" -C / --strip-components=1 debugroot
+```
+
+Each release also attaches
 one SPDX SBOM per Postgres major
 (`sbom-pgrx-edtf-postgres-pg<major>-<version>.spdx.json`), listed in
 `checksums.txt` beside the tarballs.
