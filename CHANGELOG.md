@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 over the public APIs of the crates this repository publishes.
 
+## [1.3.5](https://github.com/monumental-archive/edtf/compare/v1.3.4...v1.3.5) - 2026-11-16
+
+### Fixed
+
+- update canon to v1.68.1 ([#256](https://github.com/monumental-archive/edtf/pull/256))
+- lock file maintenance ([#258](https://github.com/monumental-archive/edtf/pull/258))
+
+### Documentation
+
+- correct the install recipes to what v1.3.4 ships ([#248](https://github.com/monumental-archive/edtf/pull/248))
+
+### CI
+
+- adopt the scheduled security release ([#249](https://github.com/monumental-archive/edtf/pull/249))
+
 ## [1.3.4](https://github.com/monumental-archive/edtf/compare/v1.3.3...v1.3.4) - 2026-11-14
 
 ### Fixed
