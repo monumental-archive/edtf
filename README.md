@@ -11,7 +11,7 @@
 [![REUSE status](https://api.reuse.software/badge/github.com/monumental-archive/edtf)](https://api.reuse.software/info/github.com/monumental-archive/edtf)
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](LICENSES/)
 [![coverage](https://codecov.io/gh/monumental-archive/edtf/branch/main/graph/badge.svg)](https://codecov.io/gh/monumental-archive/edtf)
-<!-- pending (first mint): DOI — the concept DOI lands in CITATION.cff after the first release mints it; re-run fix:badges -->
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24268583.svg)](https://doi.org/10.5281/zenodo.24268583)
 [![release](https://img.shields.io/github/v/release/monumental-archive/edtf)](https://github.com/monumental-archive/edtf/releases/latest)
 [![crates.io](https://img.shields.io/crates/v/edtf-core.svg)](https://crates.io/crates/edtf-core)
 [![docs.rs](https://img.shields.io/docsrs/edtf-core)](https://docs.rs/edtf-core)
