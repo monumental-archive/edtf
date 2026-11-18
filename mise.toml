@@ -43,7 +43,9 @@ rust = [
   { version = "1.97.1", components = "clippy,rustfmt,llvm-tools" },
   # rust-src is not optional on the nightly: audit:fuzz runs `--careful`,
   # which implies -Zbuild-std and rebuilds the standard library.
-  { version = "nightly-2026-07-20", components = "rust-src" },
+  # llvm-tools is for audit:coverage-branches, which measures
+  # `cargo llvm-cov --branch` on this nightly (.github#1359).
+  { version = "nightly-2026-07-20", components = "llvm-tools,rust-src" },
   # The MSRV toolchains, one per declared minimum: lint:msrv compiles
   # each crate at exactly the rust-version it promises rather than
   # trusting the stable pin to stand in for it. 1.82 is the workspace's;
