@@ -1,0 +1,16 @@
+# Mutation testing (canon #1355, edtf #107): tracking this file adopts the
+# belt's `audit:mutants` Rust leg, run weekly by
+# .github/workflows/mutants.yml (the canon's repo-mutants.yml) and never in
+# the gate or the audit. Every crate is mutated, edtf-postgres included.
+# The measure is no unexplained surviving mutant: kill a survivor with an
+# assertion, or record it below as an `exclude_re` entry with a `#` line
+# above it saying why the mutant is equivalent. Never `#[mutants::skip]`
+# (a dependency in shipped code).
+
+exclude_re = [
+  # edtf-postgres's `tests::` functions are test code: pgrx compiles its
+  # #[pg_test] module under `cfg(any(test, feature = "pg_test"))`, which
+  # cargo-mutants' own test filter (it skips `#[test]` and `cfg(test)`)
+  # does not recognise, so it mutates the tests themselves.
+  '^crates/edtf-postgres/src/lib\.rs:[0-9]+:[0-9]+: replace (tests::|.* in tests::)',
+]
