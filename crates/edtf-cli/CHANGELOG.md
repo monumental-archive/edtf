@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.2.3](https://github.com/CarlAllenn/edtf/compare/edtf-cli-v1.2.2...edtf-cli-v1.2.3) - 2026-08-08
+## [1.2.3](https://github.com/monumental-archive/edtf/compare/edtf-cli-v1.2.2...edtf-cli-v1.2.3) - 2026-08-08
 
 ### Other
 
@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   #135 and reproduced under test before the fix landed.
 
-## [1.2.2](https://github.com/CarlAllenn/edtf/compare/edtf-cli-v1.2.1...edtf-cli-v1.2.2) - 2026-08-08
+## [1.2.2](https://github.com/monumental-archive/edtf/compare/edtf-cli-v1.2.1...edtf-cli-v1.2.2) - 2026-08-08
 
 ### Other
 
@@ -31,47 +31,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   crates.io/npm; this is the release that carries the assets,
   through the split pipeline that makes the failure unrepeatable.
 
-## [1.2.1](https://github.com/CarlAllenn/edtf/compare/edtf-cli-v1.2.0...edtf-cli-v1.2.1) - 2026-08-08
+## [1.2.1](https://github.com/monumental-archive/edtf/compare/edtf-cli-v1.2.0...edtf-cli-v1.2.1) - 2026-08-08
 
 ### Other
 
 - No code changes. Pipeline-proof release: completes the v1.2.0 release,
   whose publish run was lost to a CI hang after the crates reached the
-  registries ([#125](https://github.com/CarlAllenn/edtf/pull/125) records
+  registries ([#125](https://github.com/monumental-archive/edtf/pull/125) records
   the incident). v1.2.0's GitHub releases remain drafts; this release
   carries the full assets.
 
-## [1.2.0](https://github.com/CarlAllenn/edtf/compare/edtf-cli-v1.1.2...edtf-cli-v1.2.0) - 2026-08-08
+## [1.2.0](https://github.com/monumental-archive/edtf/compare/edtf-cli-v1.1.2...edtf-cli-v1.2.0) - 2026-08-08
 
 ### Other
 
-- close the statement and branch coverage gaps ([#105](https://github.com/CarlAllenn/edtf/pull/105))
-- SPDX headers, code-review standard, small tasks, security review ([#101](https://github.com/CarlAllenn/edtf/pull/101))
+- close the statement and branch coverage gaps ([#105](https://github.com/monumental-archive/edtf/pull/105))
+- SPDX headers, code-review standard, small tasks, security review ([#101](https://github.com/monumental-archive/edtf/pull/101))
 
-## [1.1.2](https://github.com/CarlAllenn/edtf/compare/edtf-cli-v1.1.1...edtf-cli-v1.1.2) - 2026-07-31
+## [1.1.2](https://github.com/monumental-archive/edtf/compare/edtf-cli-v1.1.1...edtf-cli-v1.1.2) - 2026-07-31
 
 ### Other
 
 - update Cargo.lock dependencies
 
-## [1.0.2](https://github.com/CarlAllenn/edtf/compare/edtf-cli-v1.0.1...edtf-cli-v1.0.2) - 2026-07-31
+## [1.0.2](https://github.com/monumental-archive/edtf/compare/edtf-cli-v1.0.1...edtf-cli-v1.0.2) - 2026-07-31
 
 ### Changed
 
 - no library changes — republished through the hardened release pipeline:
   in-run provenance self-verification and per-crate SBOM attachment
-  ([#67](https://github.com/CarlAllenn/edtf/pull/67), [#69](https://github.com/CarlAllenn/edtf/pull/69))
+  ([#67](https://github.com/monumental-archive/edtf/pull/67), [#69](https://github.com/monumental-archive/edtf/pull/69))
 
-## [1.0.0](https://github.com/CarlAllenn/edtf/compare/edtf-cli-v0.1.0...edtf-cli-v1.0.0) - 2026-07-27
+## [1.0.0](https://github.com/monumental-archive/edtf/compare/edtf-cli-v0.1.0...edtf-cli-v1.0.0) - 2026-07-27
 
 ### Added
 
-- #8 lint canon — wholesale clippy tiers + full fallout fix ([#45](https://github.com/CarlAllenn/edtf/pull/45))
+- #8 lint canon — wholesale clippy tiers + full fallout fix ([#45](https://github.com/monumental-archive/edtf/pull/45))
 - tooling baseline — rustfmt canon, release-plz, doc/coverage gates
-  ([#8](https://github.com/CarlAllenn/edtf/pull/8))
-  ([#43](https://github.com/CarlAllenn/edtf/pull/43))
-- adopt cargo-deny supply-chain baseline (renovate-config#5) ([#38](https://github.com/CarlAllenn/edtf/pull/38))
+  ([#8](https://github.com/monumental-archive/edtf/pull/8))
+  ([#43](https://github.com/monumental-archive/edtf/pull/43))
+- adopt cargo-deny supply-chain baseline (renovate-config#5) ([#38](https://github.com/monumental-archive/edtf/pull/38))
 
 ### Other
 
-- #32 content pass — README normalize row, SECURITY.md, crate metadata ([#48](https://github.com/CarlAllenn/edtf/pull/48))
+- #32 content pass — README normalize row, SECURITY.md, crate metadata ([#48](https://github.com/monumental-archive/edtf/pull/48))

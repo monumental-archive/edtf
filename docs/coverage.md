@@ -20,7 +20,7 @@ lines with `reset: <reason>`, which a reviewer then sees.
 
 `edtf-postgres` is excluded, declared as `COVERAGE_EXCLUDE` in `mise.toml`.
 The reason is the same one that keeps it out of `test` and `lint:rust`: its
-`pg14`–`pg18` features are mutually exclusive and it needs an initialised
+`pg15`–`pg18` features are mutually exclusive and it needs an initialised
 `$PGRX_HOME`, so `cargo llvm-cov` over the workspace has no data for it and
 would report a false gap.
 

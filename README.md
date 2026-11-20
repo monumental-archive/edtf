@@ -33,7 +33,7 @@ that is valid in your application is valid in your database — always:
 | **`edtf-normalize`** | Deterministic prose-date → EDTF normalizer at the human input boundary: `"1980s"` → `198X`, `"circa 1920"` → `1920~`, `"около 1920 г."` → `1920~`. Honest ambiguity (`"12/04/1985"` returns both readings, never a guess), every output valid canonical EDTF by construction. English and Russian pattern tables; `no_std` + `alloc`, no third-party dependencies (only `edtf-core`). |
 | **`edtf-calendars`** | Proleptic Julian (Old Style) → Gregorian conversion at the ingest boundary: day precision converts exactly, year/month precision returns honest earliest/latest spans. `#![no_std]`, no third-party dependencies (only `edtf-core`). |
 | **`edtf-wasm`** | WebAssembly bindings for JavaScript: `isValid`, `level`, `canonical`, `parse` (JSON summary), `relation`, and `normalize` (prose → EDTF via `edtf-normalize`). |
-| **`edtf-postgres`** | Postgres extension (via [pgrx], Postgres 14–18): `edtf_valid()`, `edtf_level()`, `edtf_canonical()`, `edtf_min()`, `edtf_max()`, `edtf_relation()` as SQL functions. |
+| **`edtf-postgres`** | Postgres extension (via [pgrx], Postgres 15–18): `edtf_valid()`, `edtf_level()`, `edtf_canonical()`, `edtf_min()`, `edtf_max()`, `edtf_relation()` as SQL functions. |
 | **`edtf-cli`** | The `edtf` command-line tool: `validate` / `canonical` / `level` / `info` over arguments or stdin, plus `relation` (three-valued comparison of two expressions) and `from-julian` (Old Style → Gregorian EDTF). Installable anywhere via `cargo install edtf-cli` (or pin it with mise: `"cargo:edtf-cli"`). |
 
 [pgrx]: https://github.com/pgcentralfoundation/pgrx
@@ -242,8 +242,9 @@ different libc entirely. The tarball assumes the Debian pgdg layout
 Postgres built from source under a different prefix needs the files placed
 by hand from `pg_config --pkglibdir` and `--sharedir`.
 
-A major is dropped from the matrix as it reaches end of life; Postgres 14
-reaches EOL in November 2026.
+A major is dropped from the matrix as it reaches end of life;
+Postgres 14 left the matrix at its end of life (2026-11-12), and 15
+reaches its end of life in November 2027.
 
 JavaScript, via the wasm package:
 

@@ -13,7 +13,7 @@ relations).
 ## Installing
 
 Prebuilt, attested tarballs are attached to each release, for Postgres
-14–18 on `amd64` and `arm64` — no Rust toolchain and no `cargo-pgrx`
+15–18 on `amd64` and `arm64` — no Rust toolchain and no `cargo-pgrx`
 required. Releases are `v*` tags from v1.3.4 on; v1.1.0 to v1.2.3 are the
 older `edtf-postgres-v*` tags. Download the tarball for your major and
 architecture, verify it, extract its `pkgroot/` tree into `/`, then:

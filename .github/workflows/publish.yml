@@ -27,14 +27,14 @@ concurrency:
 
 jobs:
   publish:
-    uses: monumental-archive/.github/.github/workflows/publish.yml@44af359c6901601e5cdd6c97a28cd645e6b09d2b # v1.70.6
+    uses: monumental-archive/.github/.github/workflows/publish.yml@8a20a6f881c6107e27438e51c0d8427a930d35e9 # v1.71.0
     with:
       # The maximal spread in the org: six crates, the CLI binary, the
       # extension across every supported major (with its FROM scratch
       # artifact images), and the npm package.
       classes: rust-crate,rust-binary,pgrx-extension,wasm-npm
       # edtf-postgres is a workspace member so it versions and tags with
-      # the rest, but it is not a default-member and its pg14..pg18
+      # the rest, but it is not a default-member and its pg15..pg18
       # features are mutually exclusive — it builds in the extension
       # class's own containers, never in the crate or binary jobs.
       exclude: edtf-postgres
@@ -44,7 +44,7 @@ jobs:
       npm-scope: monumental-archive
       # pgrx-extension: the extension crate and the majors it supports.
       extension-crate-dir: crates/edtf-postgres
-      pg-majors: 14,15,16,17,18
+      pg-majors: 15,16,17,18
       # The record's licence and creators come from CITATION.cff, which
       # lint:citation requires wherever this is true.
       mint-doi: true
