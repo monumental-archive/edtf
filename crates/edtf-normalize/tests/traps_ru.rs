@@ -70,7 +70,7 @@ fn ambiguous(input: &str, expected: &[&str]) {
 #[track_caller]
 fn no_match(input: &str) {
     assert!(
-        matches!(normalize_with(input, ru()), Outcome::NoMatch { .. }),
+        matches!(normalize_with(input, ru()), Outcome::NoMatch { reason: _ }),
         "expected NoMatch for {input:?}"
     );
 }

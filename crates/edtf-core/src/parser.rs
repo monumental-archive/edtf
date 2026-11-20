@@ -1034,7 +1034,7 @@ mod tests {
             digits: [Some(2), Some(1)],
             qualifier: Qualifier::default(),
         };
-        assert_eq!(month_candidates(spring), [] as [u8; 0]);
+        assert_eq!(month_candidates(spring), Vec::<u8>::new());
     }
 
     /// The day-completion scan only ever passes months from
