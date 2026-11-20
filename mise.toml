@@ -92,7 +92,7 @@ description = "The workspace test suite, every feature, minus the extension"
 # excluded here exactly as it is from the coverage legs. The extension's
 # own suite is `pg:test`, and the release proves it per major in the
 # extension class's containers.
-run = "cargo test --workspace --locked --all-features --exclude edtf-postgres"
+run = '"${ORG_BELT_DIR}/measured" cargo test --workspace --locked --all-features --exclude edtf-postgres'
 
 [tasks.bench]
 description = "The criterion benchmarks whose numbers the README publishes"
