@@ -34,7 +34,7 @@ jobs:
       # artifact images), and the npm package.
       classes: rust-crate,rust-binary,pgrx-extension,wasm-npm
       # edtf-postgres is a workspace member so it versions and tags with
-      # the rest, but it is not a default-member and its pg14..pg18
+      # the rest, but it is not a default-member and its pg15..pg18
       # features are mutually exclusive — it builds in the extension
       # class's own containers, never in the crate or binary jobs.
       exclude: edtf-postgres
@@ -44,7 +44,7 @@ jobs:
       npm-scope: monumental-archive
       # pgrx-extension: the extension crate and the majors it supports.
       extension-crate-dir: crates/edtf-postgres
-      pg-majors: 14,15,16,17,18
+      pg-majors: 15,16,17,18
       # The record's licence and creators come from CITATION.cff, which
       # lint:citation requires wherever this is true.
       mint-doi: true
