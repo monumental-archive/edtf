@@ -145,7 +145,7 @@ version = "0.13.2"
 backend = "cargo:cargo-fuzz"
 
 [[tools."cargo:cargo-pgrx"]]
-version = "0.19.3"
+version = "0.20.0"
 backend = "cargo:cargo-pgrx"
 
 [[tools."github:rust-secure-code/cargo-auditable"]]
@@ -235,5 +235,5 @@ version = "1.82.0"
 backend = "core:rust"
 
 [[tools.rust]]
-version = "1.96.0"
+version = "1.99.1"
 backend = "core:rust"
