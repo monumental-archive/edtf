@@ -263,8 +263,8 @@ fn no_args_reads_empty_stdin() {
     // is a successful, silent run.
     let (stdout, stderr, ok) = edtf(&["validate"]);
     assert!(ok);
-    assert!(stdout.is_empty());
-    assert!(stderr.is_empty());
+    assert_eq!(stdout, "");
+    assert_eq!(stderr, "");
 }
 
 #[test]

@@ -1127,7 +1127,13 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
                 return None;
             }
             let (n, roman) = century_ordinal(&ls, lang)?;
-            let bc = matches!(rd.year.kind, YearKind::Standard { negative: true, .. });
+            let bc = matches!(
+                rd.year.kind,
+                YearKind::Standard {
+                    negative: true,
+                    digits: _
+                }
+            );
             let (expr, mut ns) = century_expr(n, bc)?;
             if roman {
                 ns.push(Note::RomanCentury);

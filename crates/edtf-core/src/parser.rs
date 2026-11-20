@@ -549,7 +549,10 @@ fn year_leap_possible(year: &YearKind) -> bool {
         // Y-prefixed years never carry months, so this is only reachable in
         // theory; be permissive.
         YearKind::Big { value } => is_leap(*value),
-        YearKind::Exponential { .. } => true,
+        YearKind::Exponential {
+            significand: _,
+            exponent: _,
+        } => true,
     }
 }
 
@@ -814,7 +817,7 @@ fn parse_shift(s: &str, base: usize) -> Result<TimeShift, ParseError> {
 }
 
 /// Read a two-digit shift component at `i`.
-fn shift_two(b: &[u8], i: usize, base: usize) -> Result<u8, ParseError> {
+const fn shift_two(b: &[u8], i: usize, base: usize) -> Result<u8, ParseError> {
     match (b[i], b[i + 1]) {
         (t @ b'0'..=b'9', o @ b'0'..=b'9') => Ok((t - b'0') * 10 + (o - b'0')),
         _ => Err(err(base + i, "time shift components must be two digits")),
@@ -1007,10 +1010,6 @@ mod tests {
         clippy::let_underscore_untyped,
         reason = "the discarded value's type is fixed by the call it comes from"
     )]
-    #![expect(
-        clippy::inline_modules,
-        reason = "a module small enough to read in place belongs in place"
-    )]
     #![allow(
         clippy::unwrap_used,
         reason = "test code: a panic here is the failure signal, not a crash path"
@@ -1035,7 +1034,7 @@ mod tests {
             digits: [Some(2), Some(1)],
             qualifier: Qualifier::default(),
         };
-        assert!(month_candidates(spring).is_empty());
+        assert_eq!(month_candidates(spring), Vec::<u8>::new());
     }
 
     /// The day-completion scan only ever passes months from

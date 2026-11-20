@@ -271,10 +271,6 @@ mod tests {
         clippy::missing_panics_doc,
         reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
     )]
-    #![expect(
-        clippy::inline_modules,
-        reason = "a module small enough to read in place belongs in place"
-    )]
     use alloc::format;
 
     use super::*;

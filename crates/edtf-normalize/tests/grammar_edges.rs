@@ -79,7 +79,7 @@ fn ambiguous(input: &str, expected: &[&str]) {
 #[track_caller]
 fn no_match_with(input: &str, opts: Options) {
     assert!(
-        matches!(normalize_with(input, opts), Outcome::NoMatch { .. }),
+        matches!(normalize_with(input, opts), Outcome::NoMatch { reason: _ }),
         "expected NoMatch for {input:?}"
     );
 }
@@ -256,7 +256,7 @@ fn ambiguous_endpoint_with_one_reversed_reading_fails_closed() {
     // error poisons the whole input rather than promoting the survivor (N14).
     assert!(matches!(
         normalize("the 80s to 1950"),
-        Outcome::NoMatch { .. }
+        Outcome::NoMatch { reason: _ }
     ));
 }
 

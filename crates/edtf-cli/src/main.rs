@@ -288,10 +288,6 @@ mod tests {
         clippy::missing_panics_doc,
         reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
     )]
-    #![expect(
-        clippy::inline_modules,
-        reason = "unit tests live beside the code they exercise; a separate file would put the invariants further from what they constrain"
-    )]
     #![allow(
         clippy::unwrap_used,
         reason = "test code: a panic here is the failure signal, not a crash path"

@@ -646,7 +646,10 @@ fn sweep_overflows(value: i64, precision: u32, width: u32) -> bool {
 /// The digit width of a year form, restated from public model fields.
 fn year_width(kind: &YearKind) -> u32 {
     match kind {
-        YearKind::Standard { .. } => 4,
+        YearKind::Standard {
+            negative: _,
+            digits: _,
+        } => 4,
         YearKind::Big { value } => value.unsigned_abs().to_string().len() as u32,
         YearKind::Exponential {
             significand,
