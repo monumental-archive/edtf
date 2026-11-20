@@ -63,10 +63,10 @@ rust = [
 # not pinned here.
 "aqua:theseus-rs/postgresql-binaries" = [
   "18.7.0",
-  "17.11.1",
-  "16.15.1",
-  "15.19.1",
-  "14.24.1",
+  "17.12.0",
+  "16.16.0",
+  "15.20.0",
+  "14.25.0",
 ]
 # ICU's headers, for building edtf-postgres on a Mac: the prebuilt
 # Postgres is built against ICU and ships no headers, and pgrx binds
