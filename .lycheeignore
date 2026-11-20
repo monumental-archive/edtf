@@ -1,7 +1,8 @@
 # Per-link escapes for lychee, one entry per line, each with its reason —
-# the convention lychee.toml states. lychee runs weekly in scheduled.yml
-# over the whole tree; anything listed here would otherwise turn that
-# workflow red every Monday for something that is not actually broken.
+# the convention lychee.toml states. lychee runs weekly in the audit
+# workflow (audit.yml) over the whole tree; anything listed here would
+# otherwise turn that workflow red every Monday for something that is not
+# actually broken.
 #
 # Nothing goes in here to silence a genuinely dead link. Both entries below
 # are permanent facts about the repository's history, not rot.
