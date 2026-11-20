@@ -29,10 +29,10 @@ pg_test = []
 
 [dependencies]
 edtf-core.workspace = true
-pgrx = "0.19.1"
+pgrx = "0.20.0"
 
 [dev-dependencies]
-pgrx-tests = "=0.19.3"
+pgrx-tests = "=0.20.0"
 
 [package.metadata.cargo-machete]
 # pgrx-tests has no direct `use`: `cargo pgrx test` links it as the test
