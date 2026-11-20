@@ -159,7 +159,13 @@ impl Edtf {
 /// The earliest and latest calendar day a single date expression touches.
 pub(crate) fn date_bounds(d: &Date) -> Bounds {
     // Y-prefixed / exponential years are year-precision by construction.
-    if !matches!(d.year.kind, YearKind::Standard { .. }) {
+    if !matches!(
+        d.year.kind,
+        YearKind::Standard {
+            negative: _,
+            digits: _
+        }
+    ) {
         let Some(value) = d.year.value() else {
             return Bounds {
                 earliest: Bound::Unknown,
@@ -242,7 +248,10 @@ pub(crate) fn date_bounds(d: &Date) -> Bounds {
 /// Digit width of the year form, for significant-digit ranges.
 pub(crate) fn big_width(kind: &YearKind) -> u32 {
     match kind {
-        YearKind::Standard { .. } => 4,
+        YearKind::Standard {
+            negative: _,
+            digits: _,
+        } => 4,
         YearKind::Big { value } => decimal_digits(value.unsigned_abs()),
         YearKind::Exponential {
             significand,
@@ -386,7 +395,11 @@ fn year_completions(digits: [Option<u8>; 4], ascending: bool) -> impl Iterator<I
 fn extremum(d: &Date, ascending: bool) -> Option<BoundDate> {
     // Only Standard-year dates reach here: `date_bounds` returns early for
     // Y-prefixed and exponential years, which are year-precision anyway.
-    if let YearKind::Standard { digits, .. } = d.year.kind {
+    if let YearKind::Standard {
+        digits,
+        negative: _,
+    } = d.year.kind
+    {
         if d.year.value().is_none() {
             return year_completions(digits, ascending)
                 .find_map(|y| extremum_in_year(d, y, ascending));
@@ -571,10 +584,6 @@ mod tests {
     #![expect(
         clippy::let_underscore_untyped,
         reason = "the discarded value's type is fixed by the call it comes from"
-    )]
-    #![expect(
-        clippy::inline_modules,
-        reason = "a module small enough to read in place belongs in place"
     )]
     use super::{
         Bound, BoundDate, Bounds, Date, DateField, YearKind, date_bounds, extremum, last_day,

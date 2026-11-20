@@ -414,10 +414,6 @@ mod tests {
         clippy::let_underscore_untyped,
         reason = "the discarded value's type is fixed by the call it comes from"
     )]
-    #![expect(
-        clippy::inline_modules,
-        reason = "a module small enough to read in place belongs in place"
-    )]
     use super::*;
 
     // `last_day` is deliberately partial: every caller range-checks the

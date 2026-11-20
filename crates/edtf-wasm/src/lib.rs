@@ -360,10 +360,6 @@ mod tests {
         reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
     )]
     #![expect(
-        clippy::inline_modules,
-        reason = "unit tests live beside the code they exercise; a separate file would put the invariants further from what they constrain"
-    )]
-    #![expect(
         clippy::default_numeric_fallback,
         reason = "literal fixtures whose type the assertion already fixes"
     )]

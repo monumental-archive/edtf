@@ -396,7 +396,13 @@ impl Masked {
         // Masks only occur on standard years; Y-years are digit-valued.
         let (year, year_count) = match (d.year.value(), d.year.kind) {
             (Some(v), _) => (MaskedYear::Fixed(v), 1),
-            (None, YearKind::Standard { digits, .. }) => {
+            (
+                None,
+                YearKind::Standard {
+                    digits,
+                    negative: _,
+                },
+            ) => {
                 // At most four maskable digit positions.
                 let n = u32::try_from(digits.iter().filter(|x| x.is_none()).count()).unwrap_or(4);
                 (MaskedYear::Pattern(digits), 10_u32.pow(n))
@@ -558,10 +564,6 @@ mod tests {
     #![expect(
         clippy::missing_panics_doc,
         reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
-    )]
-    #![expect(
-        clippy::inline_modules,
-        reason = "a module small enough to read in place belongs in place"
     )]
     #![allow(
         clippy::unwrap_used,

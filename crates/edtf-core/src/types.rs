@@ -175,7 +175,7 @@ impl Year {
     /// True if any digit is unspecified (`X`).
     #[must_use]
     pub fn has_unspecified(&self) -> bool {
-        matches!(self.kind, YearKind::Standard { digits, .. } if digits.iter().any(Option::is_none))
+        matches!(self.kind, YearKind::Standard { digits, negative: _ } if digits.iter().any(Option::is_none))
     }
 }
 
@@ -490,13 +490,19 @@ fn interval_level(iv: &Interval) -> u8 {
 fn date_level(d: &Date, in_interval: bool) -> u8 {
     let mut level = 0_u8;
     match d.year.kind {
-        YearKind::Standard { negative, .. } => {
+        YearKind::Standard {
+            negative,
+            digits: _,
+        } => {
             if negative {
                 level = level.max(1);
             }
         }
-        YearKind::Big { .. } => level = level.max(1),
-        YearKind::Exponential { .. } => level = level.max(2),
+        YearKind::Big { value: _ } => level = level.max(1),
+        YearKind::Exponential {
+            significand: _,
+            exponent: _,
+        } => level = level.max(2),
     }
     if d.year.significant_digits.is_some() {
         level = level.max(2);
@@ -536,7 +542,10 @@ fn qualification_level(d: &Date) -> u8 {
 /// 0 = no X digits; 1 = one of the level 1 shapes (Annex A.5.5); 2 = any other.
 fn mask_level(d: &Date) -> u8 {
     let year_x: [bool; 4] = match d.year.kind {
-        YearKind::Standard { digits, .. } => [
+        YearKind::Standard {
+            digits,
+            negative: _,
+        } => [
             digits[0].is_none(),
             digits[1].is_none(),
             digits[2].is_none(),
@@ -567,10 +576,6 @@ mod tests {
     #![expect(
         clippy::missing_panics_doc,
         reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
-    )]
-    #![expect(
-        clippy::inline_modules,
-        reason = "unit tests live beside the code they exercise; a separate file would put the invariants further from what they constrain"
     )]
     use alloc::vec;
 
