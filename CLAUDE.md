@@ -54,7 +54,7 @@ Consequences worth knowing before you reach for a knob:
 
 `edtf-postgres` is a workspace member but **not a default member**: bare
 `cargo build`/`test`/`clippy` skip it, because building it needs
-`cargo pgrx init` and its `pg14`–`pg18` features are mutually exclusive, so
+`cargo pgrx init` and its `pg15`–`pg18` features are mutually exclusive, so
 `--all-features` across it is a hard error. The belt handles it instead:
 `lint:pg-clippy` lints it and `test:pgrx` runs its suite once per declared
 Postgres major, both in the gate, and the release builds and tests it in
