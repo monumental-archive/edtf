@@ -298,6 +298,28 @@ mod tests {
             None,
             "a year before the Postgres date range is NULL"
         );
+        // The guard's own edges (#298). Postgres's `make_date` reaches
+        // past both sides of it on the low end (to 4714-11-24 BC) and
+        // stops exactly at it on the high end, so only these years tell
+        // the guard's comparisons from their neighbours: `-4712` is the
+        // first year let through, `-4713` the first `make_date` would
+        // accept but the guard refuses, `Y5874897` the last year let
+        // through. The low end is checked for NULL-ness only, not its
+        // value.
+        assert!(
+            q_text("SELECT edtf_min('-4712')::text").is_some(),
+            "the guard's lowest year is inside the Postgres date range"
+        );
+        assert_eq!(
+            q_text("SELECT edtf_min('-4713')::text"),
+            None,
+            "the year below the guard's lowest is NULL, though `make_date` would take it"
+        );
+        assert_eq!(
+            q_text("SELECT edtf_min('Y5874897')::text").as_deref(),
+            Some("5874897-01-01"),
+            "the guard's highest year is inside the Postgres date range"
+        );
     }
 
     #[pg_test]
