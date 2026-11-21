@@ -72,7 +72,11 @@ containers per major as well.
 `fuzz/` is excluded from the workspace (nightly + libFuzzer). The gate's
 `lint:fuzz-build` proves the targets still compile on stable; the Monday
 `audit:fuzz` runs them under AddressSanitizer on the dated nightly declared
-as `FUZZ_TOOLCHAIN`.
+as `FUZZ_TOOLCHAIN`. The seed corpus is committed under
+`fuzz/corpus/<target>/`, and `crates/edtf-core/tests/fuzz_corpus.rs` holds
+it to the fixtures: every EDTF string they define must be a file there.
+`EDTF_WRITE_FUZZ_CORPUS=1 cargo test -p edtf-core --test fuzz_corpus`
+writes any missing seed; a crash the fuzzer finds is committed beside them.
 
 ## Architecture notes
 
