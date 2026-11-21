@@ -634,7 +634,13 @@ mod tests {
     /// three components asked, with no month or day to answer instead.
     #[test]
     fn a_year_only_qualifier_marks_the_date() {
-        let d = year_date([1, 9, 8, 5], Qualifier { uncertain: true, approximate: false });
+        let d = year_date(
+            [1, 9, 8, 5],
+            Qualifier {
+                uncertain: true,
+                approximate: false,
+            },
+        );
         assert!(d.is_uncertain());
         assert!(!d.is_approximate());
     }

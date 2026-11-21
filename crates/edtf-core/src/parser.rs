@@ -1194,10 +1194,18 @@ mod tests {
     /// the start of the whole input.
     #[test]
     fn time_errors_are_positioned_at_their_component() {
-        assert_err("1985-04-12T10:0a:00", "time components must be two digits", 14);
+        assert_err(
+            "1985-04-12T10:0a:00",
+            "time components must be two digits",
+            14,
+        );
         assert_err("1985-04-12T10:60:00", "minute must be 00-59", 14);
         assert_err("1985-04-12T10:00:61", "second must be 00-60", 17);
-        assert_err("1985-04-12T10:00:00+01:60", "shift minutes must be 00-59", 23);
+        assert_err(
+            "1985-04-12T10:00:00+01:60",
+            "shift minutes must be 00-59",
+            23,
+        );
         let two = "time shift components must be two digits";
         assert_err("1985-04-12T10:00:00+0a", two, 20);
         assert_err("1985-04-12T10:00:00+01:0a", two, 23);
@@ -1256,6 +1264,10 @@ mod tests {
             "set range endpoints must share precision",
             12,
         );
-        assert_err("{1980,1986..1985}", "set range end precedes range start", 12);
+        assert_err(
+            "{1980,1986..1985}",
+            "set range end precedes range start",
+            12,
+        );
     }
 }
