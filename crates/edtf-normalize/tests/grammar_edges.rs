@@ -379,7 +379,7 @@ fn collision_check_needs_digits_in_the_year_too() {
 // ---------------------------------------------------------------------------
 // Boundaries the mutation leg found unpinned (#297)
 
-/// Assert a NoMatch outcome with exactly this reason.
+/// Assert a `NoMatch` outcome with exactly this reason.
 #[track_caller]
 fn no_match_because(input: &str, opts: Options, reason: NoMatchReason) {
     assert_eq!(
@@ -389,7 +389,7 @@ fn no_match_because(input: &str, opts: Options, reason: NoMatchReason) {
     );
 }
 
-/// The notes of a Normalized outcome.
+/// The notes of a `Normalized` outcome.
 #[track_caller]
 fn notes_of(input: &str) -> Vec<Note> {
     match normalize(input) {
@@ -409,19 +409,19 @@ fn no_match_reasons_cite_their_decisions() {
 fn season_collision_readings_name_the_season() {
     // Each sub-year code in a NNNN-NN collision is named in its reading
     // (N13); a code past the four seasons gets the generic name.
-    for (input, name) in [
-        ("1914-21", "spring"),
-        ("1914-22", "summer"),
-        ("1914-23", "autumn"),
-        ("1914-24", "winter"),
-        ("1914-25", "sub-year grouping"),
+    for (code, name) in [
+        (21_u8, "spring"),
+        (22, "summer"),
+        (23, "autumn"),
+        (24, "winter"),
+        (25, "sub-year grouping"),
     ] {
-        match normalize(input) {
+        let input = format!("1914-{code}");
+        match normalize(&input) {
             Outcome::Ambiguous(a) => {
-                let code = &input[5..];
                 assert_eq!(
-                    a.interpretations[0].reading,
-                    format!("sub-year code {code} ({name})"),
+                    a.interpretations.first().map(|i| i.reading.as_str()),
+                    Some(format!("sub-year code {code} ({name})").as_str()),
                     "input: {input:?}"
                 );
             }
