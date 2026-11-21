@@ -37,7 +37,7 @@
 )]
 
 use edtf_core::Edtf;
-use edtf_normalize::{Language, Options, Outcome, normalize, normalize_with};
+use edtf_normalize::{Language, NoMatchReason, Note, Options, Outcome, normalize, normalize_with};
 
 fn ru() -> Options {
     Options {
@@ -374,4 +374,161 @@ fn bare_decade_of_bare_roman_century() {
 #[test]
 fn collision_check_needs_digits_in_the_year_too() {
     no_match("198a-21");
+}
+
+// ---------------------------------------------------------------------------
+// Boundaries the mutation leg found unpinned (#297)
+
+/// Assert a `NoMatch` outcome with exactly this reason.
+#[track_caller]
+fn no_match_because(input: &str, opts: Options, reason: NoMatchReason) {
+    assert_eq!(
+        normalize_with(input, opts),
+        Outcome::NoMatch { reason },
+        "input: {input:?}"
+    );
+}
+
+/// The notes of a `Normalized` outcome.
+#[track_caller]
+fn notes_of(input: &str) -> Vec<Note> {
+    match normalize(input) {
+        Outcome::Normalized(n) => n.notes,
+        other => panic!("expected Normalized for {input:?}, got {other:?}"),
+    }
+}
+
+#[test]
+fn no_match_reasons_cite_their_decisions() {
+    assert_eq!(NoMatchReason::OutOfGrammar.decision(), "N11");
+    assert_eq!(NoMatchReason::ExplicitNoDate.decision(), "N12");
+    assert_eq!(NoMatchReason::ImpossibleDate.decision(), "N14");
+}
+
+#[test]
+fn season_collision_readings_name_the_season() {
+    // Each sub-year code in a NNNN-NN collision is named in its reading
+    // (N13); a code past the four seasons gets the generic name.
+    for (code, name) in [
+        (21_u8, "spring"),
+        (22, "summer"),
+        (23, "autumn"),
+        (24, "winter"),
+        (25, "sub-year grouping"),
+    ] {
+        let input = format!("1914-{code}");
+        match normalize(&input) {
+            Outcome::Ambiguous(a) => {
+                assert_eq!(
+                    a.interpretations.first().map(|i| i.reading.as_str()),
+                    Some(format!("sub-year code {code} ({name})").as_str()),
+                    "input: {input:?}"
+                );
+            }
+            other => panic!("expected Ambiguous for {input:?}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn numeric_fields_are_at_most_five_digits() {
+    // A zero-padded five-digit field still reads as its value…
+    ok("1985/04/00012", "1985-04-12");
+    // …but six digits is not a date field at all.
+    no_match_because(
+        "1985/04/000012",
+        Options::default(),
+        NoMatchReason::OutOfGrammar,
+    );
+}
+
+#[test]
+fn subtractive_roman_numerals_reach_c_d_and_m() {
+    // The signed accumulation reads any numeral whose total is 1-99, so the
+    // C, D and M values are live even though no century is 100+ (N15).
+    ok_with("xc век", ru(), "89XX");
+    ok_with("ccccxd век", ru(), "89XX");
+    ok_with("dccccxm век", ru(), "89XX");
+}
+
+#[test]
+fn bare_roman_century_is_only_for_roman_languages() {
+    // English does not write centuries in Roman numerals (N15).
+    no_match_because("xix", Options::default(), NoMatchReason::OutOfGrammar);
+}
+
+#[test]
+fn out_of_range_numeric_fields_are_out_of_grammar() {
+    // A month of 13 is not a field the grammar reads, so this is not an
+    // impossible calendar date (N11, not N14).
+    no_match_because(
+        "1985/13/05",
+        Options::default(),
+        NoMatchReason::OutOfGrammar,
+    );
+}
+
+#[test]
+fn hyphenated_year_ranges_as_or_alternatives() {
+    // An "or" side is read as one token, so the token-level range arms
+    // (full and elided end year, N4) are what answer it (N14).
+    ambiguous("1914-1918 or 1920", &["1914/1918", "1920"]);
+    ambiguous("1914-18 or 1920", &["1914/1918", "1920"]);
+    // Today the token arm refuses an equal end year inside an "or" side;
+    // #312 makes this read 1914/1914.
+    no_match_because(
+        "1914-1914 or 1920",
+        Options::default(),
+        NoMatchReason::OutOfGrammar,
+    );
+}
+
+#[test]
+fn decade_of_a_bc_century_fails_closed() {
+    // The decade-of-century reading (N6) builds a positive decade mask; a BC
+    // century cannot take one (N2), so the era refuses it.
+    no_match_because(
+        "60-е годы XIX века до н. э.",
+        ru(),
+        NoMatchReason::OutOfGrammar,
+    );
+}
+
+#[test]
+fn bare_left_ordinal_needs_a_century_on_the_right() {
+    // "17-19th centuries" inherits century-ness; "17-1850" has none to
+    // inherit.
+    no_match_because("17-1850", Options::default(), NoMatchReason::OutOfGrammar);
+}
+
+#[test]
+fn elision_starts_at_year_one_hundred() {
+    // Year 100 has a real century prefix to elide from (N4).
+    ok("100-18", "0100/0118");
+}
+
+#[test]
+fn distributed_endpoint_year_replaces_the_masked_note() {
+    // The year-less endpoint inherits a year, so its MissingYearMasked note
+    // gives way to EndpointYearDistributed (N16).
+    assert_eq!(
+        notes_of("june to july 1940"),
+        [Note::EndpointYearDistributed]
+    );
+}
+
+#[test]
+fn qualifier_distribution_is_noted_only_for_qualified_intervals() {
+    // N10's note marks a whole-expression qualifier spread over interval
+    // endpoints: not an unqualified interval, not a qualified date.
+    assert_eq!(notes_of("1914-1918"), []);
+    assert_eq!(notes_of("circa 1850"), []);
+    assert_eq!(notes_of("circa 1850 to 1860"), [Note::QualifierDistributed]);
+}
+
+#[test]
+fn collision_check_needs_digits_in_both_halves() {
+    // "+101" parses as a number but is not four ASCII digits: no N13
+    // collision reading may be built from it.
+    no_match_because("+101-21", Options::default(), NoMatchReason::OutOfGrammar);
 }
