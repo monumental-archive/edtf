@@ -1,6 +1,6 @@
 # Per-link escapes for lychee, one entry per line, each with its reason —
-# the convention lychee.toml states. lychee runs weekly in the audit
-# workflow (audit.yml) over the whole tree; anything listed here would
+# the convention lychee.toml states. lychee runs weekly in the records
+# workflow (records.yml) over the whole tree; anything listed here would
 # otherwise turn that workflow red every Monday for something that is not
 # actually broken.
 #
