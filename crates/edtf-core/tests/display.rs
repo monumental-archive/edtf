@@ -4,9 +4,8 @@
 //! Canonical formatting tests: exact renderings plus the round-trip
 //! property over every valid string in both fixture corpora.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
-    clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]
 #![expect(

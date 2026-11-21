@@ -11,8 +11,7 @@
 //! the python-edtf-ism we do not adopt); `not_adopted` are python-edtf's
 //! substring-extraction and guessing behaviors, enforced as `NoMatch` (N11).
 
-#![allow(
-    clippy::unwrap_used,
+#![expect(
     clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]

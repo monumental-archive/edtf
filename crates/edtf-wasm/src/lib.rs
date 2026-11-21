@@ -371,7 +371,7 @@ mod tests {
         clippy::non_ascii_literal,
         reason = "Russian prose dates are the input this normaliser exists to read; Cyrillic literals are the subject under test, not stray non-ASCII"
     )]
-    #![allow(
+    #![expect(
         clippy::unwrap_used,
         reason = "test code: a panic here is the failure signal, not a crash path"
     )]

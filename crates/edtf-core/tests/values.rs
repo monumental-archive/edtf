@@ -5,9 +5,8 @@
 //! §9.2.2 mask denotations, §4.4.3 sweeps, the D24–D29 decisions, and the
 //! D27 parse-time range-endpoint rules (docs/spec-notes.md).
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
-    clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]
 #![expect(

@@ -6,8 +6,7 @@
 //! range endpoints that must fail closed, and preprocessing quirks. Same
 //! N-decision authority as `traps.rs`.
 
-#![allow(
-    clippy::unwrap_used,
+#![expect(
     clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]

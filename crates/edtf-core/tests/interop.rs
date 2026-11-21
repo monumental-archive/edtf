@@ -8,8 +8,7 @@
 //! docs/spec-notes.md (D3, D5, D6, D15, D17, D21, D22); implementation
 //! extensions are recorded as must-rejects, not adopted.
 
-#![allow(
-    clippy::unwrap_used,
+#![expect(
     clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]

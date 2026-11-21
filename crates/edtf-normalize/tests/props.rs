@@ -10,15 +10,12 @@
 //! that re-parse is what makes the guarantee real, since core has no
 //! validating constructors.
 
-#![allow(
-    clippy::unwrap_used,
+#![expect(
     clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]
-#![allow(
-    clippy::cast_possible_truncation,
+#![expect(
     clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
     reason = "generator and oracle ranges are bounded by construction"
 )]
 #![expect(

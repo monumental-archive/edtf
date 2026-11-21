@@ -15,14 +15,13 @@
 //! bounds comparison the parser applies (decision D18), and time shifts are
 //! only generated in shapes `Display` can spell.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]
-#![allow(
+#![expect(
     clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
     reason = "generator and oracle ranges are bounded by construction"
 )]

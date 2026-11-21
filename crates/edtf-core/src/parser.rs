@@ -1010,7 +1010,7 @@ mod tests {
         clippy::let_underscore_untyped,
         reason = "the discarded value's type is fixed by the call it comes from"
     )]
-    #![allow(
+    #![expect(
         clippy::unwrap_used,
         reason = "test code: a panic here is the failure signal, not a crash path"
     )]

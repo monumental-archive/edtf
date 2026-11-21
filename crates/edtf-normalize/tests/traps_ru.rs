@@ -6,8 +6,7 @@
 //! grammatical-case month/season forms, year-marker noise ("гг."), and the
 //! locale-implied day-first numeric order (N5).
 
-#![allow(
-    clippy::unwrap_used,
+#![expect(
     clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]
