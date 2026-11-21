@@ -15,14 +15,14 @@ targets = [
 
 [advisories]
 yanked = "deny"
-# pgrx 0.19 depends on serde_cbor, which its author archived in 2021
+# pgrx depends on serde_cbor, which its author archived in 2021
 # (RUSTSEC-2021-0127 is informational/unmaintained, not a vulnerability —
 # `patched = []` because there is nothing to patch). Tracked upstream as
 # pgcentralfoundation/pgrx#524, open. Not fixable here: it is pgrx's direct
 # dependency, not ours. `unused-ignored-advisory = "deny"` below means this
 # entry fails CI the moment pgrx drops it, so it cannot rot.
 ignore = [
-  { id = "RUSTSEC-2021-0127", reason = "serde_cbor via pgrx 0.19; upstream pgrx#524" },
+  { id = "RUSTSEC-2021-0127", reason = "serde_cbor via pgrx 0.20; upstream pgrx#524" },
 ]
 # Unmaintained advisories fail for the whole graph, not just direct deps —
 # a transitive unmaintained crate is the same supply-chain exposure.
@@ -57,11 +57,7 @@ allow-wildcard-paths = true
 skip = [
   { crate = "syn@^2.0", reason = "several proc-macro crates lag the syn 3 move" },
   { crate = "half@^1.8", reason = "serde_cbor (via pgrx) lags half 2; see the RUSTSEC-2021-0127 ignore" },
-  { crate = "hashbrown@^0.15", reason = "petgraph (via pgrx-sql-entity-graph) lags hashbrown 0.17" },
-  { crate = "shlex@^1.3", reason = "bindgen (via pgrx-bindgen) lags shlex 2" },
-  { crate = "toml@^0.9", reason = "cargo_toml (via pgrx-pg-config) lags toml 1" },
-  { crate = "toml_datetime@^0.7", reason = "pulled by toml 0.9, same lag" },
-  { crate = "winnow@^0.7", reason = "pulled by toml 0.9, same lag" },
+  { crate = "getrandom@^0.2", reason = "ring 0.17 (via pgrx-c-macros) lags getrandom 0.4" },
 ]
 
 [bans.workspace-dependencies]
@@ -99,6 +95,7 @@ allow-build-scripts = [
   "proc-macro2",
   "quote",
   "radium",
+  "ring",
   "rustix",
   "rustversion",
   "serde",
@@ -117,9 +114,13 @@ enable-builtin-globs = true
 
 # Reviewed script shipments inside compile-time crates (audited 2026-07-26).
 [[bans.build.bypass]]
-crate = "libc"
-# Maintainer utility script, never executed by build.rs.
-allow-globs = ["etc/libc-util.py"]
+crate = "ring"
+# BoringSSL perlasm source (via pgrx-c-macros, a build dependency of
+# pgrx-pg-sys). A registry build compiles the shipped `pregenerated/`
+# assembly; ring 0.17.14's build.rs runs perl only when a `.git`
+# directory exists or RING_PREGENERATE_ASM=1, neither of which holds
+# for a crate from crates.io (#285).
+allow-globs = ["crypto/**/*.pl"]
 
 [[bans.build.bypass]]
 crate = "zerocopy"

@@ -49,14 +49,16 @@ rust = [
   # The MSRV toolchains, one per declared minimum: lint:msrv compiles
   # each crate at exactly the rust-version it promises rather than
   # trusting the stable pin to stand in for it. 1.82 is the workspace's;
-  # 1.96 is edtf-postgres's, because pgrx requires it (#197). Move a
-  # line and its rust-version together, never one alone.
+  # 1.99.1 is edtf-postgres's, because pgrx 0.20 requires it (#197,
+  # #285); 1.99.0 is excluded for an x86_64 miscompile of
+  # `extern "C" fn -> bool` (rust-lang/rust#163911). Move a line and its
+  # rust-version together, never one alone.
   { version = "1.82.0" },
-  { version = "1.96.0" },
+  { version = "1.99.1" },
 ]
 # Build input of the pgrx-extension class; must equal the pgrx crate
-# dependency, which Cargo.lock resolves to 0.19.3.
-"cargo:cargo-pgrx" = "0.19.3"
+# dependency, which Cargo.lock resolves to 0.20.0.
+"cargo:cargo-pgrx" = "0.20.0"
 # The Postgres edtf-postgres is compiled and tested against in the gate,
 # one entry per major the crate's features declare (.github#813). The
 # belt derives the majors from Cargo.toml and reds if a declared one is

@@ -6,9 +6,9 @@ description = "Postgres extension (pgrx) exposing edtf-core: EDTF validation, le
 keywords = ["edtf", "date", "iso8601", "postgres", "pgrx"]
 categories = ["date-and-time", "database"]
 edition.workspace = true
-# Not the workspace's 1.82: pgrx declares 1.96 itself, so this crate
-# cannot promise less than its own dependency does (#197).
-rust-version = "1.96"
+# Not the workspace's 1.82: pgrx 0.20 declares 1.99.1 itself, so this
+# crate cannot promise less than its own dependency does (#197, #285).
+rust-version = "1.99.1"
 license.workspace = true
 repository.workspace = true
 
@@ -28,10 +28,10 @@ pg_test = []
 
 [dependencies]
 edtf-core.workspace = true
-pgrx = "0.19.1"
+pgrx = "0.20.0"
 
 [dev-dependencies]
-pgrx-tests = "=0.19.3"
+pgrx-tests = "=0.20.0"
 
 [package.metadata.cargo-machete]
 # pgrx-tests has no direct `use`: `cargo pgrx test` links it as the test
