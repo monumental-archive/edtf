@@ -337,6 +337,20 @@ mod tests {
         assert_eq!(dispatch("validate", "1985-02-30"), (false, String::new()));
     }
 
+    /// The year must be bare ASCII digits after an optional `-`. A leading
+    /// `+` is the case the digit check alone refuses: `i64::from_str`
+    /// accepts it, so without the check `+1917` would convert silently.
+    #[test]
+    fn julian_year_refuses_an_explicit_plus_sign() {
+        assert_eq!(parse_julian_parts("1917"), Some((1917, None, None)));
+        assert_eq!(parse_julian_parts("+1917"), None);
+        assert_eq!(parse_julian_parts("-+44-03-15"), None);
+        assert_eq!(
+            dispatch("from-julian", "+1917-10-25"),
+            (false, String::new())
+        );
+    }
+
     /// The final arm guards an invariant, loudly.
     ///
     /// `main` only ever hands `process` a command it has already matched, so
