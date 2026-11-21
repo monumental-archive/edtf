@@ -67,7 +67,7 @@ use edtf_core::Edtf;
 struct Rng(u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         // xorshift64* — plenty for fuzzing, fully deterministic.
         let mut x = self.0;
         x ^= x >> 12;
@@ -77,7 +77,7 @@ impl Rng {
         x.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
 
-    fn below(&mut self, n: usize) -> usize {
+    const fn below(&mut self, n: usize) -> usize {
         (self.next() % n as u64) as usize
     }
 }

@@ -107,7 +107,7 @@ impl Qualifier {
     }
 
     /// Fold another component set into this one.
-    pub(crate) fn merge(&mut self, other: Self) {
+    pub(crate) const fn merge(&mut self, other: Self) {
         self.uncertain |= other.uncertain;
         self.approximate |= other.approximate;
     }
