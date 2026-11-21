@@ -13,6 +13,50 @@ exclude_re = [
   # cargo-mutants' own test filter (it skips `#[test]` and `cfg(test)`)
   # does not recognise, so it mutates the tests themselves.
   '^crates/edtf-postgres/src/lib\.rs:[0-9]+:[0-9]+: replace (tests::|.* in tests::)',
+  # edtf-normalize roman_num: `vals[i * 1..]` is `vals[i..]`, which adds
+  # only vals[i] itself to the look-ahead, and `n > v` is false for n == v.
+  '^crates/edtf-normalize/src/engine\.rs:323:19: replace \+ with \* in roman_num$',
+  # edtf-normalize strip_qualifiers: dropping a lone qualifier or noise word
+  # leaves an empty remainder, and neither "" nor any such word parses in
+  # any caller (none is a number, ordinal, Roman numeral or no-date word).
+  '^crates/edtf-normalize/src/engine\.rs:404:23: replace > with >= in strip_qualifiers$',
+  # Same for a lone trailing qualifier or noise word: empty or not, no parse.
+  '^crates/edtf-normalize/src/engine\.rs:432:23: replace > with >= in strip_qualifiers$',
+  # edtf-normalize split_era: a token list that IS an era phrase leaves an
+  # empty core, which parses to None; no era phrase parses on its own either.
+  '^crates/edtf-normalize/src/engine\.rs:462:23: replace > with >= in split_era$',
+  # edtf-normalize parse_single: popping a lone trailing noise word ("года")
+  # leaves an empty core; neither the word nor an empty core parses.
+  '^crates/edtf-normalize/src/engine\.rs:816:27: replace > with >= in parse_single$',
+  # edtf-normalize parse_single: stripping a lone noise word after a decade
+  # leaves no century tokens; no noise word reads as a century either.
+  '^crates/edtf-normalize/src/engine\.rs:864:30: replace > with >= in parse_single$',
+  # edtf-normalize split_modifier: a bare modifier phrase gives an empty
+  # remainder (None); unmatched, the phrase alone also parses to None.
+  '^crates/edtf-normalize/src/engine\.rs:969:21: replace > with >= in split_modifier$',
+  # edtf-normalize split_modifier: stripping a lone noise word after the
+  # modifier leaves nothing; the noise word is no decade or century either.
+  '^crates/edtf-normalize/src/engine\.rs:988:22: replace > with >= in split_modifier$',
+  # edtf-normalize match_head: a bare open-range phrase gives an empty
+  # remainder, which parses to None, as does the unmatched phrase alone.
+  '^crates/edtf-normalize/src/engine\.rs:1016:23: replace > with >= in match_head$',
+  # edtf-normalize parse_or: the edge-position guard is redundant; an "or"
+  # at either end leaves an empty side, and parse_single("") is None.
+  '^crates/edtf-normalize/src/engine\.rs:1046:17: replace \|\| with && in parse_or$',
+  # `len + 1` / `len / 1` drop the end-position test; an empty right side is None.
+  '^crates/edtf-normalize/src/engine\.rs:1046:38: replace - with [+/] in parse_or$',
+  # edtf-normalize parse_range: the word-split edge guard is redundant; an
+  # empty side makes endpoint_pair None (no parse, no number, no ordinal).
+  '^crates/edtf-normalize/src/engine\.rs:1073:14: replace > with >= in parse_range$',
+  # `||` admits an edge position; its empty side makes endpoint_pair None.
+  '^crates/edtf-normalize/src/engine\.rs:1073:18: replace && with \|\| in parse_range$',
+  # `<=` admits the last position; its empty right side is None.
+  '^crates/edtf-normalize/src/engine\.rs:1073:25: replace < with <= in parse_range$',
+  # `len + 1` / `len / 1` admit the last position; its empty right side is None.
+  '^crates/edtf-normalize/src/engine\.rs:1073:38: replace - with [+/] in parse_range$',
+  # edtf-normalize parse_range: the hyphen-split empty-side guard is
+  # redundant for the same reason: endpoint_pair with an empty side is None.
+  '^crates/edtf-normalize/src/engine\.rs:1094:25: replace \|\| with && in parse_range$',
   # edtf-core year_leap_possible: `v * 10 - d` folds the digits to -v
   # instead of v, and is_leap is rem_euclid-based, so is_leap(-v) ==
   # is_leap(v) for every year; no input can tell the two apart.
