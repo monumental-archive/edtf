@@ -384,3 +384,42 @@ impl Edtf {
         ])
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #![expect(
+        clippy::missing_panics_doc,
+        reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
+    )]
+    use super::{BoundDate, Ext, pred, succ};
+
+    fn day(year: i64, month: u8, day: u8) -> Ext {
+        Ext::Day(BoundDate { year, month, day })
+    }
+
+    fn ymd(e: Ext) -> Option<(i64, u8, u8)> {
+        match e {
+            Ext::Day(d) => Some((d.year, d.month, d.day)),
+            Ext::NegInf | Ext::PosInf => None,
+        }
+    }
+
+    /// Mid-month, month end, year end and a leap February: each step lands
+    /// on the true calendar neighbour.
+    #[test]
+    fn succ_steps_to_the_next_calendar_day() {
+        assert_eq!(ymd(succ(day(1985, 4, 12))), Some((1985, 4, 13)));
+        assert_eq!(ymd(succ(day(1985, 4, 30))), Some((1985, 5, 1)));
+        assert_eq!(ymd(succ(day(1984, 2, 28))), Some((1984, 2, 29)));
+        assert_eq!(ymd(succ(day(1985, 12, 31))), Some((1986, 1, 1)));
+    }
+
+    /// The mirror of `succ`, across the same boundaries.
+    #[test]
+    fn pred_steps_to_the_previous_calendar_day() {
+        assert_eq!(ymd(pred(day(1985, 4, 12))), Some((1985, 4, 11)));
+        assert_eq!(ymd(pred(day(1985, 5, 1))), Some((1985, 4, 30)));
+        assert_eq!(ymd(pred(day(1984, 3, 1))), Some((1984, 2, 29)));
+        assert_eq!(ymd(pred(day(1985, 1, 1))), Some((1984, 12, 31)));
+    }
+}
