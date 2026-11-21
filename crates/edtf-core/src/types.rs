@@ -645,6 +645,22 @@ mod tests {
         assert!(!d.is_approximate());
     }
 
+    /// A qualifier on the month alone is enough too, with no day after it:
+    /// each component answers on its own, none needs another to agree.
+    #[test]
+    fn a_month_only_qualifier_marks_the_date() {
+        let mut d = year_date([1, 9, 8, 5], Qualifier::default());
+        d.month = Some(DateField {
+            digits: [Some(0), Some(4)],
+            qualifier: Qualifier {
+                uncertain: true,
+                approximate: false,
+            },
+        });
+        assert!(d.is_uncertain());
+        assert!(!d.is_approximate());
+    }
+
     /// An unqualified value is not approximate.
     #[test]
     fn an_unqualified_value_is_not_approximate() {
