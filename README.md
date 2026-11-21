@@ -244,7 +244,9 @@ by hand from `pg_config --pkglibdir` and `--sharedir`.
 
 A major is dropped from the matrix as it reaches end of life;
 Postgres 14 left the matrix at its end of life (2026-11-12), and 15
-reaches its end of life in November 2027.
+reaches its end of life in November 2027. Removing the `pg14` feature
+is a breaking change, released as 2.0.0; 1.3.5 is the last release
+with it.
 
 JavaScript, via the wasm package:
 
