@@ -172,6 +172,8 @@ fn display_forms() {
     );
     assert_eq!(j(1917, 10, 25).to_string(), "1917-10-25");
     assert_eq!(j(-44, 3, 15).to_string(), "-0044-03-15");
+    // Year 0 is the sign boundary: it is unsigned, never "-0000".
+    assert_eq!(j(0, 1, 1).to_string(), "0000-01-01");
 }
 
 /// Every rejection clause of the calendar-day check, separately.
