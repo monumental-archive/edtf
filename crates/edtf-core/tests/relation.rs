@@ -5,11 +5,6 @@
 //! masks, qualifiers, seasons, open/unknown ends, Y-years, sets and
 //! datetimes. Property-level invariants live in `tests/props.rs`.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    reason = "test/bench code: a panic here is the failure signal, not a crash path"
-)]
 #![expect(
     clippy::tests_outside_test_module,
     reason = "an integration test under tests/ is compiled as its own crate whose every item is test support, so there is no non-test code for a mod tests to separate it from"

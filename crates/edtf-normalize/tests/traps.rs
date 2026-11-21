@@ -5,8 +5,7 @@
 //! N-decision in docs/normalize-notes.md commits to. Every expected string
 //! here must parse in edtf-core at the asserted level — enforced inline.
 
-#![allow(
-    clippy::unwrap_used,
+#![expect(
     clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]

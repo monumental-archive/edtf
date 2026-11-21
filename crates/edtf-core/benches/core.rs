@@ -6,8 +6,7 @@
 //! `task bench` (or `cargo bench -p edtf-core`) and publish the numbers in
 //! the README on release.
 
-#![allow(
-    clippy::unwrap_used,
+#![expect(
     clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]

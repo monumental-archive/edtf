@@ -11,11 +11,6 @@
 //! non-goal), and these rows pin what the arithmetic must do *after* that
 //! resolution.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    reason = "test/bench code: a panic here is the failure signal, not a crash path"
-)]
 #![expect(
     clippy::tests_outside_test_module,
     reason = "an integration test under tests/ is compiled as its own crate whose every item is test support, so there is no non-test code for a mod tests to separate it from"

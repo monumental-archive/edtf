@@ -16,7 +16,7 @@
 //! expressions from stdin — handy for validating whole data files:
 //! `cut -f3 dates.tsv | edtf validate -`.
 
-#![allow(
+#![expect(
     clippy::print_stdout,
     clippy::print_stderr,
     reason = "a CLI's job is printing: stdout is output, stderr is diagnostics"
@@ -288,7 +288,7 @@ mod tests {
         clippy::missing_panics_doc,
         reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
     )]
-    #![allow(
+    #![expect(
         clippy::unwrap_used,
         reason = "test code: a panic here is the failure signal, not a crash path"
     )]

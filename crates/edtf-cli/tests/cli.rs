@@ -3,7 +3,7 @@
 
 //! End-to-end tests of the `edtf` binary via `std::process`.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"

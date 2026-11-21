@@ -7,9 +7,8 @@
 //! that belongs to the database wrapper, not the core — those are skipped
 //! here and covered by the explicit cases below.)
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
-    clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]
 #![expect(

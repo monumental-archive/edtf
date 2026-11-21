@@ -8,15 +8,12 @@
 //! nightly toolchain or external fuzzer needed, so this guards every CI run.
 //! Iteration counts scale up under `--release` (and via `EDTF_FUZZ_ITERS`).
 
-#![allow(
-    clippy::unwrap_used,
+#![expect(
     clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]
-#![allow(
+#![expect(
     clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
     reason = "generator and oracle ranges are bounded by construction"
 )]
 #![expect(
