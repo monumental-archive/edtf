@@ -521,4 +521,25 @@ mod tests {
         assert!(!j.contains("\"level\":1"), "1985 is level 0: {j}");
         assert!(j.contains("\"level\":0"));
     }
+
+    #[test]
+    fn valid_input_has_level_and_validity() {
+        // A valid input reports its own level, never the invalid -1, and an
+        // invalid one is not valid: each side of both exports is asserted.
+        assert_eq!(level("1985"), 0);
+        assert_eq!(level("1985~"), 1);
+        assert_eq!(level("2004-06~-11"), 2);
+        assert!(!is_valid("1985-02-30"));
+        assert!(!is_valid("junk"));
+    }
+
+    #[test]
+    fn default_century_upper_bound_is_inclusive() {
+        // 9999 is the last in-domain defaultCentury; 10000 is the first
+        // option error.
+        let max = Some(String::from("{\"defaultCentury\":9999}"));
+        assert!(normalize("the 80s", max).is_some());
+        let over = Some(String::from("{\"defaultCentury\":10000}"));
+        assert!(normalize("the 80s", over).is_none());
+    }
 }
