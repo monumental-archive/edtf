@@ -387,6 +387,10 @@ impl Edtf {
 
 #[cfg(test)]
 mod tests {
+    #![expect(
+        clippy::missing_panics_doc,
+        reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
+    )]
     use super::{BoundDate, Ext, pred, succ};
 
     fn day(year: i64, month: u8, day: u8) -> Ext {
