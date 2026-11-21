@@ -24,9 +24,6 @@ shell = "bash -euo pipefail -c"
 # -Zsanitizer, which stable refuses. Must match the dated nightly in the
 # rust pin below. This is the one pin in the org Renovate cannot bump.
 FUZZ_TOOLCHAIN = "nightly-2026-07-20"
-# How long each target fuzzes on the Monday cron. 300 rather than the
-# 60s floor: on a weekly cron for a public repo the minutes are free.
-FUZZ_SECONDS = "300"
 
 [tools]
 # Two toolchains, both locked by mise. The stable pin builds and
