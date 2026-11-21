@@ -1362,7 +1362,7 @@ fn map_single(single: Single, wrap: impl Fn(Expr) -> Option<Expr>, note: Note) -
 // Qualification and rendering
 
 /// Fold a qualifier into an accumulating one.
-fn merge(into: &mut Qualifier, q: Qualifier) {
+const fn merge(into: &mut Qualifier, q: Qualifier) {
     into.uncertain |= q.uncertain;
     into.approximate |= q.approximate;
 }
@@ -1370,7 +1370,7 @@ fn merge(into: &mut Qualifier, q: Qualifier) {
 /// Distribute a whole-expression qualifier over every present component;
 /// uniform qualification renders as the trailing form ("1940-06~") via
 /// core's canonical Display (N10).
-fn qualify_date(d: &mut Date, q: Qualifier) {
+const fn qualify_date(d: &mut Date, q: Qualifier) {
     if !q.uncertain && !q.approximate {
         return;
     }

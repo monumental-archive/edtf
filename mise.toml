@@ -48,12 +48,12 @@ rust = [
   { version = "nightly-2026-07-20", components = "llvm-tools,rust-src" },
   # The MSRV toolchains, one per declared minimum: lint:msrv compiles
   # each crate at exactly the rust-version it promises rather than
-  # trusting the stable pin to stand in for it. 1.82 is the workspace's;
+  # trusting the stable pin to stand in for it. 1.85 is the workspace's;
   # 1.99.1 is edtf-postgres's, because pgrx 0.20 requires it (#197,
   # #285); 1.99.0 is excluded for an x86_64 miscompile of
   # `extern "C" fn -> bool` (rust-lang/rust#163911). Move a line and its
   # rust-version together, never one alone.
-  { version = "1.82.0" },
+  { version = "1.85.0" },
   { version = "1.99.1" },
 ]
 # Build input of the pgrx-extension class; must equal the pgrx crate
