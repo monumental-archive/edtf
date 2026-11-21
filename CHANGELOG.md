@@ -6,6 +6,47 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 over the public APIs of the crates this repository publishes.
 
+## [1.4.0](https://github.com/monumental-archive/edtf/compare/v1.3.5...v1.4.0) - 2026-11-21
+
+### Added
+
+- drop Postgres 14 at its end of life ([#289](https://github.com/monumental-archive/edtf/pull/289))
+
+### Changed
+
+- convert inner lint allows to expects ([#295](https://github.com/monumental-archive/edtf/pull/295))
+
+### Fixed
+
+- move edtf-postgres to pgrx 0.20.0 at rust 1.99.1 ([#293](https://github.com/monumental-archive/edtf/pull/293))
+
+### Documentation
+
+- record the concept doi in the citation file ([#264](https://github.com/monumental-archive/edtf/pull/264))
+- re-point carlallenn/edtf links to monumental-archive/edtf ([#287](https://github.com/monumental-archive/edtf/pull/287))
+
+### Testing
+
+- adopt the canon's rust mutation leg ([#275](https://github.com/monumental-archive/edtf/pull/275))
+- pin the to_pg_date range guard's edges ([#306](https://github.com/monumental-archive/edtf/pull/306))
+- kill the parse_julian_parts sign-check mutant ([#307](https://github.com/monumental-archive/edtf/pull/307))
+- assert year 0 displays unsigned ([#305](https://github.com/monumental-archive/edtf/pull/305))
+- kill the 3 edtf-wasm mutation survivors ([#308](https://github.com/monumental-archive/edtf/pull/308))
+- kill or explain the edtf-core mutation survivors ([#309](https://github.com/monumental-archive/edtf/pull/309))
+
+### CI
+
+- adopt the canon's rust branch-coverage floor ([#273](https://github.com/monumental-archive/edtf/pull/273))
+- remove codecov.yml for the org's global yaml ([#277](https://github.com/monumental-archive/edtf/pull/277))
+
+### Dependencies
+
+- update node to 26.13.1 ([#267](https://github.com/monumental-archive/edtf/pull/267))
+- pin cargo-auditable in its prebuilt github: form ([#268](https://github.com/monumental-archive/edtf/pull/268))
+- update postgresql-binaries to 18.7.0 ([#279](https://github.com/monumental-archive/edtf/pull/279))
+- update postgresql-binaries ([#283](https://github.com/monumental-archive/edtf/pull/283))
+- update rust to 1.100.0 ([#290](https://github.com/monumental-archive/edtf/pull/290))
+
 ## [1.3.5](https://github.com/monumental-archive/edtf/compare/v1.3.4...v1.3.5) - 2026-11-16
 
 ### Fixed
