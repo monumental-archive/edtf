@@ -200,3 +200,29 @@ fn converse_pairs() {
     assert_eq!(Overlaps.converse(), Overlaps);
     assert_eq!(Equal.converse(), Equal);
 }
+
+#[test]
+fn modality_names_are_lower_case() {
+    assert_eq!(Modality::Impossible.as_str(), "impossible");
+    assert_eq!(Modality::Possible.as_str(), "possible");
+    assert_eq!(Modality::Definite.as_str(), "definite");
+}
+
+#[test]
+fn a_definite_relation_is_not_impossible() {
+    let r = rel("1985~", "199X");
+    assert!(!r.is_impossible(Before));
+    assert!(r.is_impossible(After));
+}
+
+/// Overlap is asked in both directions and either one suffices. Here only
+/// one partial overlap is feasible — the earlier region may end on the later
+/// one's first day, but the later one cannot start first — and the coarsened
+/// `Overlaps` still reports it, whichever operand comes first.
+#[test]
+fn overlap_feasible_in_one_direction_only() {
+    let r = rel("1980-01-01/1985-01-01", "1985-01-01/1990-12-31");
+    assert!(r.is_possible(Overlaps));
+    let r = rel("1985-01-01/1990-12-31", "1980-01-01/1985-01-01");
+    assert!(r.is_possible(Overlaps));
+}

@@ -1123,4 +1123,139 @@ mod tests {
 
         check_plain_month(field([Some(0), Some(4)])).unwrap();
     }
+
+    /// Assert `input` fails with exactly this message at exactly this offset.
+    fn assert_err(input: &str, message: &str, offset: usize) {
+        let e = parse(input).unwrap_err();
+        assert_eq!((e.message, e.offset), (message, offset), "{input:?}");
+    }
+
+    /// A space and a control character are each refused on their own, at
+    /// their own byte, before any grammar runs.
+    #[test]
+    fn whitespace_and_control_bytes_are_each_refused() {
+        assert_err("1985-01-01 ", "whitespace is not allowed", 10);
+        assert_err("1985\t", "whitespace is not allowed", 4);
+    }
+
+    /// Error offsets inside a date are absolute: each component's position is
+    /// added to the slice's base, so a date that is not the whole input (an
+    /// interval end, a set element) reports where it really sits.
+    #[test]
+    fn date_errors_are_positioned_from_the_slice_base() {
+        assert_err("1985-1", "month must be two digits (or X)", 5);
+        assert_err("1985/1986-1", "month must be two digits (or X)", 10);
+        assert_err("-0000", "-0000 is not a valid year", 0);
+        assert_err(
+            "198XS2",
+            "significant digits cannot combine with unspecified digits",
+            4,
+        );
+    }
+
+    /// A masked month or year digit admits only the completions matching its
+    /// specified digit: `X4` is April alone (no 31st), and a year ending in 1
+    /// is never leap while one ending in 4 can be.
+    #[test]
+    fn masked_digits_admit_only_matching_completions() {
+        assert_err("1985-X4-31", "day is out of range for the month", 8);
+        assert_err("XXX1-02-29", "day is out of range for the month", 8);
+        parse("XXX4-02-29").unwrap();
+    }
+
+    /// The S-digit count must be at least 1 and within the digit count, and
+    /// a missing count is refused rather than read as no suffix.
+    #[test]
+    fn y_year_significant_digits_beyond_the_digit_count_are_refused() {
+        let msg = "significant digits exceed the year's digit count";
+        assert_err("Y12345S6", msg, 7);
+        assert_err("Y12345S", msg, 7);
+        assert_err("Y12345S0", msg, 7);
+    }
+
+    /// Every separator of a date-time is checked, each on its own: a wrong
+    /// byte in any one position is enough to refuse the shape.
+    #[test]
+    fn datetime_separators_are_each_required() {
+        let date = "date-times require a complete YYYY-MM-DD date";
+        assert_err("1985X04-12T10:00:00", date, 0);
+        assert_err("1985-04X12T10:00:00", date, 0);
+        assert_err("1985-04-1T10:00:00", date, 0);
+        assert_err("1985-04-12T10x00:00", "time must be hh:mm:ss", 11);
+        assert_err("1985-04-12T10:00x00", "time must be hh:mm:ss", 11);
+        assert_err(
+            "1985-04-12T10:00:00+01x30",
+            "time shift must be \u{b1}hh or \u{b1}hh:mm",
+            19,
+        );
+    }
+
+    /// Time and shift errors sit at the offending component, counted from
+    /// the start of the whole input.
+    #[test]
+    fn time_errors_are_positioned_at_their_component() {
+        assert_err("1985-04-12T10:0a:00", "time components must be two digits", 14);
+        assert_err("1985-04-12T10:60:00", "minute must be 00-59", 14);
+        assert_err("1985-04-12T10:00:61", "second must be 00-60", 17);
+        assert_err("1985-04-12T10:00:00+01:60", "shift minutes must be 00-59", 23);
+        let two = "time shift components must be two digits";
+        assert_err("1985-04-12T10:00:00+0a", two, 20);
+        assert_err("1985-04-12T10:00:00+01:0a", two, 23);
+    }
+
+    /// Interval errors sit where the offending part starts or ends.
+    #[test]
+    fn interval_errors_are_positioned_at_the_offending_part() {
+        assert_err("1985/1986/1987", "interval must contain exactly one '/'", 9);
+        assert_err(
+            "..1985-13/1990",
+            "month must be 01-12 or a sub-year code 21-41",
+            7,
+        );
+        assert_err(
+            "1985../1990",
+            "'..'-suffixed date is only allowed as interval end",
+            4,
+        );
+    }
+
+    /// An interval may start and end on the same day: only an end strictly
+    /// before the start is out of order.
+    #[test]
+    fn a_one_day_interval_is_in_order() {
+        parse("1985-01-01/1985-01-01").unwrap();
+    }
+
+    /// `{}` is a terminated set with nothing in it, not an unterminated one.
+    #[test]
+    fn an_empty_set_is_refused_as_empty_not_unterminated() {
+        assert_err("{}", "set must contain at least one element", 1);
+        assert_err("{", "unterminated set", 0);
+    }
+
+    /// Set errors sit at the offending element or range end, counted from
+    /// the start of the whole input.
+    #[test]
+    fn set_errors_are_positioned_at_the_offending_element() {
+        assert_err("{1985,{1986}}", "sets cannot nest", 6);
+        let month = "month must be 01-12 or a sub-year code 21-41";
+        assert_err("{..1985-13}", month, 8);
+        assert_err("{1980,1985..1986-13}", month, 17);
+        assert_err(
+            "{1980,1985..1986..1987}",
+            "set element cannot contain multiple '..'",
+            12,
+        );
+        assert_err(
+            "{1980,1985..1986~}",
+            "set range endpoints cannot be qualified",
+            12,
+        );
+        assert_err(
+            "{1980,1985..1986-01}",
+            "set range endpoints must share precision",
+            12,
+        );
+        assert_err("{1980,1986..1985}", "set range end precedes range start", 12);
+    }
 }

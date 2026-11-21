@@ -655,6 +655,15 @@ mod tests {
         assert_eq!(significant_range(1985, Some(1), 20), Some((1985, 1985)));
     }
 
+    // The sign split sits exactly at zero: year 0 sweeps upward like any
+    // non-negative year, and a negative year mirrors its magnitude's sweep,
+    // both ends negated, so the range still reads low to high.
+    #[test]
+    fn significant_range_splits_on_the_sign_at_zero() {
+        assert_eq!(significant_range(0, Some(2), 4), Some((0, 99)));
+        assert_eq!(significant_range(-1985, Some(2), 4), Some((-1999, -1900)));
+    }
+
     // `season_months` is total over the 21..=41 codes validation admits;
     // anything else must panic rather than return a wrong month pair.
     #[test]

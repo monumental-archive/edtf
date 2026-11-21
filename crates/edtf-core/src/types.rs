@@ -629,4 +629,21 @@ mod tests {
         assert!(second.is_uncertain());
         assert!(second.is_approximate());
     }
+
+    /// A qualifier on the year alone is enough: it is the first of the
+    /// three components asked, with no month or day to answer instead.
+    #[test]
+    fn a_year_only_qualifier_marks_the_date() {
+        let d = year_date([1, 9, 8, 5], Qualifier { uncertain: true, approximate: false });
+        assert!(d.is_uncertain());
+        assert!(!d.is_approximate());
+    }
+
+    /// An unqualified value is not approximate.
+    #[test]
+    fn an_unqualified_value_is_not_approximate() {
+        let e = Edtf::Date(year_date([1, 9, 8, 5], Qualifier::default()));
+        assert!(!e.is_approximate());
+        assert!(!e.is_uncertain());
+    }
 }
