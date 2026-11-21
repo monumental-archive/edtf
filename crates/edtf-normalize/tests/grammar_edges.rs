@@ -474,7 +474,8 @@ fn hyphenated_year_ranges_as_or_alternatives() {
     // (full and elided end year, N4) are what answer it (N14).
     ambiguous("1914-1918 or 1920", &["1914/1918", "1920"]);
     ambiguous("1914-18 or 1920", &["1914/1918", "1920"]);
-    // A four-digit end year must be later than the start.
+    // Today the token arm refuses an equal end year inside an "or" side;
+    // #312 makes this read 1914/1914.
     no_match_because(
         "1914-1914 or 1920",
         Options::default(),
