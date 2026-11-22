@@ -32,10 +32,6 @@
     reason = "one named helper per assertion group is what makes the test readable"
 )]
 #![expect(
-    clippy::shadow_reuse,
-    reason = "rebinding a value through the transformation under test"
-)]
-#![expect(
     clippy::unreachable,
     reason = "an unreachable! naming the invariant the fixture guarantees"
 )]
@@ -69,17 +65,6 @@ fn julian_last_day(month: u8, leap: bool) -> u8 {
     }
 }
 
-/// Test-local oracle: JDN of a proleptic Gregorian date (floor division).
-fn gregorian_jdn(d: BoundDate) -> i128 {
-    let (y, m, dd) = (i128::from(d.year), i128::from(d.month), i128::from(d.day));
-    let a = (14 - m).div_euclid(12);
-    let y = y + 4800 - a;
-    let m = m + 12 * a - 3;
-    dd + (153 * m + 2).div_euclid(5) + 365 * y + y.div_euclid(4) - y.div_euclid(100)
-        + y.div_euclid(400)
-        - 32045
-}
-
 /// The written-date offset: how many days later the Julian nominal date
 /// `y-m-d` falls than the Gregorian nominal date `y-m-d`.
 fn offset(y: i64, m: u8, d: u8) -> i128 {
@@ -89,12 +74,13 @@ fn offset(y: i64, m: u8, d: u8) -> i128 {
         day: d,
     })
     .expect("valid by construction");
-    gregorian_jdn(g)
-        - gregorian_jdn(BoundDate {
+    g.julian_day_number()
+        - BoundDate {
             year: y,
             month: m,
             day: d,
-        })
+        }
+        .julian_day_number()
 }
 
 /// A valid proleptic Julian date across a wide year range.
@@ -159,7 +145,7 @@ proptest! {
         let Ok(Converted::Span { earliest, latest }) = convert(y, None, None) else {
             return Err(TestCaseError::fail("year must convert to a span"));
         };
-        let days = gregorian_jdn(latest) - gregorian_jdn(earliest) + 1;
+        let days = latest.julian_day_number() - earliest.julian_day_number() + 1;
         let expected = if is_julian_leap(y) { 366 } else { 365 };
         prop_assert_eq!(days, expected, "Julian {} spans {}..{}", y, earliest, latest);
     }
@@ -170,7 +156,7 @@ proptest! {
         let Ok(Converted::Span { earliest, latest }) = convert(y, Some(m), None) else {
             return Err(TestCaseError::fail("month must convert to a span"));
         };
-        let days = gregorian_jdn(latest) - gregorian_jdn(earliest) + 1;
+        let days = latest.julian_day_number() - earliest.julian_day_number() + 1;
         prop_assert_eq!(days, i128::from(julian_last_day(m, is_julian_leap(y))));
     }
 

@@ -245,16 +245,6 @@ const fn julian_jdn(y: i128, m: i128, d: i128) -> i128 {
     d + (153 * m + 2).div_euclid(5) + 365 * y + y.div_euclid(4) - 32083
 }
 
-/// Julian Day Number of a proleptic Gregorian date.
-const fn gregorian_jdn(y: i128, m: i128, d: i128) -> i128 {
-    let a = (14 - m).div_euclid(12);
-    let y = y + 4800 - a;
-    let m = m + 12 * a - 3;
-    d + (153 * m + 2).div_euclid(5) + 365 * y + y.div_euclid(4) - y.div_euclid(100)
-        + y.div_euclid(400)
-        - 32045
-}
-
 /// Split the era-day count `e` (per 4-year cycle) into (year-in-era, month,
 /// day) — the shared tail of both JDN inversions.
 const fn split(c: i128) -> (i128, u8, u8) {
@@ -335,11 +325,7 @@ pub fn julian_to_gregorian(date: JulianDate) -> Result<BoundDate, CalendarError>
 /// exceeds the numeric range this library computes with.
 pub fn gregorian_to_julian(date: BoundDate) -> Result<JulianDate, CalendarError> {
     check(date.month, date.day, is_gregorian_leap(date.year))?;
-    let jdn = gregorian_jdn(
-        i128::from(date.year),
-        i128::from(date.month),
-        i128::from(date.day),
-    );
+    let jdn = date.julian_day_number();
     let (year, month, day) = jdn_to_julian(jdn);
     Ok(JulianDate {
         year: i64::try_from(year).map_err(|_| CalendarError::OutOfRange)?,

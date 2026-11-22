@@ -108,6 +108,39 @@ pub struct BoundDate {
     pub day: u8,
 }
 
+impl BoundDate {
+    /// The Julian Day Number of this proleptic-Gregorian day: the count of
+    /// days since noon, 1 January 4713 BC in the proleptic Julian calendar
+    /// (astronomical year -4712), so `2000-01-01` is 2451545 and `-4713-11-24`
+    /// is 0. Days before that origin are negative.
+    ///
+    /// This is the property any consumer mapping a bound into another date
+    /// system needs (a Postgres `date` is a day count from 2000-01-01), and
+    /// it is how `edtf-calendars` crosses into the Julian calendar.
+    ///
+    /// The function is total: it computes in `i128` with floor division
+    /// (Fliegel–Van Flandern / Richards), so every `i64` year is safe. It is
+    /// meaningful for a real calendar day, which is every `BoundDate` that
+    /// [`Edtf::bounds`] produces; for a month or day out
+    /// of range it still returns a number, but not one that names that day.
+    #[must_use]
+    #[expect(
+        clippy::shadow_reuse,
+        reason = "the JDN form rebinds y and m as the published derivation does, step by step; renaming each step would break the correspondence to the source"
+    )]
+    pub const fn julian_day_number(self) -> i128 {
+        let y = self.year as i128;
+        let m = self.month as i128;
+        let d = self.day as i128;
+        let a = (14 - m).div_euclid(12);
+        let y = y + 4800 - a;
+        let m = m + 12 * a - 3;
+        d + (153 * m + 2).div_euclid(5) + 365 * y + y.div_euclid(4) - y.div_euclid(100)
+            + y.div_euclid(400)
+            - 32045
+    }
+}
+
 impl core::fmt::Display for BoundDate {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if self.year < 0 {
