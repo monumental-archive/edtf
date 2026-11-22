@@ -329,14 +329,16 @@ fn roman_num(t: &str) -> Option<u32> {
     u32::try_from(total).ok().filter(|t| (1..=99).contains(t))
 }
 
-/// Ordinal in century position.
+/// Ordinal in century position: 1 to 99.
 ///
 /// Digits, suffixed digits, ordinal words, and Roman numerals where the
 /// language uses them. The bool records the Roman-numeral provenance
-/// (surfaced as `Note::RomanCentury`, N15).
+/// (surfaced as `Note::RomanCentury`, N15). The range is held here, not by
+/// each caller, so a bare left endpoint ("0-1в") can never reach the
+/// century arithmetic as century 0.
 fn century_ordinal(t: &str, lang: &Lang) -> Option<(u32, bool)> {
     if let Some(n) = ordinal_num(t, lang) {
-        return Some((n, false));
+        return (1..=99).contains(&n).then_some((n, false));
     }
     if lang.roman_centuries {
         return Some((roman_num(t)?, true));
@@ -581,7 +583,7 @@ fn century_toks(toks: &[&str], lang: &Lang) -> Option<(u32, bool)> {
         [o, w] if word(w) => century_ordinal(o, lang)?,
         _ => return None,
     };
-    (1..=99).contains(&n).then_some((n, roman))
+    Some((n, roman))
 }
 
 /// Astronomical year span of century `n`: 19th CE = 1801..=1900,
