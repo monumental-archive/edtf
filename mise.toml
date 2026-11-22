@@ -88,8 +88,8 @@ description = "The workspace test suite, every feature, minus the extension"
 # --all-features across edtf-postgres is a hard error (its pg majors are
 # mutually exclusive) and it needs a live Postgres regardless, so it is
 # excluded here exactly as it is from the coverage legs. The extension's
-# own suite is `pg:test`, and the release proves it per major in the
-# extension class's containers.
+# own suite is `test:pgrx`, the belt's, in the gate, and the release
+# proves it per major in the extension class's containers.
 run = '"${ORG_BELT_DIR}/measured" cargo test --workspace --locked --all-features --exclude edtf-postgres'
 
 [tasks.bench]
@@ -103,13 +103,3 @@ run = "cargo build -p edtf-wasm --target wasm32-unknown-unknown --release"
 [tasks."wasm:pack"]
 description = "Build the npm-ready package (JS glue + .d.ts) via wasm-pack"
 run = "wasm-pack build crates/edtf-wasm --target web --out-dir pkg"
-
-[tasks."pg:test"]
-description = "The Postgres extension test suite (requires `cargo pgrx init`)"
-dir = "crates/edtf-postgres"
-run = "cargo pgrx test pg18"
-
-[tasks."pg:package"]
-description = "Package the Postgres extension for installation"
-dir = "crates/edtf-postgres"
-run = "cargo pgrx package"

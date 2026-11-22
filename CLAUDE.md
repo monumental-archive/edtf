@@ -60,8 +60,9 @@ Consequences worth knowing before you reach for a knob:
 Postgres major, both in the gate, and the release builds and tests it in
 containers per major as well.
 
-- `mise run pg:test` / `pg:package` (the extension is linted by the
-  belt's `lint:pg-clippy`, in the gate)
+- `mise run test:pgrx` — the extension's suite at every declared Postgres
+  major (the belt's, in the gate; the extension is linted by the belt's
+  `lint:pg-clippy`)
 - `mise run lint:pg-schema` — diff the generated SQL surface against
   `schema.snapshot.sql`, in the gate; `fix:pg-schema` rewrites it after
   a surface change you intend (read the diff first)

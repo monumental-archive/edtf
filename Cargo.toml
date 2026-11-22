@@ -16,7 +16,7 @@ members = [
 # toolchain ($PGRX_HOME, via `cargo pgrx init`), and its pg15-pg18 features
 # are mutually exclusive, so `--all-features` across it is a hard error.
 # Bare `cargo build`/`test`/`clippy` therefore cover the five pure-Rust
-# crates and skip it; reach it with `-p edtf-postgres` or `task pg:test`.
+# crates and skip it; reach it with `-p edtf-postgres` or `mise run test:pgrx`.
 #
 # This is the layout serious pgrx projects use: ParadeDB sets
 # default-members = ["pg_search", "tokenizers"] for the same reason, and
