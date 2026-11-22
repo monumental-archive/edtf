@@ -257,10 +257,13 @@ fn significant_digit_sweep_overflow_bounds_to_unknown() {
 #[test]
 fn julian_day_numbers_match_known_days() {
     // Known Julian Day Numbers of proleptic-Gregorian days (astronomical
-    // years): the J2000 and Unix epochs, the first Gregorian day, the turn
-    // of 1 BC (year 0) into AD 1, and Postgres's floor (JDN 0) and ceiling.
+    // years): the J2000 and Unix epochs, the leap day 2000-02-29 (the
+    // formula's a is 1 for January and February alike), the first Gregorian
+    // day, the turn of 1 BC (year 0) into AD 1, and Postgres's floor (JDN 0)
+    // and ceiling.
     for (year, month, day, jdn) in [
         (2000, 1, 1, 2_451_545),
+        (2000, 2, 29, 2_451_604),
         (1970, 1, 1, 2_440_588),
         (1582, 10, 15, 2_299_161),
         (1, 1, 1, 1_721_426),
