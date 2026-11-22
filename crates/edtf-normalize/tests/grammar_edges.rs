@@ -168,6 +168,14 @@ fn impossible_on_both_numeric_readings_fails_closed() {
 }
 
 #[test]
+fn equal_numeric_fields_are_order_irrelevant() {
+    // Both orderings render the same date, so the order is irrelevant, not
+    // two identical readings (N5).
+    ok("04/04/1985", "1985-04-04");
+    assert_eq!(notes_of("04/04/1985"), [Note::NumericOrderIrrelevant]);
+}
+
+#[test]
 fn year_then_single_digit_month() {
     ok("1985/4", "1985-04");
 }
@@ -191,10 +199,54 @@ fn season_range_collisions_cover_every_season_name() {
 // Open-ended ranges, alternatives
 
 #[test]
-fn open_range_over_a_collision_keeps_only_date_readings() {
-    // "before 1914-21": the elided-range reading cannot be an interval
-    // endpoint, so the sub-year reading survives alone (N8, N13).
-    ok("before 1914-21", "../1914-21");
+fn open_range_over_a_collision_reports_both_readings() {
+    // "before 1914-21": before spring 1914, or before the span 1914-1921,
+    // which is before its start (N8, N13).
+    ambiguous("before 1914-21", &["../1914-21", "../1914"]);
+}
+
+#[test]
+fn open_ranges_take_a_span_by_its_near_edge() {
+    // Before a span is before its start; after it is after its end (N8).
+    ok("before 1914-1918", "../1914");
+    ok("after 1914-1918", "1918/..");
+    ok("after 1914-18", "1918/..");
+    ok("before june-july 1940", "../1940-06");
+    ok("after 2nd century bc", "-0100/..");
+    ok("before early 19th century", "../1801");
+    assert!(!notes_of("before early 19th century").contains(&Note::ModifierDropped));
+    ok("after late 19th century", "1900/..");
+    ok("before circa 1914-1918", "../1914~");
+    // Both of N17's readings start in the same winter: one reading.
+    ok("before winter 1941-42", "../1941-24");
+    for input in ["before after 1900", "before before 1900", "after 1918-1914"] {
+        no_match_because(input, Options::default(), NoMatchReason::OutOfGrammar);
+    }
+    ambiguous("before 1900s", &["../190X", "../19XX"]);
+}
+
+#[test]
+fn sub_year_codes_read_inside_a_phrase() {
+    // A sub-year code with no elided reading is simply that date (N13).
+    ok("before 1985-21", "../1985-21");
+    ok("after 1985-24", "1985-24/..");
+    ambiguous("1985-21 or 1990", &["1985-21", "1990"]);
+    ok("1985-21 to 1990", "1985-21/1990");
+    ok("1985-21 - 1990-22", "1985-21/1990-22");
+    ambiguous("before 1914-21", &["../1914-21", "../1914"]);
+    // A colliding token is refused as an alternative or a range endpoint.
+    for input in [
+        "1914-21 or 1930",
+        "1915-21 to 1990",
+        "1900 to 1915-21",
+        "before 1985-42",
+        "before 1985-13",
+        "before 198X",
+    ] {
+        no_match_because(input, Options::default(), NoMatchReason::OutOfGrammar);
+    }
+    // Two identical alternatives are one reading.
+    ok("1863 or 1863", "1863");
 }
 
 #[test]

@@ -112,7 +112,11 @@ against the N-number.
   event somewhere in an open span — `[..1917]` (a one-of set) says the value
   is one of an enumerated list, which is a different claim and a level-2
   feature besides. "no later than" style phrases (`не позднее`) read the
-  same way.
+  same way. The operand may be a span: "before 1914-1918" is `../1914`
+  and "after 1914-1918" is `1918/..`; before a span is before its start,
+  after it is after its end. A century part keeps its modifier here
+  ("before early 19th century" → `../1801`). An operand with two readings
+  gives two readings.
 - **N9 — missing years are masked:** a *standalone* month with no year
   ("January", "January 12", "апрель") gets year `XXXX`: `XXXX-01`,
   `XXXX-01-12`. Never an assumed current year — the normalizer has no clock
@@ -148,7 +152,10 @@ against the N-number.
   EDTF does not pass through silently: when the elided reading is
   chronologically possible, both readings are reported. Elided ends 13–20
   and 42–99 are not valid codes, so only the range reading exists
-  ("1914-18" → `1914/1918`).
+  ("1914-18" → `1914/1918`). Inside a phrase the same holds: "before
+  1914-21" is `../1914-21` or `../1914`. Where no elided reading exists
+  the token is simply the sub-year date ("before 1985-21" →
+  `../1985-21`). As a range endpoint a colliding token is refused.
 - **N14 — alternatives stay alternatives, and dead readings poison:**
   "1863 or 1864" ("1863 или 1864") → `Ambiguous` with both years.
   python-edtf silently keeps the first. When any reading of an ambiguous
