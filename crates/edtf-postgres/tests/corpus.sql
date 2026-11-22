@@ -56,11 +56,32 @@ BEGIN
     ASSERT edtf_max('2003-24')::text = '2004-02-29', 'season 24 wraps across the year boundary';
     ASSERT edtf_max('1985-04-12/..')::text = 'infinity', 'open interval end';
     ASSERT edtf_min('../1985')::text = '-infinity', 'open interval start';
-    -- Unknown ends and years outside the Postgres date range are NULL,
-    -- never a silently clamped date.
+    -- Bounds convert as a day count (the Julian Day Number), so EDTF's
+    -- astronomical years land on Postgres's BC numbering: year 0000 is
+    -- 1 BC (a leap year), -0001 is 2 BC, -4712 is 4713 BC.
+    ASSERT edtf_min('-4712')::text = '4713-01-01 BC', 'astronomical -4712 is 4713 BC';
+    ASSERT edtf_max('-0001')::text = '0002-12-31 BC', 'astronomical -0001 is 2 BC';
+    ASSERT edtf_min('0000')::text = '0001-01-01 BC', 'year 0000 is 1 BC: floor';
+    ASSERT edtf_max('0000')::text = '0001-12-31 BC', 'year 0000 is 1 BC: ceiling';
+    ASSERT edtf_max('0000-02')::text = '0001-02-29 BC', 'year 0000 is a leap year';
+    ASSERT edtf_min('0001')::text = '0001-01-01', 'year 0001 is AD 1';
+    -- Postgres holds 4714-11-24 BC (Julian day 0) to 5874897-12-31. A day
+    -- outside that range saturates to -infinity / infinity, which is not a
+    -- date and is never a silently clamped one: it still compares and
+    -- contains correctly against every date Postgres can hold. NULL means
+    -- only that the bound is unknown.
+    ASSERT edtf_min('-4713-11-24')::text = '4714-11-24 BC', 'the Postgres floor';
+    ASSERT edtf_min('-4713-11-23')::text = '-infinity', 'the day before the floor saturates';
+    ASSERT edtf_min('-4713')::text = '-infinity', 'a year starting before the floor saturates';
+    ASSERT edtf_max('-4713')::text = '4714-12-31 BC', 'that year still ends inside the range';
+    ASSERT edtf_max('Y5874897')::text = '5874897-12-31', 'the Postgres ceiling';
+    ASSERT edtf_min('Y5874898')::text = 'infinity', 'the year after the ceiling saturates';
+    ASSERT edtf_min('Y-17E7')::text = '-infinity', 'deep past: earliest saturates';
+    ASSERT edtf_max('Y-17E7')::text = '-infinity', 'deep past: latest saturates';
+    ASSERT edtf_max('Y17E7')::text = 'infinity', 'deep future: latest saturates';
+    ASSERT NOT (daterange(edtf_min('Y-17E7'), edtf_max('Y-17E7'), '[]') @> DATE '1965-06-15'),
+        'a saturated deep-past range does not contain a real date';
     ASSERT edtf_max('1986-04/') IS NULL, 'unknown interval end is NULL, not infinity';
-    ASSERT edtf_min('Y17E7') IS NULL, 'year beyond the Postgres date range is NULL';
-    ASSERT edtf_min('Y-17E7') IS NULL, 'year before the Postgres date range is NULL';
 
     -- edtf_relation ------------------------------------------------------
     ASSERT edtf_relation('1985~', '199X') = ARRAY['definitely_before'],

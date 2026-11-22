@@ -37,7 +37,7 @@
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 
-use edtf_core::{Bound, Edtf};
+use edtf_core::{Bound, BoundDate, Edtf};
 use serde_json::Value;
 
 fn bound_str(b: Bound) -> String {
@@ -206,4 +206,24 @@ fn significant_digit_sweep_overflow_bounds_to_unknown() {
     // One significant digit more and the sweep fits again.
     let b = Edtf::parse("Y9E18S2").unwrap().bounds();
     assert!(matches!(b.earliest, Bound::Date(_)));
+}
+
+#[test]
+fn julian_day_numbers_match_known_days() {
+    // Known Julian Day Numbers of proleptic-Gregorian days (astronomical
+    // years): the J2000 and Unix epochs, the first Gregorian day, the turn
+    // of 1 BC (year 0) into AD 1, and Postgres's floor (JDN 0) and ceiling.
+    for (year, month, day, jdn) in [
+        (2000, 1, 1, 2_451_545),
+        (1970, 1, 1, 2_440_588),
+        (1582, 10, 15, 2_299_161),
+        (1, 1, 1, 1_721_426),
+        (0, 1, 1, 1_721_060),
+        (-4713, 11, 24, 0),
+        (-4713, 11, 23, -1),
+        (5_874_897, 12, 31, 2_147_483_493),
+    ] {
+        let date = BoundDate { year, month, day };
+        assert_eq!(date.julian_day_number(), jdn, "JDN of {date}");
+    }
 }
