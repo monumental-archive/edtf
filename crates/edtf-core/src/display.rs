@@ -328,18 +328,18 @@ mod tests {
                 significant_digits: None,
                 qualifier: q,
             };
-            let month = DateField {
+            let month_field = DateField {
                 digits: [Some(0), Some(6)],
                 qualifier: q,
             };
-            let day = DateField {
+            let day_field = DateField {
                 digits: [Some(1), Some(1)],
                 qualifier: q,
             };
             let shapes = [
                 (None, None, "2004"),
-                (Some(month), None, "2004-06"),
-                (Some(month), Some(day), "2004-06-11"),
+                (Some(month_field), None, "2004-06"),
+                (Some(month_field), Some(day_field), "2004-06-11"),
             ];
             for (month, day, body) in shapes {
                 let date = Date { year, month, day };
