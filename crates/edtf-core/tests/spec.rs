@@ -270,9 +270,19 @@ fn years_have_one_supported_range() {
         "Y1E30",
         "Y1E100000",
         "Y10000000000000000000",
+        "Y99999999999999999999",
         "Y1E100001",
     ] {
         assert_eq!(message_of(s), "year out of supported range", "{s:?}");
+    }
+    // The error sits at the year's first digit, after any sign.
+    for (s, offset) in [
+        ("Y10000000000000000000", 1),
+        ("Y99999999999999999999", 1),
+        ("Y1E100001", 1),
+        ("Y-1E18", 2),
+    ] {
+        assert_eq!(Edtf::parse(s).unwrap_err().offset, offset, "{s:?}");
     }
     // A significant-digit sweep stays inside the limit because the year does.
     assert_invalid("Y9E18S1");

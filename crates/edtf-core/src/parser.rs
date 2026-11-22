@@ -1088,21 +1088,25 @@ mod tests {
     }
 
     /// A digit run too wide for `i64` is real input, not only a guard: it has
-    /// to be reported at the run's first digit rather than wrap around. In a
-    /// year it is the one year-range error (decision D30); in an `S` count it
-    /// keeps `take_number`'s own message.
+    /// to be reported at the run's first digit rather than wrap around. An
+    /// `S` count keeps `take_number`'s own message; in a year the same
+    /// overflow is the one year-range error (decision D30).
     #[test]
     fn an_oversized_digit_run_errors_at_the_first_digit() {
-        assert_err("Y99999999999999999999", "year out of supported range", 1);
-        assert_err("Y-99999999999999999999", "year out of supported range", 2);
-        assert_err("Y1E99999999999999999999", "year out of supported range", 1);
-        // An exponent that fits `i64` but not `u32` is the same error.
-        assert_err("Y1E4294967296", "year out of supported range", 1);
         assert_err(
-            "Y12345S99999999999999999999",
+            "Y17E7S99999999999999999999",
             "number out of supported range",
-            7,
+            6,
         );
+    }
+
+    /// An exponent is limited only by the year it produces (decision D30):
+    /// a run too wide for `i64`, and one that fits `i64` but not `u32`, are
+    /// both the year-range error at the year's first digit.
+    #[test]
+    fn an_oversized_exponent_is_the_year_range_error() {
+        assert_err("Y1E99999999999999999999", "year out of supported range", 1);
+        assert_err("Y1E4294967296", "year out of supported range", 1);
     }
 
     /// Parsing never builds a year whose bounds cannot be computed (decision
