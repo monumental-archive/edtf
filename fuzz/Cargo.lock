@@ -35,7 +35,15 @@ name = "edtf-core-fuzz"
 version = "0.0.0"
 dependencies = [
  "edtf-core",
+ "edtf-normalize",
  "libfuzzer-sys",
+]
+
+[[package]]
+name = "edtf-normalize"
+version = "1.3.5"
+dependencies = [
+ "edtf-core",
 ]
 
 [[package]]

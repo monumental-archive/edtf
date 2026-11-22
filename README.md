@@ -284,7 +284,9 @@ ordering), and a deterministic fuzz harness (hundreds of thousands of
 hostile inputs per run; the parser must never panic, and everything it
 accepts must round-trip). On top of that, coverage-guided fuzzing
 (`fuzz/`, cargo-fuzz) runs nightly in CI against the same never-panic and
-round-trip properties.
+round-trip properties, the relation algebra over pairs of parsed values,
+and the normaliser (whatever prose it is given, its output must be
+canonical EDTF).
 Parse errors carry the byte offset of the problem:
 `1985-02-30` → `invalid EDTF at offset 8: day is out of range for the month`.
 

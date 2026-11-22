@@ -3,12 +3,14 @@
 
 //! The committed fuzz corpus holds every seed the fixtures define (#302).
 //!
-//! The seed set is every `edtf` string in the legacy conformance corpus,
-//! every key of the golden snapshot, and every example and invalid case of
-//! the `LoC` interop corpus: the inputs the rest of this suite already
-//! knows are interesting. Each target in [`TARGETS`] must carry each seed
-//! as the exact content of some file in `fuzz/corpus/<target>/`; files
-//! beyond the seed set (crash regressions the fuzzer found) are allowed.
+//! The EDTF seed set is every `edtf` string in the legacy conformance
+//! corpus, every key of the golden snapshot, and every example and invalid
+//! case of the `LoC` interop corpus: the inputs the rest of this suite
+//! already knows are interesting. The prose seed set adds every `input` of
+//! the natural-language corpus, for the normaliser. Each target in
+//! [`TARGETS`] must carry each seed of its set as the exact content of some
+//! file in `fuzz/corpus/<target>/`; files beyond the seed set (crash
+//! regressions and inputs the fuzzer found) are allowed.
 //!
 //! Run with `EDTF_WRITE_FUZZ_CORPUS=1` and this test is also the writer:
 //! it adds each missing seed, named by the FNV-1a 64 hash of its bytes, and
@@ -41,10 +43,24 @@ use std::sync::{Mutex, PoisonError};
 
 use serde_json::Value;
 
-/// The fuzz targets under `fuzz/fuzz_targets/`. Every one takes the same
-/// seeds; a target added later gets its corpus directory by joining this
+/// Which seed set a fuzz target's corpus must hold.
+#[derive(Clone, Copy)]
+enum Seeds {
+    /// EDTF strings: the targets that drive the parser.
+    Edtf,
+    /// EDTF strings and natural-language prose: the normaliser's target.
+    Prose,
+}
+
+/// The fuzz targets under `fuzz/fuzz_targets/` and the seed set each one
+/// holds; a target added later gets its corpus directory by joining this
 /// list.
-const TARGETS: [&str; 2] = ["parse", "roundtrip"];
+const TARGETS: [(&str, Seeds); 4] = [
+    ("parse", Seeds::Edtf),
+    ("roundtrip", Seeds::Edtf),
+    ("relate", Seeds::Edtf),
+    ("normalize", Seeds::Prose),
+];
 
 /// Held while the committed corpus is read or written, so the scratch
 /// tests never copy a corpus the writer is halfway through filling.
@@ -111,6 +127,27 @@ fn seeds() -> BTreeSet<String> {
     seeds
 }
 
+/// The prose seed set: the EDTF seeds plus every input of the
+/// natural-language corpus, matched or not.
+fn prose_seeds(edtf: &BTreeSet<String>) -> BTreeSet<String> {
+    let natlang = read_json(&repo_root().join("tests/fixtures/natlang/python-edtf-natlang.json"));
+    let mut seeds = edtf.clone();
+    for list in ["agreements", "agreements_no_match", "divergences"] {
+        let cases = natlang
+            .get(list)
+            .and_then(Value::as_array)
+            .unwrap_or_else(|| panic!("natural-language corpus has no {list} array"));
+        for case in cases {
+            let input = case
+                .get("input")
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| panic!("natural-language {list} case without an input"));
+            seeds.insert(input.to_owned());
+        }
+    }
+    seeds
+}
+
 /// FNV-1a, 64-bit: the corpus file name of a seed's bytes.
 fn fnv1a64(bytes: &[u8]) -> u64 {
     const OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
@@ -146,11 +183,16 @@ fn contents(dir: &Path) -> BTreeSet<Vec<u8>> {
     reason = "an I/O failure on the corpus is a broken test environment, not a corpus verdict; panicking keeps it out of the report"
 )]
 fn check(corpus: &Path, seeds: &BTreeSet<String>, write: bool) -> Result<(), String> {
+    let prose = prose_seeds(seeds);
     let mut errors = Vec::new();
-    for target in TARGETS {
+    for (target, set) in TARGETS {
+        let wanted = match set {
+            Seeds::Edtf => seeds,
+            Seeds::Prose => &prose,
+        };
         let dir = corpus.join(target);
         let present = contents(&dir);
-        for seed in seeds
+        for seed in wanted
             .iter()
             .filter(|seed| !present.contains(seed.as_bytes()))
         {
@@ -186,7 +228,7 @@ fn scratch_copy(name: &str) -> PathBuf {
     if root.exists() {
         fs::remove_dir_all(&root).expect("clear scratch corpus");
     }
-    for target in TARGETS {
+    for (target, _) in TARGETS {
         let from = repo_root().join("fuzz/corpus").join(target);
         let to = root.join(target);
         fs::create_dir_all(&to).expect("create scratch corpus");
@@ -213,7 +255,7 @@ fn a_deleted_seed_is_named_then_rewritten() {
     let seeds = seeds();
     let corpus = scratch_copy("fuzz-corpus-deleted");
     let seed = seeds.first().expect("the fixtures define seeds");
-    let dir = corpus.join(TARGETS[0]);
+    let dir = corpus.join(TARGETS[0].0);
     let path = dir.join(format!("{:016x}", fnv1a64(seed.as_bytes())));
     fs::remove_file(&path).expect("delete one seed file");
 
@@ -233,7 +275,7 @@ fn a_taken_name_is_never_overwritten() {
     let corpus = scratch_copy("fuzz-corpus-taken");
     let seed = seeds.first().expect("the fixtures define seeds");
     let path = corpus
-        .join(TARGETS[0])
+        .join(TARGETS[0].0)
         .join(format!("{:016x}", fnv1a64(seed.as_bytes())));
     fs::write(&path, "not the seed").expect("plant other bytes");
 

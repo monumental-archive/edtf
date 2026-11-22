@@ -55,6 +55,7 @@ print_stderr = "warn"
 [dependencies]
 libfuzzer-sys = "0.4"
 edtf-core = { path = "../crates/edtf-core" }
+edtf-normalize = { path = "../crates/edtf-normalize" }
 
 [[bin]]
 name = "parse"
@@ -66,6 +67,20 @@ bench = false
 [[bin]]
 name = "roundtrip"
 path = "fuzz_targets/roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "relate"
+path = "fuzz_targets/relate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "normalize"
+path = "fuzz_targets/normalize.rs"
 test = false
 doc = false
 bench = false

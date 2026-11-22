@@ -71,11 +71,16 @@ containers per major as well.
   the gate: it is a pure filename-graph walk, no pgrx and no database.
 
 `fuzz/` is excluded from the workspace (nightly + libFuzzer). The gate's
-`lint:fuzz-build` proves the targets still compile on stable; the Monday
-`audit:fuzz` runs them under AddressSanitizer on the dated nightly declared
-as `FUZZ_TOOLCHAIN`. The seed corpus is committed under
+`lint:fuzz-build` proves the targets still compile on stable and replays
+their committed corpus; the nightly `deep-tests` workflow runs `audit:fuzz`
+on each under AddressSanitizer on the dated nightly declared as
+`FUZZ_TOOLCHAIN`. There are four targets: `parse` (never panics),
+`roundtrip` (canonical form, bounds, enumeration), `relate` (the relation
+algebra over two parsed values) and `normalize` (the normaliser's output
+is canonical EDTF, under every option). The seed corpus is committed under
 `fuzz/corpus/<target>/`, and `crates/edtf-core/tests/fuzz_corpus.rs` holds
-it to the fixtures: every EDTF string they define must be a file there.
+it to the fixtures: every EDTF string they define must be a file there,
+and the `normalize` corpus holds the natural-language inputs too.
 `EDTF_WRITE_FUZZ_CORPUS=1 cargo test -p edtf-core --test fuzz_corpus`
 writes any missing seed; a crash the fuzzer finds is committed beside them.
 
