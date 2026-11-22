@@ -186,13 +186,13 @@ fn check(corpus: &Path, seeds: &BTreeSet<String>, write: bool) -> Result<(), Str
     let prose = prose_seeds(seeds);
     let mut errors = Vec::new();
     for (target, set) in TARGETS {
-        let seeds = match set {
+        let wanted = match set {
             Seeds::Edtf => seeds,
             Seeds::Prose => &prose,
         };
         let dir = corpus.join(target);
         let present = contents(&dir);
-        for seed in seeds
+        for seed in wanted
             .iter()
             .filter(|seed| !present.contains(seed.as_bytes()))
         {
