@@ -15,15 +15,6 @@ targets = [
 
 [advisories]
 yanked = "deny"
-# pgrx depends on serde_cbor, which its author archived in 2021
-# (RUSTSEC-2021-0127 is informational/unmaintained, not a vulnerability —
-# `patched = []` because there is nothing to patch). Tracked upstream as
-# pgcentralfoundation/pgrx#524, open. Not fixable here: it is pgrx's direct
-# dependency, not ours. `unused-ignored-advisory = "deny"` below means this
-# entry fails CI the moment pgrx drops it, so it cannot rot.
-ignore = [
-  { id = "RUSTSEC-2021-0127", reason = "serde_cbor via pgrx 0.20; upstream pgrx#524" },
-]
 # Unmaintained advisories fail for the whole graph, not just direct deps —
 # a transitive unmaintained crate is the same supply-chain exposure.
 unmaintained = "all"
