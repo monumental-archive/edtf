@@ -15,6 +15,9 @@
 //! Pass `-` (or pipe with no arguments) to read newline-separated
 //! expressions from stdin — handy for validating whole data files:
 //! `cut -f3 dates.tsv | edtf validate -`.
+//!
+//! A leading `--` after the command is skipped; inputs that begin with
+//! `-` need no `--`.
 
 #![expect(
     clippy::print_stdout,
