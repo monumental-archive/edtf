@@ -88,35 +88,43 @@ fuzz_target!(|data: &[u8]| {
         // Every value an accepted expression enumerates (D24-D29) is
         // concrete, round-trips, and lies within the expression's bounds.
         // The stream can be astronomically long, so a prefix is checked.
-        if let Ok(values) = parsed.values() {
-            for item in values.take(VALUES_CHECKED) {
-                let shown = item.to_string();
-                assert_eq!(
-                    edtf_core::Edtf::parse(&shown).as_ref(),
-                    Ok(&item),
-                    "{s:?} enumerated {shown:?}, which does not round-trip"
-                );
+        let values = match parsed.values() {
+            Ok(values) => values,
+            Err(why) => {
                 assert!(
-                    !item.has_unspecified(),
-                    "{s:?} enumerated {shown:?}, which is still masked"
+                    !why.to_string().is_empty(),
+                    "{s:?}: unenumerable without a reason"
                 );
-                let inner = item.bounds();
-                if let (edtf_core::Bound::Date(outer), edtf_core::Bound::Date(first)) =
-                    (bounds.earliest, inner.earliest)
-                {
-                    assert!(
-                        outer <= first,
-                        "{s:?} enumerated {shown:?} before its earliest bound"
-                    );
-                }
-                if let (edtf_core::Bound::Date(outer), edtf_core::Bound::Date(last)) =
-                    (bounds.latest, inner.latest)
-                {
-                    assert!(
-                        last <= outer,
-                        "{s:?} enumerated {shown:?} after its latest bound"
-                    );
-                }
+                return;
+            }
+        };
+        for item in values.take(VALUES_CHECKED) {
+            let shown = item.to_string();
+            assert_eq!(
+                edtf_core::Edtf::parse(&shown).as_ref(),
+                Ok(&item),
+                "{s:?} enumerated {shown:?}, which does not round-trip"
+            );
+            assert!(
+                !item.has_unspecified(),
+                "{s:?} enumerated {shown:?}, which is still masked"
+            );
+            let inner = item.bounds();
+            if let (edtf_core::Bound::Date(outer), edtf_core::Bound::Date(first)) =
+                (bounds.earliest, inner.earliest)
+            {
+                assert!(
+                    outer <= first,
+                    "{s:?} enumerated {shown:?} before its earliest bound"
+                );
+            }
+            if let (edtf_core::Bound::Date(outer), edtf_core::Bound::Date(last)) =
+                (bounds.latest, inner.latest)
+            {
+                assert!(
+                    last <= outer,
+                    "{s:?} enumerated {shown:?} after its latest bound"
+                );
             }
         }
     }
