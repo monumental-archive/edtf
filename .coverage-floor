@@ -34,10 +34,10 @@ fuzz-parse 56.0
 #
 # fuzz-relate: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.
-# fuzz-relate measured: 60.1
-fuzz-relate 58.1
+# fuzz-relate measured: 62.4
+fuzz-relate 60.4
 #
 # fuzz-roundtrip: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.
-# fuzz-roundtrip measured: 87.2
-fuzz-roundtrip 85.2
+# fuzz-roundtrip measured: 88.3
+fuzz-roundtrip 86.3
