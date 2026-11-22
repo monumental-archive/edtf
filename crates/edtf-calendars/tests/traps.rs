@@ -193,3 +193,12 @@ fn calendar_check_rejects_each_clause() {
         Err(CalendarError::InvalidDate)
     );
 }
+
+/// `i64::MIN` has no negation: the negative branch prints the magnitude as
+/// unsigned, so the most negative year prints with one minus sign.
+#[test]
+fn julian_dates_print_every_year() {
+    assert_eq!(j(i64::MIN, 1, 1).to_string(), "-9223372036854775808-01-01");
+    assert_eq!(j(-5, 1, 1).to_string(), "-0005-01-01");
+    assert_eq!(j(5, 1, 1).to_string(), "0005-01-01");
+}
