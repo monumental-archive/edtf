@@ -246,6 +246,9 @@ fn ranges() {
     ok("с 1914 по 1918", "1914/1918", 0);
     ok("с 1914 по 1918 год", "1914/1918", 0);
     ok("XVII-XIX вв.", "16XX/18XX", 2);
+    // There is no century 0 (found by the normalize fuzz target).
+    no_match("0-1в");
+    no_match("0-XIX вв.");
     // Modifiers on range endpoints collapse to the whole century (N1 scope).
     ok("конец XIX - начало XX века", "18XX/19XX", 2);
 }

@@ -197,6 +197,9 @@ fn ranges() {
     ok("1856-ca. 1865", "1856/1865~", 1);
     ok("1857-mid 1860s", "1857/186X", 2); // modifier dropped, recorded (N1)
     ok("17-19th centuries", "16XX/18XX", 2);
+    // There is no century 0: a bare left ordinal is refused, not
+    // computed with (found by the normalize fuzz target).
+    no_match("0-19th centuries");
 }
 
 #[test]
