@@ -65,9 +65,4 @@ exclude_re = [
   # year's sign, and is_leap (rem_euclid-based) is symmetric under negation,
   # so no input can tell the two apart.
   '^crates/edtf-core/src/parser\.rs:544:40: delete - in year_leap_possible$',
-  # edtf-core Date Display: with `!=` the uniform-qualifier shortcut never
-  # fires, and the general path then renders a uniform date identically —
-  # its group prefix spans every part, so the one trailing symbol (or none)
-  # lands where the shortcut puts it; no input can tell the two apart.
-  '^crates/edtf-core/src/display\.rs:161:54: replace == with != in <impl Display for Date>::fmt$',
 ]
