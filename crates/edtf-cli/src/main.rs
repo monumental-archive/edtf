@@ -75,6 +75,9 @@ USAGE:
     edtf <COMMAND>                (with piped stdin) same as '-'
     edtf relation <A> <B>         compare exactly two expressions
 
+    a leading '--' after the command is skipped; inputs that begin with
+    '-' need no '--'.
+
 COMMANDS:
     validate     check inputs; exit 0 only if every input is valid EDTF
     canonical    print the spec-preferred form of each valid input
@@ -94,6 +97,14 @@ OPTIONS:
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // Everything after the command is an input, verbatim, except one
+    // leading `--` end-of-options marker, which is dropped (#329). No other
+    // argument is an option: `-0500` and `-` (stdin) stay inputs.
+    let rest = match args.get(1..) {
+        Some([marker, tail @ ..]) if marker == "--" => tail,
+        Some(rest) => rest,
+        None => &[],
+    };
     match args.first().map(String::as_str) {
         None | Some("-h" | "--help" | "help") => {
             print!("{USAGE}");
@@ -103,10 +114,8 @@ fn main() -> ExitCode {
             println!("edtf {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        Some(cmd @ ("validate" | "canonical" | "level" | "info" | "from-julian")) => {
-            run(cmd, &args[1..])
-        }
-        Some("relation") => relation(&args[1..]),
+        Some(cmd @ ("validate" | "canonical" | "level" | "info" | "from-julian")) => run(cmd, rest),
+        Some("relation") => relation(rest),
         Some(other) => {
             eprintln!("edtf: unknown command {other:?}\n\n{USAGE}");
             ExitCode::FAILURE
