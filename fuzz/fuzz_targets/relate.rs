@@ -53,7 +53,11 @@ fuzz_target!(|data: &[u8]| {
     assert!(definite.len() <= 1, "{a} vs {b}: two definite relations");
     assert_eq!(ab.definite(), definite.first().copied(), "{a} vs {b}");
     if let Some(d) = ab.definite() {
-        assert_eq!(possible, [d], "{a} vs {b}: a definite relation must be sole");
+        assert_eq!(
+            possible,
+            [d],
+            "{a} vs {b}: a definite relation must be sole"
+        );
         assert!(
             matches!(d, Relation::Before | Relation::After | Relation::Equal),
             "{a} vs {b}: {d:?} can never be definite"
@@ -84,6 +88,14 @@ fuzz_target!(|data: &[u8]| {
         expected_before,
         "{a} vs {b}: definite Before disagrees with the bounds"
     );
+
+    // Impossible is exactly not-possible, every relation and modality has a
+    // name, and the description of the relation is never empty.
+    for r in Relation::ALL {
+        assert_eq!(ab.is_impossible(r), !ab.is_possible(r), "{a} vs {b}: {r:?}");
+        assert!(!r.as_str().is_empty() && !ab.modality(r).as_str().is_empty());
+    }
+    assert!(!ab.to_string().is_empty(), "{a} vs {b}: empty description");
 
     // A value can always equal itself.
     if a == b {

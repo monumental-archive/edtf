@@ -11,7 +11,7 @@
 #![no_main]
 
 use edtf_core::Edtf;
-use edtf_normalize::{normalize_with, Language, NumericOrder, Options, Outcome};
+use edtf_normalize::{Language, NumericOrder, Options, Outcome, normalize_with};
 use libfuzzer_sys::fuzz_target;
 
 /// Every reading the normaliser emits is canonical and reparses to the value
@@ -35,7 +35,11 @@ fuzz_target!(|data: &[u8]| {
     };
     let already_valid = Edtf::parse(input).ok();
     for language in [Language::English, Language::Russian] {
-        for numeric_order in [None, Some(NumericOrder::DayFirst), Some(NumericOrder::MonthFirst)] {
+        for numeric_order in [
+            None,
+            Some(NumericOrder::DayFirst),
+            Some(NumericOrder::MonthFirst),
+        ] {
             for default_century in [None, Some(1900)] {
                 let options = Options {
                     language,
@@ -58,7 +62,9 @@ fuzz_target!(|data: &[u8]| {
                         // reading is never lost.
                         if let Some(v) = &already_valid {
                             assert!(
-                                amb.interpretations.iter().any(|reading| &reading.value == v),
+                                amb.interpretations
+                                    .iter()
+                                    .any(|reading| &reading.value == v),
                                 "{input:?} under {options:?}: valid EDTF was reported ambiguous without its own reading"
                             );
                         }
