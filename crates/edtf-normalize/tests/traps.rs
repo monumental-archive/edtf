@@ -478,6 +478,7 @@ const ALL_NOTES: &[Note] = &[
     Note::DecadeOfCentury,
     Note::EndpointYearDistributed,
     Note::CrossYearSeason,
+    Note::EdtfCaseNormalized,
 ];
 
 const fn _every_note_is_listed(note: Note) {
@@ -505,7 +506,8 @@ const fn _every_note_is_listed(note: Note) {
         | Note::RomanCentury
         | Note::DecadeOfCentury
         | Note::EndpointYearDistributed
-        | Note::CrossYearSeason => {}
+        | Note::CrossYearSeason
+        | Note::EdtfCaseNormalized => {}
     }
 }
 
