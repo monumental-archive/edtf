@@ -172,6 +172,9 @@ pub(crate) fn date_bounds(d: &Date) -> Bounds {
             digits: _
         }
     ) {
+        // The parser admits only years of at most 18 digits (decision D30),
+        // whose value and sweep always compute; only a hand-built year the
+        // library cannot compute with reaches either Unknown below.
         let Some(value) = d.year.value() else {
             return Bounds {
                 earliest: Bound::Unknown,
@@ -279,8 +282,10 @@ const fn decimal_digits(mut v: u64) -> u32 {
 /// The year range denoted by a value with `S<precision>` significant digits
 /// over a `width`-digit form (ISO 8601-2 §4.4.3): keep the leading
 /// `precision` digits, sweep the rest 0..9. `None` when the top of the swept
-/// range exceeds the numeric range this library computes with (e.g.
-/// `Y9E18S1`), mirroring how un-valuable years bound to `Unknown`.
+/// range exceeds the numeric range this library computes with (e.g. a
+/// hand-built 9E18S1), mirroring how un-valuable years bound to `Unknown`.
+/// A parsed year has at most 18 digits (decision D30), so its sweep tops out
+/// at `10^18 - 1` and never reaches `None`.
 pub(crate) fn significant_range(
     value: i64,
     precision: Option<u32>,
@@ -551,6 +556,9 @@ fn set_bounds(s: &Set) -> Bounds {
 }
 
 /// The earlier of two bounds, treating `Unknown` as negative infinity.
+///
+/// A set element of a parsed value never bounds to `Unknown` (decision D30);
+/// only a hand-built element with an uncomputable year brings one here.
 fn min_bound(a: Bound, b: Bound) -> Bound {
     match (a, b) {
         (Bound::NegativeInfinity, _) | (_, Bound::NegativeInfinity) => Bound::NegativeInfinity,
@@ -562,7 +570,8 @@ fn min_bound(a: Bound, b: Bound) -> Bound {
     }
 }
 
-/// The later of two bounds, treating `Unknown` as positive infinity.
+/// The later of two bounds, treating `Unknown` as positive infinity. As with
+/// [`min_bound`], only a hand-built set element can bring an `Unknown` here.
 fn max_bound(a: Bound, b: Bound) -> Bound {
     match (a, b) {
         (Bound::PositiveInfinity, _) | (_, Bound::PositiveInfinity) => Bound::PositiveInfinity,

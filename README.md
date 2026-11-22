@@ -102,7 +102,7 @@ gets a documented note.
 
 Every grammar production and every judgment call is documented with ISO
 section citations in [docs/spec-notes.md](docs/spec-notes.md), including 29
-resolved decisions (D1–D29) and one identified erratum in the ISO text
+resolved decisions (D1–D30) and one identified erratum in the ISO text
 itself (Annex A.6.3 Example 2, which contradicts its own normative clause).
 
 ## Usage

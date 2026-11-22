@@ -473,6 +473,34 @@ of this implementation. Each is enforced by tests in `crates/edtf-core/tests/`.
   distinct. `[…]` one-member sets enumerate identically to `{…}` — the
   members are the candidates; the set kind states which apply, not what
   they are.
+- **D30 — one supported year range, enforced at parsing:** a year has at
+  most 18 digits, `|year| ≤ 999 999 999 999 999 999`, whichever way it is
+  spelled. `Y…` computes the year's value once for both forms (written
+  out, or `significand × 10^exponent`) and refuses anything past the line
+  with "year out of supported range" — a written-out run too wide for
+  `i64`, an exponent too wide for `u32` and a product past the limit are
+  the same error (`Y1E18`, `Y1000000000000000000`, `Y1E19`, `Y1E100001`).
+  There is no separate exponent cap: two limits on one quantity let values
+  through that the model could not hold, and "cannot compute" then
+  travelled through the library disguised as "unknown" — `Y1E30/1985`
+  passed D18 though it ends before it starts, and `Y1E30` related to 1985
+  as possibly-everything. Why 18 digits and not `i64::MAX`: with at most
+  18 digits a significant-digit sweep tops out at `10^18 − 1` (`Y9E17S1`
+  → 900000000000000000–999999999999999999), so every year that parses can
+  be bounded, compared, ordered (D18) and enumerated, and its Julian Day
+  Number fits `i128`; at `i64::MAX`, `Y9E18S1` would still sweep past it.
+  Consequence: a parsed value's bound is `Unknown` only on the side of an
+  interval whose endpoint there is unknown; a date, datetime or set never
+  has an unknown bound (asserted by the fuzz targets). The fallbacks in
+  bounds, relations, D18 and enumeration stay, because the model's fields
+  are public and a hand-built `Year` can still hold any value; only such a
+  value reaches them. ISO 8601-2 sets no upper limit on a year; every
+  implementation has one, and this is where this one's single line is —
+  10^18 years is about 10^8 times the age of the universe. Rejected: a
+  `Bound` variant for "beyond computable" (keeps unorderable years, so D18
+  and relations would need big-number comparison), arbitrary-precision
+  years (`no_std`, zero dependencies, and a proleptic day at 10^30 years
+  means nothing), and keeping the exponent cap as a second rule.
 
 ## 10. Test-suite sources
 

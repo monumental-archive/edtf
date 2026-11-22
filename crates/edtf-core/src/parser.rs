@@ -565,13 +565,25 @@ fn year_matches(digits: [Option<u8>; 4], y: i64) -> bool {
         .all(|(pat, a)| pat.is_none_or(|p| i64::from(p) == a))
 }
 
+/// The largest year magnitude a parsed year may have: 18 digits (decision
+/// D30). With at most 18 digits a significant-digit sweep tops out at
+/// `10^18 - 1`, so every year that parses can be bounded, compared, ordered
+/// and enumerated in `i64`.
+const MAX_YEAR_MAGNITUDE: i64 = 999_999_999_999_999_999;
+
 /// `Y…` years (ISO 8601-2 §4.7.2-4.7.4): year precision only, |value| > 9999.
+///
+/// Both forms compute the year's value once, here, and one rule bounds it:
+/// `|year| <= MAX_YEAR_MAGNITUDE` (decision D30). A written-out run too wide
+/// for `i64`, an exponent too wide for `u32`, and a `significand × 10^exponent`
+/// past the limit are all the same error.
 fn parse_prefixed_year(s: &str, base: usize) -> Result<Date, ParseError> {
     let mut c = Cur::new(s, base);
     c.eat(b'Y');
     let negative = c.eat(b'-');
     let value_off = c.pos();
-    let (mantissa, mantissa_len) = c.take_number()?;
+    let out_of_range = || err(value_off, "year out of supported range");
+    let (mantissa, mantissa_len) = c.take_number().map_err(|_too_wide| out_of_range())?;
     if mantissa_len == 0 {
         return Err(c.fail("expected digits after 'Y'"));
     }
@@ -584,9 +596,10 @@ fn parse_prefixed_year(s: &str, base: usize) -> Result<Date, ParseError> {
             "leading zeros are not allowed in Y-prefixed years",
         ));
     }
-    let (kind, digit_count) = if c.eat(b'E') {
+    let signed = if negative { -mantissa } else { mantissa };
+    let (kind, digit_count, value) = if c.eat(b'E') {
         let exp_off = c.pos();
-        let (exp, exp_len) = c.take_number()?;
+        let (exp, exp_len) = c.take_number().map_err(|_too_wide| out_of_range())?;
         if exp_len == 0 {
             return Err(err(exp_off, "expected digits after exponent 'E'"));
         }
@@ -596,37 +609,33 @@ fn parse_prefixed_year(s: &str, base: usize) -> Result<Date, ParseError> {
                 "exponential year significand cannot be zero",
             ));
         }
-        let Some(exponent) = u32::try_from(exp).ok().filter(|e| *e <= 100_000) else {
-            return Err(err(exp_off, "exponent out of supported range"));
+        let Some(exponent) = u32::try_from(exp).ok() else {
+            return Err(out_of_range());
         };
-        let significand = if negative { -mantissa } else { mantissa };
-        // Reject values expressible as a plain four-digit year (decision D1).
-        if let Some(v) = 10_i64
+        let Some(value) = 10_i64
             .checked_pow(exponent)
-            .and_then(|p| significand.checked_mul(p))
-        {
-            if v.abs() <= 9999 {
-                return Err(err(value_off, "Y-prefixed years require |year| > 9999"));
-            }
-        }
+            .and_then(|p| signed.checked_mul(p))
+        else {
+            return Err(out_of_range());
+        };
         (
             YearKind::Exponential {
-                significand,
+                significand: signed,
                 exponent,
             },
             mantissa_len as u64 + u64::from(exponent),
+            value,
         )
     } else {
-        if mantissa <= 9999 {
-            return Err(err(value_off, "Y-prefixed years require |year| > 9999"));
-        }
-        (
-            YearKind::Big {
-                value: if negative { -mantissa } else { mantissa },
-            },
-            mantissa_len as u64,
-        )
+        (YearKind::Big { value: signed }, mantissa_len as u64, signed)
     };
+    if !(-MAX_YEAR_MAGNITUDE..=MAX_YEAR_MAGNITUDE).contains(&value) {
+        return Err(out_of_range());
+    }
+    // Reject values expressible as a plain four-digit year (decision D1).
+    if (-9999..=9999).contains(&value) {
+        return Err(err(value_off, "Y-prefixed years require |year| > 9999"));
+    }
     let significant = if c.eat(b'S') {
         let sig_off = c.pos();
         let (n, len) = c.take_number()?;
@@ -891,6 +900,8 @@ fn parse_endpoint(s: &str, base: usize, is_start: bool) -> Result<IntervalEndpoi
 fn dates_out_of_order(a: &Date, b: &Date) -> bool {
     match (date_bounds(a).earliest, date_bounds(b).latest) {
         (Bound::Date(lo), Bound::Date(hi)) => lo > hi,
+        // Every parsed year has computable bounds (decision D30), so only a
+        // hand-built year the library cannot compute with reaches this arm.
         _ => false,
     }
 }
@@ -1077,12 +1088,51 @@ mod tests {
     }
 
     /// A digit run too wide for `i64` is real input, not only a guard: it has
-    /// to be reported at the run's first digit rather than wrap around.
+    /// to be reported at the run's first digit rather than wrap around. An
+    /// `S` count keeps `take_number`'s own message; in a year the same
+    /// overflow is the one year-range error (decision D30).
     #[test]
     fn an_oversized_digit_run_errors_at_the_first_digit() {
-        let e = parse("Y99999999999999999999").unwrap_err();
-        assert_eq!(e.message, "number out of supported range");
-        assert_eq!(e.offset, 1);
+        assert_err(
+            "Y17E7S99999999999999999999",
+            "number out of supported range",
+            6,
+        );
+    }
+
+    /// An exponent is limited only by the year it produces (decision D30):
+    /// a run too wide for `i64`, and one that fits `i64` but not `u32`, are
+    /// both the year-range error at the year's first digit.
+    #[test]
+    fn an_oversized_exponent_is_the_year_range_error() {
+        assert_err("Y1E99999999999999999999", "year out of supported range", 1);
+        assert_err("Y1E4294967296", "year out of supported range", 1);
+    }
+
+    /// Parsing never builds a year whose bounds cannot be computed (decision
+    /// D30), but a hand-built one can exist; the interval-order check then
+    /// cannot prove the pair reversed and lets it through, rather than
+    /// guess. 1E30 lies after 1985, yet the check cannot know it.
+    #[test]
+    fn an_unboundable_hand_built_year_is_not_out_of_order() {
+        let huge = Date {
+            year: Year {
+                kind: YearKind::Exponential {
+                    significand: 1,
+                    exponent: 30,
+                },
+                significant_digits: None,
+                qualifier: Qualifier::default(),
+            },
+            month: None,
+            day: None,
+        };
+        let y1985 = parse_date_at("1985", 0).unwrap();
+        assert!(!dates_out_of_order(&huge, &y1985));
+        assert!(!dates_out_of_order(&y1985, &huge));
+        // The same order between computable years is caught.
+        let y20000 = parse_date_at("Y20000", 0).unwrap();
+        assert!(dates_out_of_order(&y20000, &y1985));
     }
 
     /// The dispatcher only routes strings containing `/` here; without one the

@@ -19,7 +19,7 @@
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 
-use edtf_core::{Edtf, Modality, Relation, Relations};
+use edtf_core::{Date, Edtf, Modality, Qualifier, Relation, Relations, Year, YearKind};
 
 fn rel(a: &str, b: &str) -> Relations {
     Edtf::parse(a)
@@ -167,8 +167,24 @@ fn unknown_bound_is_possible_everything() {
     assert_rel("1985/", "../1980", &ALL, None);
     assert_rel("1985/", "1990", &ALL, None);
     assert_rel("/1985", "1990", &ALL, None);
-    // Y-years beyond i64 bound to Unknown as well.
-    assert_rel("Y9E18S1", "1985", &ALL, None);
+    // A year the library cannot compute with bounds to Unknown as well. The
+    // parser refuses such years (D30), so it is built by hand: 9E18S1's
+    // sweep tops out past i64.
+    let huge = Edtf::Date(Date {
+        year: Year {
+            kind: YearKind::Exponential {
+                significand: 9,
+                exponent: 18,
+            },
+            significant_digits: Some(1),
+            qualifier: Qualifier::default(),
+        },
+        month: None,
+        day: None,
+    });
+    let r = huge.relation(&Edtf::parse("1985").unwrap_or_else(|e| panic!("1985: {e}")));
+    assert_eq!(r.possible().collect::<Vec<_>>(), ALL, "got: {r}");
+    assert_eq!(r.definite(), None);
 }
 
 // ------------------------------------------------------------ API shape

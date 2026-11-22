@@ -106,7 +106,9 @@ pub enum Unenumerable {
     UnboundedSetElement,
     /// A significant-digit sweep or range endpoint lies beyond the years
     /// this library computes with — the same cases where `bounds()` reports
-    /// [`Bound::Unknown`](crate::Bound::Unknown).
+    /// [`Bound::Unknown`](crate::Bound::Unknown). The parser admits only
+    /// years of at most 18 digits (decision D30), so only a hand-built value
+    /// reports this.
     YearRangeOverflow,
 }
 
