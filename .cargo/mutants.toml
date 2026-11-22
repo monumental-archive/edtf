@@ -27,19 +27,19 @@ exclude_re = [
   '^crates/edtf-normalize/src/engine\.rs:462:23: replace > with >= in split_era$',
   # edtf-normalize parse_single: popping a lone trailing noise word ("года")
   # leaves an empty core; neither the word nor an empty core parses.
-  '^crates/edtf-normalize/src/engine\.rs:762:27: replace > with >= in parse_single$',
+  '^crates/edtf-normalize/src/engine\.rs:777:27: replace > with >= in parse_single$',
   # edtf-normalize parse_single: stripping a lone noise word after a decade
   # leaves no century tokens; no noise word reads as a century either.
-  '^crates/edtf-normalize/src/engine\.rs:810:30: replace > with >= in parse_single$',
+  '^crates/edtf-normalize/src/engine\.rs:825:30: replace > with >= in parse_single$',
   # edtf-normalize split_modifier: a bare modifier phrase gives an empty
   # remainder (None); unmatched, the phrase alone also parses to None.
-  '^crates/edtf-normalize/src/engine\.rs:915:21: replace > with >= in split_modifier$',
+  '^crates/edtf-normalize/src/engine\.rs:930:21: replace > with >= in split_modifier$',
   # edtf-normalize split_modifier: stripping a lone noise word after the
   # modifier leaves nothing; the noise word is no decade or century either.
-  '^crates/edtf-normalize/src/engine\.rs:934:22: replace > with >= in split_modifier$',
+  '^crates/edtf-normalize/src/engine\.rs:949:22: replace > with >= in split_modifier$',
   # edtf-normalize match_head: a bare open-range phrase gives an empty
   # remainder, which parses to None, as does the unmatched phrase alone.
-  '^crates/edtf-normalize/src/engine\.rs:962:23: replace > with >= in match_head$',
+  '^crates/edtf-normalize/src/engine\.rs:977:23: replace > with >= in match_head$',
   # edtf-core year_leap_possible: `v * 10 - d` folds the digits to -v
   # instead of v, and is_leap is rem_euclid-based, so is_leap(-v) ==
   # is_leap(v) for every year; no input can tell the two apart.

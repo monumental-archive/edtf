@@ -723,6 +723,21 @@ fn numeric_token(t: &str, opts: Options, lang: &Lang) -> Option<Single> {
                 }
             }
         }
+        // A sub-year code: "1985-21" (N13). A token that is also an elided
+        // range ("1914-21") is not read here: the range grammar reads it,
+        // giving both readings where a span may stand and refusing it as a
+        // range endpoint, which cannot hold a span (N13).
+        ([py, pb], &[y, code])
+            if sep == '-' && py.len() == 4 && pb.len() == 2 && (21..=41).contains(&code) =>
+        {
+            match endpoint_pair(py, pb, opts, lang) {
+                None => {
+                    let (y, code) = (i32::try_from(y).ok()?, u8::try_from(code).ok()?);
+                    Some(Single::One(Expr::Date(date_ym(y, code)?), Vec::new()))
+                }
+                Some(_) => None,
+            }
+        }
         // Month and year: 7/2008, 04.1985.
         ([pa, py], &[m, y]) if pa.len() <= 2 && py.len() == 4 && (1..=12).contains(&m) => {
             let (y, m) = (i32::try_from(y).ok()?, u8::try_from(m).ok()?);
@@ -968,25 +983,41 @@ fn match_head<'a>(toks: &[&'a str], phrases: &[&[&str]]) -> Option<Vec<&'a str>>
 
 /// Everything a whole input, or one "or" alternative, can be (N4, N8, N14).
 ///
-/// A date, a two-sided range or an open range. `in_range` is passed to the
-/// single-expression grammar, so an open range's inner expression stays a
-/// date (N1 scope).
-fn parse_reading(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<Single> {
+/// A date, a two-sided range or an open range. It is never a range
+/// endpoint, so the single-expression grammar may read a span here.
+fn parse_reading(s: &str, opts: Options, lang: &Lang) -> Option<Single> {
     let toks: Vec<&str> = s.split(' ').collect();
-    parse_single(s, opts, lang, in_range)
+    parse_single(s, opts, lang, false)
         .or_else(|| parse_open(&toks, opts, lang))
         .or_else(|| parse_range(s, &toks, opts, lang))
 }
 
 /// "before X" → `../X`, "after X" → `X/..` (interval reading, N8).
+///
+/// X is any reading. Before a span is before its start and after a span is
+/// after its end, so a two-sided span gives its near edge; an open one
+/// ("before after 1900") gives nothing (N8).
 fn parse_open(toks: &[&str], opts: Options, lang: &Lang) -> Option<Single> {
     let (before, rest) = match_head(toks, lang.before_phrases)
         .map(|rest| (true, rest))
         .or_else(|| match_head(toks, lang.after_phrases).map(|rest| (false, rest)))?;
     let (inner, q) = strip_qualifiers(&rest.join(" "), lang);
-    let single = parse_reading(&inner, opts, lang, true)?;
+    let single = parse_reading(&inner, opts, lang)?;
     let wrap = |expr: Expr| -> Option<Expr> {
-        let Expr::Date(mut d) = expr else { return None };
+        let mut d = match expr {
+            Expr::Date(d) => d,
+            Expr::Interval(Interval {
+                start: IntervalEndpoint::Date(start),
+                end: IntervalEndpoint::Date(end),
+            }) => {
+                if before {
+                    start
+                } else {
+                    end
+                }
+            }
+            Expr::Interval(_) => return None,
+        };
         qualify_date(&mut d, q);
         let (start, end) = if before {
             (IntervalEndpoint::Open, IntervalEndpoint::Date(d))
@@ -1014,7 +1045,7 @@ fn parse_or(toks: &[&str], opts: Options, lang: &Lang) -> Option<Single> {
         let (inner, q) = strip_qualifiers(&side, lang);
         // A side with no reading, or with several, refuses the whole input:
         // nested ambiguity would be a product of guesses.
-        let Single::One(mut expr, mut notes) = parse_reading(&inner, opts, lang, false)? else {
+        let Single::One(mut expr, mut notes) = parse_reading(&inner, opts, lang)? else {
             return None;
         };
         qualify_expr(&mut expr, q);
@@ -1434,6 +1465,16 @@ fn outcome_from(single: Single, q: Qualifier, base_notes: Vec<Note>) -> Outcome 
             if interps.len() < total {
                 return no_match(NoMatchReason::ImpossibleDate);
             }
+            // Two readings that render the same are one reading: both of
+            // N17's readings of "before winter 1941-42" start in one winter.
+            let mut seen: Vec<String> = Vec::new();
+            interps.retain(|i| {
+                let fresh = !seen.contains(&i.edtf);
+                if fresh {
+                    seen.push(i.edtf.clone());
+                }
+                fresh
+            });
             // `Many` is never built empty, so at least one reading survives.
             if interps.len() == 1 {
                 let i = interps.remove(0);
@@ -1508,7 +1549,7 @@ pub(crate) fn run(input: &str, opts: Options) -> Outcome {
     }
     let toks: Vec<&str> = rest.split(' ').collect();
 
-    parse_reading(&rest, opts, lang, false)
+    parse_reading(&rest, opts, lang)
         .or_else(|| parse_or(&toks, opts, lang))
         .map_or_else(
             || no_match(NoMatchReason::OutOfGrammar),
