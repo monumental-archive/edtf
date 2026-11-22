@@ -1603,15 +1603,7 @@ pub(crate) fn run(input: &str, opts: Options) -> Outcome {
 /// `NNNN-NN` with a sub-year code 21–41: if it is also a plausible elided
 /// range, both readings, through the one range grammar (N4, N13).
 fn collision_check(s: &str, opts: Options, lang: &Lang) -> Option<Outcome> {
-    let b = s.as_bytes();
-    if b.len() != 7 || b[4] != b'-' {
-        return None;
-    }
-    if !b[..4].iter().all(u8::is_ascii_digit) || !b[5..].iter().all(u8::is_ascii_digit) {
-        return None;
-    }
-    let code: u32 = s[5..].parse().ok()?;
-    if !(21..=41).contains(&code) {
+    if !is_sub_year_token(s) {
         return None;
     }
     let single = endpoint_pair(&s[..4], &s[5..], opts, lang)?;
