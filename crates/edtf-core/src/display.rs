@@ -311,6 +311,58 @@ mod tests {
         assert_eq!(qualified_prefix_end(&mixed, UNCERTAIN), 1);
     }
 
+    /// A date whose every part carries the same qualifier renders as its
+    /// plain body followed by one trailing symbol, or by nothing when
+    /// unqualified: four qualifier states over the three date shapes.
+    #[test]
+    fn uniform_dates_render_one_trailing_qualifier() {
+        let states = [
+            (Qualifier::default(), ""),
+            (UNCERTAIN, "?"),
+            (
+                Qualifier {
+                    uncertain: false,
+                    approximate: true,
+                },
+                "~",
+            ),
+            (
+                Qualifier {
+                    uncertain: true,
+                    approximate: true,
+                },
+                "%",
+            ),
+        ];
+        for (q, symbol) in states {
+            let year = Year {
+                kind: YearKind::Standard {
+                    negative: false,
+                    digits: [Some(2), Some(0), Some(0), Some(4)],
+                },
+                significant_digits: None,
+                qualifier: q,
+            };
+            let month = DateField {
+                digits: [Some(0), Some(6)],
+                qualifier: q,
+            };
+            let day = DateField {
+                digits: [Some(1), Some(1)],
+                qualifier: q,
+            };
+            let shapes = [
+                (None, None, "2004"),
+                (Some(month), None, "2004-06"),
+                (Some(month), Some(day), "2004-06-11"),
+            ];
+            for (month, day, body) in shapes {
+                let date = Date { year, month, day };
+                assert_eq!(format!("{date}"), format!("{body}{symbol}"));
+            }
+        }
+    }
+
     /// The parser only sets `hours_only` on `±hh`, whose minutes are zero, so
     /// a hand-built shift carrying both is out of the parser's reach. Display
     /// degrades gracefully rather than truncating: the minutes survive.
