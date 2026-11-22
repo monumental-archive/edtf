@@ -55,7 +55,7 @@ rust = [
 ]
 # Build input of the pgrx-extension class; must equal the pgrx crate
 # dependency, which Cargo.lock resolves to 0.20.0.
-"cargo:cargo-pgrx" = "0.20.0"
+"cargo:cargo-pgrx" = "0.20.1"
 # The Postgres edtf-postgres is compiled and tested against in the gate,
 # one entry per major the crate's features declare (.github#813). The
 # belt derives the majors from Cargo.toml and reds if a declared one is
