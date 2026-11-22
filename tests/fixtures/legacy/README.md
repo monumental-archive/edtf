@@ -8,6 +8,9 @@ cross-checking, not authorities** — where they disagree with `docs/spec-notes.
   examples + adversarial cases (53 valid across levels 0–2, 10 invalid), with
   earliest/latest bounds conventions designed for the Postgres layer
   (open end `..` → ±infinity, unknown end → null, un-date-boundable years → null).
+  `edtf-postgres` departs from the last of these: a day outside the Postgres
+  date range saturates to `-infinity` / `infinity`, and NULL means only an
+  unknown bound (#304).
 - `edtf-golden.json` — behavior snapshot of the old edtf.js/plv8 engine
   (63 entries with min/max epoch-ms, type, qualification flags).
 

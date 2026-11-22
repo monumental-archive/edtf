@@ -3,9 +3,10 @@
 
 //! Bounds tests: spec-derived expectations plus the legacy corpus's
 //! earliest/latest fields wherever they are concrete dates or infinities.
-//! (Corpus rows with null bounds encode a Postgres-layer clamping convention
-//! that belongs to the database wrapper, not the core — those are skipped
-//! here and covered by the explicit cases below.)
+//! (Corpus rows with null bounds encode the legacy Postgres layer's
+//! convention for years outside the Postgres date range, not the core's;
+//! edtf-postgres now saturates those to ±infinity instead (#304). They are
+//! skipped here and covered by the explicit cases below.)
 
 #![expect(
     clippy::unwrap_used,
