@@ -22,12 +22,22 @@
 # rust-branches measured: 99.3
 rust-branches 90
 #
+# fuzz-normalize: a fuzz target's committed corpus, replayed once (#1896), a
+# floor of its own held by coverage:check, under the same band and law.
+# fuzz-normalize measured: 64.7
+fuzz-normalize 62.7
+#
 # fuzz-parse: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.
-# fuzz-parse measured: 42.8
-fuzz-parse 40.8
+# fuzz-parse measured: 57.7
+fuzz-parse 55.7
+#
+# fuzz-relate: a fuzz target's committed corpus, replayed once (#1896), a
+# floor of its own held by coverage:check, under the same band and law.
+# fuzz-relate measured: 57.5
+fuzz-relate 55.5
 #
 # fuzz-roundtrip: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.
-# fuzz-roundtrip measured: 60.0
-fuzz-roundtrip 58.0
+# fuzz-roundtrip measured: 79.1
+fuzz-roundtrip 77.1
