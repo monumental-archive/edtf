@@ -197,6 +197,12 @@ against the N-number.
   reported (`CrossYearSeason`), N13-style. A non-adjacent end year
   ("winter 1941-45") has only the range reading. Winter is the only emitted
   season that wraps; the others compose as plain ranges.
+- **N18 — EDTF letters in either case:** EDTF notation is read in either
+  letter case, as a whole input and as a token inside a phrase ("198x" →
+  `198X`; "before 198X" → `../198X`; "198X or 1990" → `198X` or `1990`).
+  A whole input is tried as EDTF before it is read as prose, so Russian
+  "xxxx" is the masked year `XXXX`, not a century; forty as a Roman
+  numeral is XL.
 
 ## 3. Test ceremony
 

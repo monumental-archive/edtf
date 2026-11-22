@@ -226,6 +226,49 @@ fn open_ranges_take_a_span_by_its_near_edge() {
 }
 
 #[test]
+fn edtf_letters_read_in_either_case() {
+    // EDTF notation is read in either letter case, as a whole input and as
+    // a token inside a phrase (N18).
+    ok("198x", "198X");
+    assert_eq!(notes_of("198x"), [Note::EdtfCaseNormalized]);
+    ok("y17e7", "Y17E7");
+    ok("1985-04-12t10:00:00z", "1985-04-12T10:00:00Z");
+    ok("198x/199x", "198X/199X");
+    ok("[198x,1990]", "[198X,1990]");
+    ok("198X", "198X");
+    assert_eq!(notes_of("198X"), [Note::AlreadyValidEdtf]);
+    for input in ["before 198x", "before 198X"] {
+        ok(input, "../198X");
+        assert_eq!(
+            notes_of(input),
+            [Note::EdtfCaseNormalized, Note::OpenInterval]
+        );
+    }
+    ok("before y17e7", "../Y17E7");
+    ok("before 1985-xx", "../1985-XX");
+    ok("before -0500", "../-0500");
+    ambiguous("198X or 1990", &["198X", "1990"]);
+    ambiguous("1985~ or 1990", &["1985~", "1990"]);
+    ambiguous("2004-06~-11 or 2005", &["2004-06~-11", "2005"]);
+    ok("198x to 1995", "198X/1995");
+    // No EDTF form says "before" a time of day.
+    no_match_because(
+        "before 1985-04-12t10:00:00",
+        Options::default(),
+        NoMatchReason::OutOfGrammar,
+    );
+    ambiguous("1900s", &["190X", "19XX"]);
+    ok("c1860", "1860~");
+    no_match_because("xix", Options::default(), NoMatchReason::OutOfGrammar);
+    // A colliding sub-year token stays the range grammar's question (N13).
+    no_match_because(
+        "1915-21 to 1990",
+        Options::default(),
+        NoMatchReason::OutOfGrammar,
+    );
+}
+
+#[test]
 fn sub_year_codes_read_inside_a_phrase() {
     // A sub-year code with no elided reading is simply that date (N13).
     ok("before 1985-21", "../1985-21");
@@ -241,7 +284,6 @@ fn sub_year_codes_read_inside_a_phrase() {
         "1900 to 1915-21",
         "before 1985-42",
         "before 1985-13",
-        "before 198X",
     ] {
         no_match_because(input, Options::default(), NoMatchReason::OutOfGrammar);
     }

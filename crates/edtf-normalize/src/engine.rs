@@ -727,17 +727,13 @@ fn numeric_token(t: &str, opts: Options, lang: &Lang) -> Option<Single> {
         // range ("1914-21") is not read here: the range grammar reads it,
         // giving both readings where a span may stand and refusing it as a
         // range endpoint, which cannot hold a span (N13).
-        ([py, pb], &[y, code])
-            if sep == '-' && py.len() == 4 && pb.len() == 2 && (21..=41).contains(&code) =>
-        {
-            match endpoint_pair(py, pb, opts, lang) {
-                None => {
-                    let (y, code) = (i32::try_from(y).ok()?, u8::try_from(code).ok()?);
-                    Some(Single::One(Expr::Date(date_ym(y, code)?), Vec::new()))
-                }
-                Some(_) => None,
+        ([py, pb], &[y, code]) if is_sub_year_token(t) => match endpoint_pair(py, pb, opts, lang) {
+            None => {
+                let (y, code) = (i32::try_from(y).ok()?, u8::try_from(code).ok()?);
+                Some(Single::One(Expr::Date(date_ym(y, code)?), Vec::new()))
             }
-        }
+            Some(_) => None,
+        },
         // Month and year: 7/2008, 04.1985.
         ([pa, py], &[m, y]) if pa.len() <= 2 && py.len() == 4 && (1..=12).contains(&m) => {
             let (y, m) = (i32::try_from(y).ok()?, u8::try_from(m).ok()?);
@@ -751,6 +747,19 @@ fn numeric_token(t: &str, opts: Options, lang: &Lang) -> Option<Single> {
         }
         _ => None,
     }
+}
+
+/// `NNNN-NN` with NN a sub-year code 21–41: four digits, a hyphen, two
+/// digits (N13).
+fn is_sub_year_token(t: &str) -> bool {
+    let b = t.as_bytes();
+    b.len() == 7
+        && b[4] == b'-'
+        && b[..4].iter().all(u8::is_ascii_digit)
+        && b[5..].iter().all(u8::is_ascii_digit)
+        && t[5..]
+            .parse::<u8>()
+            .is_ok_and(|code| (21..=41).contains(&code))
 }
 
 // ---------------------------------------------------------------------------
@@ -872,7 +881,29 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
                     vec![Note::MissingYearMasked],
                 ));
             }
-            numeric_token(t, opts, lang)
+            if let Some(single) = numeric_token(t, opts, lang) {
+                return Some(single);
+            }
+            // A token that is an EDTF date, in either letter case (N18).
+            // Not tried for a sub-year-code token: numeric_token's answer
+            // there is final, so a colliding one stays a range-grammar
+            // question (N13).
+            if is_sub_year_token(t) {
+                return None;
+            }
+            match Edtf::parse(&t.to_ascii_uppercase()) {
+                Ok(Edtf::Date(d)) => {
+                    let notes = if t.bytes().any(|b| b.is_ascii_alphabetic()) {
+                        vec![Note::EdtfCaseNormalized]
+                    } else {
+                        Vec::new()
+                    };
+                    Some(Single::One(Expr::Date(d), notes))
+                }
+                // A datetime, interval or set is not a reading: no EDTF
+                // form says "before" a time of day (N18).
+                _ => None,
+            }
         }
         [a, b] => {
             // "spring 2001" / "весной 2001" / "2001 spring" (N7).
@@ -1526,6 +1557,18 @@ pub(crate) fn run(input: &str, opts: Options) -> Outcome {
             edtf,
             value,
             notes: vec![Note::AlreadyValidEdtf],
+        });
+    }
+
+    // The same notation in another letter case takes the same place: tried
+    // before the input is read as prose (N18).
+    if let Ok(v) = Edtf::parse(&dashed.to_ascii_uppercase()) {
+        let edtf = v.to_string();
+        let value = Edtf::parse(&edtf).unwrap_or(v);
+        return Outcome::Normalized(Normalized {
+            edtf,
+            value,
+            notes: vec![Note::EdtfCaseNormalized],
         });
     }
 

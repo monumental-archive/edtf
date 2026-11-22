@@ -105,6 +105,15 @@ fn bc_years_are_astronomical() {
 }
 
 #[test]
+fn edtf_letters_read_in_either_case() {
+    // A whole input is tried as EDTF before it is read as prose: "xxxx" is
+    // the masked year, not the 40th century; forty is XL (N18).
+    ok("xxxx", "XXXX", 2);
+    ok("xxxx век", "39XX", 1);
+    ok("xix", "18XX", 1);
+}
+
+#[test]
 fn roman_centuries() {
     ok("XIX век", "18XX", 1);
     ok("XIX в.", "18XX", 1);

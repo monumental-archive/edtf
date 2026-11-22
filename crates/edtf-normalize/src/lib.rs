@@ -151,6 +151,9 @@ pub enum Note {
     /// "winter 1941-42" may be one boundary-spanning winter or a
     /// season-to-year range; both readings reported (N17).
     CrossYearSeason,
+    /// EDTF letters are read in either case and written in upper case
+    /// (N18).
+    EdtfCaseNormalized,
 }
 
 impl Note {
@@ -180,6 +183,7 @@ impl Note {
             Self::RomanCentury => Some("N15"),
             Self::EndpointYearDistributed => Some("N16"),
             Self::CrossYearSeason => Some("N17"),
+            Self::EdtfCaseNormalized => Some("N18"),
         }
     }
 
@@ -229,6 +233,7 @@ impl Note {
             Self::CrossYearSeason => {
                 "season-year-pair prose may name one boundary-spanning season or a range"
             }
+            Self::EdtfCaseNormalized => "EDTF letters read in either case; written in upper case",
         }
     }
 }
