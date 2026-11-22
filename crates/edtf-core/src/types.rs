@@ -153,7 +153,9 @@ pub struct Year {
 
 impl Year {
     /// The numeric year value, when every digit is specified and the value is
-    /// representable. `None` for masked years and overflowing exponentials.
+    /// representable. `None` for masked years, and for an exponential too
+    /// large for `i64` — which only a hand-built value can be, since parsing
+    /// admits at most 18 digits (decision D30).
     #[must_use]
     pub fn value(&self) -> Option<i64> {
         match self.kind {

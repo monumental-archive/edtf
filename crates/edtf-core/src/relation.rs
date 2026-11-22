@@ -283,6 +283,8 @@ const fn ext(b: Bound) -> Option<Ext> {
 
 /// The calendar day after `e`; year overflow saturates to `PosInf`, which
 /// only under-reports overlap feasibility at the edge of representable time.
+/// A parsed year is at most 18 digits (decision D30), so only a hand-built
+/// bound at `i64::MAX` overflows here.
 fn succ(e: Ext) -> Ext {
     let Ext::Day(d) = e else { return e };
     if d.day < last_day(d.month, is_leap(d.year)) {
@@ -307,7 +309,8 @@ fn succ(e: Ext) -> Ext {
     }
 }
 
-/// The calendar day before `e`; year underflow saturates to `NegInf`.
+/// The calendar day before `e`; year underflow saturates to `NegInf`. As
+/// with `succ`, only a hand-built bound at `i64::MIN` underflows (D30).
 fn pred(e: Ext) -> Ext {
     let Ext::Day(d) = e else { return e };
     if d.day > 1 {

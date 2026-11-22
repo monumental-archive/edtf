@@ -145,8 +145,8 @@ pub enum Note {
     /// A bare decade tied to an explicit century ("60-е годы XIX века" →
     /// `186X`) (N6).
     DecadeOfCentury,
-    /// A range endpoint without a year inherited the other endpoint's stated
-    /// year ("June-July 1940" → `1940-06/1940-07`) (N16).
+    /// A range endpoint or alternative without a year inherited the stated
+    /// year beside it ("June-July 1940" → `1940-06/1940-07`) (N16).
     EndpointYearDistributed,
     /// "winter 1941-42" may be one boundary-spanning winter or a
     /// season-to-year range; both readings reported (N17).
@@ -224,7 +224,7 @@ impl Note {
             }
             Self::DecadeOfCentury => "decade tied to the explicitly named century",
             Self::EndpointYearDistributed => {
-                "endpoint without a year inherited the other endpoint's stated year"
+                "endpoint or alternative without a year inherited the stated year beside it"
             }
             Self::CrossYearSeason => {
                 "season-year-pair prose may name one boundary-spanning season or a range"

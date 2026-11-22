@@ -255,6 +255,11 @@ fn before_after() {
 #[test]
 fn alternatives() {
     ambiguous("1863 или 1864", &["1863", "1864"]);
+    // Each side is a whole reading; a stated year scopes the others (N14, N16).
+    ambiguous("с 1914 по 1918 или 1920", &["1914/1918", "1920"]);
+    ambiguous("1914 — 1918 или 1920", &["1914/1918", "1920"]);
+    ambiguous("июнь или июль 1940", &["1940-06", "1940-07"]);
+    ambiguous("начало XIX века или 1850", &["1801/1830", "1850"]);
 }
 
 #[test]

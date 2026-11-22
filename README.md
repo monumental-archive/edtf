@@ -102,7 +102,7 @@ gets a documented note.
 
 Every grammar production and every judgment call is documented with ISO
 section citations in [docs/spec-notes.md](docs/spec-notes.md), including 29
-resolved decisions (D1–D29) and one identified erratum in the ISO text
+resolved decisions (D1–D30) and one identified erratum in the ISO text
 itself (Annex A.6.3 Example 2, which contradicts its own normative clause).
 
 ## Usage
@@ -264,10 +264,10 @@ Toolchain and every linter are pinned via [mise](https://mise.jdx.dev) with a
 checksum lockfile; git hooks (lefthook) and CI run the same gauntlet:
 
 ```sh
-mise install     # pinned Rust + all linters
-mise run ci      # the org gate: every linter, then the test suite
-mise run wasm    # build the WebAssembly artifact
-mise run pg:test # Postgres extension tests (needs `cargo pgrx init` once)
+mise install       # pinned Rust + all linters
+mise run ci        # the org gate: every linter, then the test suite
+mise run wasm      # build the WebAssembly artifact
+mise run test:pgrx # Postgres extension tests, every declared major
 ```
 
 The test suite includes a 63-case conformance corpus derived from every

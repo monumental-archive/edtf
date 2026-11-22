@@ -77,7 +77,11 @@ against the N-number.
   them. A **BC start refuses elision entirely** ("500 BC to 18" → `NoMatch`):
   no deterministic reading exists — the CE reading, the BC-ordinal reading,
   and truncating century arithmetic all disagree — so per the contract the
-  normalizer refuses rather than fabricates.
+  normalizer refuses rather than fabricates. One implementation reads every
+  form: the unspaced token, the spaced hyphen and the range words all go
+  through the same endpoint pairing, so they cannot disagree. A range may
+  start and end in the same year (`1914-1914` → `1914/1914`); only a
+  reversed range is refused. Year 0 is 1 BC, so it refuses elision too.
 - **N5 — all-numeric dates:** "12/04/1985" is DD/MM or MM/DD; without context
   the order is *unknowable* and the result is `Ambiguous` with both readings
   — never python-edtf's silent `dayfirst=False` guess. Resolution, in
@@ -153,7 +157,12 @@ against the N-number.
   closed with `NoMatchReason::ImpossibleDate` — promoting the survivor
   would fake certainty the prose never had. (A future extension could offer
   a one-of set `[1863, 1864]` as a third reading; today the two plain
-  readings keep the form's choice simple.)
+  readings keep the form's choice simple.) An alternative is any prose
+  reading a whole input could have: a date, a range, an open range, a
+  century part. "or" always separates whole alternatives and never binds
+  inside a range: "from 1914 to 1918 or 1920" is `1914/1918` or `1920`. Any
+  number of alternatives is read. An alternative that is itself ambiguous
+  ("1863 or 1900s") is still refused.
 - **N15 — Roman-numeral centuries (Russian):** "XIX век", "XIX в.",
   "XVII-XIX вв." parse as centuries, including with Cyrillic lookalike
   letters (Х/х for X, etc.), which real Russian sources routinely contain,
@@ -170,7 +179,10 @@ against the N-number.
   fills rightward). Emitting `XXXX` there would assert the year is unknown
   when the prose gives it. Reversed month ranges ("July-June 1940") fail
   closed at the calendar check. Both-endpoints-year-less ranges
-  ("May-June") keep their masks: no year exists anywhere in the input.
+  ("May-June") keep their masks: no year exists anywhere in the input. The
+  same holds between alternatives: "June or July 1940" is `1940-06` or
+  `1940-07`. When the alternatives that state a year disagree, or state one
+  that is not fully specified, the input is refused.
 - **N17 — cross-year winters are ambiguous:** "winter 1941-42" (also
   "-1942", "зима 1941-1942 гг.") names either ONE winter spanning the year
   boundary — EDTF's code 24 wraps, so `1941-24` already covers Dec 1941 –

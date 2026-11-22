@@ -38,7 +38,9 @@
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 
-use edtf_core::{Bound, BoundDate, Edtf};
+use edtf_core::{
+    Bound, BoundDate, Date, Edtf, Qualifier, Set, SetElement, SetKind, Year, YearKind,
+};
 use serde_json::Value;
 
 fn bound_str(b: Bound) -> String {
@@ -126,10 +128,36 @@ fn significant_digit_bounds() {
     assert_bounds("Y17E7", "170000000-01-01", "170000000-12-31");
     // Found by cargo-fuzz: 9e18 fits in i64 but the S1 sweep's upper end
     // (9999999999999999999) does not — must degrade to unknown, not panic.
-    assert_bounds("Y9E18S1", "unknown", "unknown");
-    // Parsing computes bounds for interval ordering (D18); huge exponents on
-    // both ends must stay total there too.
-    Edtf::parse("Y8E20202/Y9E18S1").unwrap();
+    // Parsing now refuses the year (D30), so only a hand-built one gets here.
+    let b = Edtf::Date(exponential(9, 18, Some(1))).bounds();
+    assert_eq!(
+        (bound_str(b.earliest), bound_str(b.latest)),
+        ("unknown".into(), "unknown".into())
+    );
+    // At the D30 limit the widest sweep still fits.
+    assert_bounds(
+        "Y9E17S1",
+        "900000000000000000-01-01",
+        "999999999999999999-12-31",
+    );
+}
+
+/// A hand-built exponential year: the parser refuses values past D30's
+/// 18-digit limit, but the model's fields are public, so the escapes for an
+/// uncomputable year are still reachable by construction.
+fn exponential(significand: i64, exponent: u32, significant_digits: Option<u32>) -> Date {
+    Date {
+        year: Year {
+            kind: YearKind::Exponential {
+                significand,
+                exponent,
+            },
+            significant_digits,
+            qualifier: Qualifier::default(),
+        },
+        month: None,
+        day: None,
+    }
 }
 
 #[test]
@@ -176,12 +204,24 @@ fn interval_ordering_enforced() {
 
 #[test]
 fn unvaluable_set_elements_poison_set_bounds() {
-    // Y1E19 exceeds the computable year range: its bounds are Unknown, and
-    // Unknown absorbs every neighbour in a set sweep — in either order.
-    for s in ["[Y1E19,1985]", "[1985,Y1E19]"] {
-        let b = Edtf::parse(s).unwrap().bounds();
-        assert_eq!(b.earliest, Bound::Unknown, "{s}");
-        assert_eq!(b.latest, Bound::Unknown, "{s}");
+    // A hand-built 1E19 exceeds the computable year range (the parser
+    // refuses `Y1E19`, D30): its bounds are Unknown, and Unknown absorbs
+    // every neighbour in a set sweep — in either order.
+    let Edtf::Date(y1985) = Edtf::parse("1985").unwrap() else {
+        panic!("1985 parses as a date");
+    };
+    let huge = exponential(1, 19, None);
+    for (name, elements) in [
+        ("[1E19,1985]", [huge, y1985]),
+        ("[1985,1E19]", [y1985, huge]),
+    ] {
+        let set = Edtf::Set(Set {
+            kind: SetKind::OneMember,
+            elements: elements.into_iter().map(SetElement::Date).collect(),
+        });
+        let b = set.bounds();
+        assert_eq!(b.earliest, Bound::Unknown, "{name}");
+        assert_eq!(b.latest, Bound::Unknown, "{name}");
     }
 }
 
@@ -199,13 +239,18 @@ fn masked_leap_day_bounds_search_year_completions() {
 
 #[test]
 fn significant_digit_sweep_overflow_bounds_to_unknown() {
-    // Y9E18S1 sweeps 18 digits above a magnitude near i64::MAX: the top of
-    // the swept range does not exist, so the bounds are honestly Unknown.
-    let b = Edtf::parse("Y9E18S1").unwrap().bounds();
+    // A hand-built 9E18S1 sweeps 18 digits above a magnitude near i64::MAX:
+    // the top of the swept range does not exist, so the bounds are honestly
+    // Unknown. The parser refuses the string (D30).
+    assert_eq!(
+        Edtf::parse("Y9E18S1").unwrap_err().message,
+        "year out of supported range"
+    );
+    let b = Edtf::Date(exponential(9, 18, Some(1))).bounds();
     assert_eq!(b.earliest, Bound::Unknown);
     assert_eq!(b.latest, Bound::Unknown);
     // One significant digit more and the sweep fits again.
-    let b = Edtf::parse("Y9E18S2").unwrap().bounds();
+    let b = Edtf::Date(exponential(9, 18, Some(2))).bounds();
     assert!(matches!(b.earliest, Bound::Date(_)));
 }
 

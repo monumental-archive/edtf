@@ -374,6 +374,9 @@ fn bare_decade_of_bare_roman_century() {
 #[test]
 fn collision_check_needs_digits_in_the_year_too() {
     no_match("198a-21");
+    // An attached qualifier is not a year digit: it scopes the whole input,
+    // so both range endpoints carry it (N10, N13).
+    ambiguous("c100-21", &["0100-21~", "0100~/0121~"]);
 }
 
 // ---------------------------------------------------------------------------
@@ -470,17 +473,10 @@ fn out_of_range_numeric_fields_are_out_of_grammar() {
 
 #[test]
 fn hyphenated_year_ranges_as_or_alternatives() {
-    // An "or" side is read as one token, so the token-level range arms
-    // (full and elided end year, N4) are what answer it (N14).
+    // An "or" side is read as a whole input, so the range grammar (full and
+    // elided end year, N4) answers it (N14).
     ambiguous("1914-1918 or 1920", &["1914/1918", "1920"]);
     ambiguous("1914-18 or 1920", &["1914/1918", "1920"]);
-    // Today the token arm refuses an equal end year inside an "or" side;
-    // #312 makes this read 1914/1914.
-    no_match_because(
-        "1914-1914 or 1920",
-        Options::default(),
-        NoMatchReason::OutOfGrammar,
-    );
 }
 
 #[test]
@@ -502,9 +498,10 @@ fn bare_left_ordinal_needs_a_century_on_the_right() {
 }
 
 #[test]
-fn elision_starts_at_year_one_hundred() {
-    // Year 100 has a real century prefix to elide from (N4).
+fn elision_needs_an_ad_start() {
+    // Any AD start elides; only a BC start refuses (N4).
     ok("100-18", "0100/0118");
+    ok("0001-18", "0001/0018"); // year 1 is the first AD year
 }
 
 #[test]
@@ -531,4 +528,67 @@ fn collision_check_needs_digits_in_both_halves() {
     // "+101" parses as a number but is not four ASCII digits: no N13
     // collision reading may be built from it.
     no_match_because("+101-21", Options::default(), NoMatchReason::OutOfGrammar);
+}
+
+// ---------------------------------------------------------------------------
+// One reading grammar on every path (#312)
+
+#[test]
+fn or_sides_are_whole_readings() {
+    // An alternative is anything a whole input could be, and "or" never
+    // binds inside a range (N14).
+    ambiguous("1914-1914 or 1920", &["1914/1914", "1920"]);
+    ambiguous("1914 - 1918 or 1920", &["1914/1918", "1920"]);
+    ambiguous("from 1914 to 1918 or 1920", &["1914/1918", "1920"]);
+    ambiguous("before 1863 or 1864", &["../1863", "1864"]);
+    ambiguous("early 19th century or 1850", &["1801/1830", "1850"]);
+    ambiguous("1863 or 1864 or 1865", &["1863", "1864", "1865"]);
+    ambiguous("1914-1918 or 1920", &["1914/1918", "1920"]);
+    for input in ["1918-1914 or 1920", "1914-14 or 1920", "1914-21 or 1930"] {
+        no_match_because(input, Options::default(), NoMatchReason::OutOfGrammar);
+    }
+}
+
+#[test]
+fn alternatives_share_a_stated_year() {
+    // A stated year scopes the year-less alternatives (N16).
+    ambiguous("June or July 1940", &["1940-06", "1940-07"]);
+    ambiguous("June 1940 or July", &["1940-06", "1940-07"]);
+    ambiguous("12 June or 13 July 1940", &["1940-06-12", "1940-07-13"]);
+    match normalize("June or July 1940") {
+        Outcome::Ambiguous(a) => {
+            let inheriting = &a.interpretations.first().expect("two readings").notes;
+            assert!(inheriting.contains(&Note::EndpointYearDistributed));
+            assert!(!inheriting.contains(&Note::MissingYearMasked));
+        }
+        other => panic!("expected Ambiguous, got {other:?}"),
+    }
+    // Agreeing stated years scope the year-less side together.
+    ambiguous(
+        "June or July 1940 or August 1940",
+        &["1940-06", "1940-07", "1940-08"],
+    );
+    for input in ["June or July 1940 or August 1941", "June or 1940s"] {
+        no_match_because(input, Options::default(), NoMatchReason::OutOfGrammar);
+    }
+    ambiguous("May or June", &["XXXX-05", "XXXX-06"]);
+    ambiguous("June or 1914-1918", &["XXXX-06", "1914/1918"]);
+}
+
+#[test]
+fn year_ranges_read_the_same_on_every_path() {
+    // One endpoint pairing reads the unspaced, spaced and range-word forms
+    // (N4).
+    for input in ["0050-60", "0050 - 60", "from 0050 to 60"] {
+        ok(input, "0050/0060");
+    }
+    for input in ["1914-1914", "1914 - 1914", "1914 to 1914"] {
+        ok(input, "1914/1914");
+    }
+    for input in ["1 bc - 18", "44 bc to 18"] {
+        no_match_because(input, Options::default(), NoMatchReason::OutOfGrammar);
+    }
+    ok("0000-21", "0000-21");
+    assert_eq!(notes_of("0000-21"), [Note::AlreadyValidEdtf]);
+    ambiguous("0010-25", &["0010-25", "0010/0025"]);
 }

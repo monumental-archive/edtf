@@ -286,3 +286,34 @@ fn blank_stdin_lines_are_skipped() {
     assert!(out.status.success());
     assert_eq!(String::from_utf8(out.stdout).unwrap(), "0\n");
 }
+
+#[test]
+fn double_dash_ends_options() {
+    let (stdout, stderr, ok) = edtf(&["validate", "--", "1985"]);
+    assert!(
+        ok,
+        "a leading -- is the end-of-options marker, not an input"
+    );
+    assert_eq!(stdout.trim(), "1985: ok (level 0)");
+    assert!(stderr.is_empty(), "nothing on stderr, got {stderr:?}");
+
+    let (stdout, _, ok) = edtf(&["canonical", "--", "-0500"]);
+    assert!(ok);
+    assert_eq!(stdout.trim(), "-0500");
+
+    let (stdout, _, ok) = edtf(&["from-julian", "--", "1917"]);
+    assert!(ok);
+    assert_eq!(stdout.trim(), "1917-01-14/1918-01-13");
+
+    let (_, _, ok) = edtf(&["relation", "--", "1985", "1990"]);
+    assert!(ok, "relation takes the two expressions after the marker");
+
+    // Only the first marker is dropped: a second `--` is an input.
+    let (_, stderr, ok) = edtf(&["validate", "--", "--"]);
+    assert!(!ok);
+    assert!(stderr.contains("--: invalid EDTF"), "got {stderr:?}");
+
+    // A value beginning with `-` needs no marker, as before.
+    let (_, _, ok) = edtf(&["validate", "-0500"]);
+    assert!(ok);
+}
