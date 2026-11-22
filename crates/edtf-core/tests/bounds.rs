@@ -207,3 +207,17 @@ fn significant_digit_sweep_overflow_bounds_to_unknown() {
     let b = Edtf::parse("Y9E18S2").unwrap().bounds();
     assert!(matches!(b.earliest, Bound::Date(_)));
 }
+
+#[test]
+fn bound_dates_print_every_year() {
+    // i64::MIN has no negation: the negative branch prints the magnitude
+    // as unsigned, so the most negative year prints with one minus sign.
+    let date = |year| edtf_core::BoundDate {
+        year,
+        month: 1,
+        day: 1,
+    };
+    assert_eq!(date(i64::MIN).to_string(), "-9223372036854775808-01-01");
+    assert_eq!(date(-5).to_string(), "-0005-01-01");
+    assert_eq!(date(5).to_string(), "0005-01-01");
+}
