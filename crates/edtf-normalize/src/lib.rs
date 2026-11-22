@@ -224,7 +224,7 @@ impl Note {
             }
             Self::DecadeOfCentury => "decade tied to the explicitly named century",
             Self::EndpointYearDistributed => {
-                "endpoint without a year inherited the other endpoint's stated year"
+                "endpoint or alternative without a year inherited the stated year beside it"
             }
             Self::CrossYearSeason => {
                 "season-year-pair prose may name one boundary-spanning season or a range"
