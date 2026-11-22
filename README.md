@@ -132,6 +132,7 @@ SELECT edtf_min('156X'), edtf_max('156X');           -- 1560-01-01, 1569-12-31
 SELECT edtf_relation('1985~', '199X');               -- {definitely_before}
 -- e.g. as a consistency rule: born must not be after died
 -- CHECK (NOT ('definitely_after' = ANY(edtf_relation(born, died))))
+-- a NULL bound means that side is unknown; daterange reads it as unbounded
 SELECT daterange(edtf_min(production_date),
                  edtf_max(production_date), '[]') @> DATE '1965-06-15'
 FROM artworks;

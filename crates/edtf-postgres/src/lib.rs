@@ -9,8 +9,11 @@
 //! - `edtf_level(text) → integer` (0/1/2, NULL if invalid)
 //! - `edtf_canonical(text) → text` (spec-preferred form, NULL if invalid)
 //! - `edtf_min(text) → date` / `edtf_max(text) → date` — earliest/latest
-//!   calendar day. Open ends map to `-infinity`/`infinity`; unknown ends and
-//!   years outside the Postgres date range map to NULL.
+//!   calendar day, converted as a day count (the bound's Julian Day Number),
+//!   so astronomical year 0 is 1 BC. Open ends map to `-infinity`/`infinity`;
+//!   a day before Postgres's floor (4714-11-24 BC) saturates to `-infinity`
+//!   and one past its ceiling (5874897-12-31) to `infinity`; only an unknown
+//!   end is NULL.
 //! - `edtf_relation(text, text) → text[]` — three-valued temporal relation: one
 //!   entry per non-impossible relation, `definitely_<r>` when it holds for
 //!   every completion, `possibly_<r>` otherwise.
@@ -24,7 +27,7 @@
 pub mod pg_test;
 
 use edtf_core::{Bound, Edtf, Modality};
-use pgrx::{datetime::Date, pg_extern};
+use pgrx::{datetime::Date, pg_extern, pg_sys};
 
 ::pgrx::pg_module_magic!(name, version);
 
@@ -58,25 +61,41 @@ fn edtf_canonical(input: &str) -> Option<String> {
     Some(Edtf::parse(input).ok()?.to_string())
 }
 
-/// Postgres `date` range is 4713-01-01 BC .. 5874897-12-31 AD. In the
-/// astronomical numbering edtf-core uses (year 0 exists), 4713 BC is -4712.
+/// A bound as a Postgres `date`, converted day to day.
+///
+/// A Postgres `date` is a count of days from 2000-01-01, and an edtf-core
+/// bound is a proleptic-Gregorian day with a Julian Day Number, so the
+/// conversion is a subtraction, with no detour through year/month/day
+/// notation and its BC numbering (astronomical year 0 is 1 BC, `-4712` is
+/// 4713 BC).
+///
+/// Postgres holds 4714-11-24 BC (Julian day 0) to 5874897-12-31. A day
+/// before that floor saturates to `-infinity` and one past that ceiling to
+/// `infinity`, so the bound still compares, contains and overlaps correctly
+/// against every date Postgres can hold. NULL means one thing: the bound is
+/// unknown.
 fn to_pg_date(bound: Bound) -> Option<Date> {
     match bound {
         Bound::NegativeInfinity => Some(Date::negative_infinity()),
         Bound::PositiveInfinity => Some(Date::positive_infinity()),
         Bound::Unknown => None,
         Bound::Date(date) => {
-            if date.year < -4712 || date.year > 5_874_897 {
-                return None;
+            let jdn = date.julian_day_number();
+            if jdn < i128::from(pg_sys::DATETIME_MIN_JULIAN) {
+                Some(Date::negative_infinity())
+            } else if jdn >= i128::from(pg_sys::DATE_END_JULIAN) {
+                Some(Date::positive_infinity())
+            } else {
+                let days = jdn.checked_sub(i128::from(pg_sys::POSTGRES_EPOCH_JDATE))?;
+                Date::try_from(i32::try_from(days).ok()?).ok()
             }
-            let year = i32::try_from(date.year).ok()?;
-            Date::new(year, date.month, date.day).ok()
         }
     }
 }
 
 /// Earliest calendar day the expression touches; `-infinity` for open
-/// starts; NULL when invalid, unknown, or before the Postgres date range.
+/// starts and for a day before the Postgres date range (4714-11-24 BC);
+/// NULL when invalid or unknown.
 #[pg_extern(immutable, parallel_safe, strict)]
 #[expect(
     clippy::single_call_fn,
@@ -86,8 +105,9 @@ fn edtf_min(input: &str) -> Option<Date> {
     to_pg_date(Edtf::parse(input).ok()?.bounds().earliest)
 }
 
-/// Latest calendar day the expression touches; `infinity` for open ends;
-/// NULL when invalid, unknown, or beyond the Postgres date range.
+/// Latest calendar day the expression touches; `infinity` for open ends
+/// and for a day past the Postgres date range (5874897-12-31); NULL when
+/// invalid or unknown.
 #[pg_extern(immutable, parallel_safe, strict)]
 #[expect(
     clippy::single_call_fn,
@@ -279,46 +299,13 @@ mod tests {
             Some("-infinity"),
             "an open start maps to Postgres `-infinity`"
         );
-        // Unknown end and out-of-range years are NULL. Both ends of the
-        // range guard in `to_pg_date`, not just the upper one: the lower
-        // side is the only arm of this crate that a suite testing only
-        // `Y17E7` leaves untaken.
+        // An unknown end is NULL; out-of-range days saturate to the
+        // infinities, pinned with the other conversion rows in
+        // `tests/corpus.sql`.
         assert_eq!(
             q_text("SELECT edtf_max('1986-04/')::text"),
             None,
             "an unknown end is NULL, not infinity"
-        );
-        assert_eq!(
-            q_text("SELECT edtf_min('Y17E7')::text"),
-            None,
-            "a year beyond the Postgres date range is NULL"
-        );
-        assert_eq!(
-            q_text("SELECT edtf_min('Y-17E7')::text"),
-            None,
-            "a year before the Postgres date range is NULL"
-        );
-        // The guard's own edges (#298). Postgres's `make_date` reaches
-        // past both sides of it on the low end (to 4714-11-24 BC) and
-        // stops exactly at it on the high end, so only these years tell
-        // the guard's comparisons from their neighbours: `-4712` is the
-        // first year let through, `-4713` the first `make_date` would
-        // accept but the guard refuses, `Y5874897` the last year let
-        // through. The low end is checked for NULL-ness only, not its
-        // value.
-        assert!(
-            q_text("SELECT edtf_min('-4712')::text").is_some(),
-            "the guard's lowest year is inside the Postgres date range"
-        );
-        assert_eq!(
-            q_text("SELECT edtf_min('-4713')::text"),
-            None,
-            "the year below the guard's lowest is NULL, though `make_date` would take it"
-        );
-        assert_eq!(
-            q_text("SELECT edtf_min('Y5874897')::text").as_deref(),
-            Some("5874897-01-01"),
-            "the guard's highest year is inside the Postgres date range"
         );
     }
 
