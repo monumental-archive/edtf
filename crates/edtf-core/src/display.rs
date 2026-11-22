@@ -135,10 +135,10 @@ fn field_body(f: DateField) -> String {
 }
 
 /// Index of the last leading part sharing the year's qualifier `q0` — the
-/// reach of one group marker. The `Display` impl for `Date` returns early for
-/// fully uniform dates, so in practice the scan always stops at an unequal
-/// part; the length guard is what keeps it total for any slice, including one
-/// whose every part shares `q0`.
+/// reach of one group marker. Every uniformly qualified date reaches the
+/// length guard from the `Display` impl for `Date`: its every part shares
+/// `q0`, so the scan walks to the last index and stops there rather than
+/// indexing past the end.
 fn qualified_prefix_end(parts: &[(String, Qualifier)], q0: Qualifier) -> usize {
     let mut end = 0;
     while end + 1 < parts.len() && parts[end + 1].1 == q0 {
@@ -158,24 +158,10 @@ impl Display for Date {
             parts.push((field_body(*d), d.qualifier));
         }
 
-        let all_equal = parts.iter().all(|(_, q)| *q == parts[0].1);
-        if all_equal {
-            // Unqualified, or complete qualification: one trailing symbol.
-            let q = parts[0].1;
-            for (i, (body, _)) in parts.iter().enumerate() {
-                if i > 0 {
-                    f.write_char('-')?;
-                }
-                f.write_str(body)?;
-            }
-            if q.is_qualified() {
-                f.write_char(qual_symbol(q))?;
-            }
-            return Ok(());
-        }
-
         // Longest qualified prefix sharing the year's qualifier becomes one
         // group marker; anything after it gets individual (left) qualifiers.
+        // A uniformly qualified date's prefix spans every part, so it gets
+        // one trailing symbol; an unqualified date gets none.
         let q0 = parts[0].1;
         let prefix_end = q0.is_qualified().then(|| qualified_prefix_end(&parts, q0));
         for (i, (body, q)) in parts.iter().enumerate() {
@@ -290,9 +276,8 @@ mod tests {
     }
 
     /// The prefix scan's length guard: parts that all share `q0` walk to the
-    /// last index instead of indexing past the end. `Display for Date` never
-    /// hands it such a slice — a uniformly qualified date takes the
-    /// complete-qualification early return — so only a direct call reaches it.
+    /// last index instead of indexing past the end. `Display for Date` hands
+    /// it such a slice for every uniformly qualified date.
     #[test]
     fn prefix_scan_stops_at_the_final_part() {
         let uniform = [
@@ -302,13 +287,65 @@ mod tests {
         ];
         assert_eq!(qualified_prefix_end(&uniform, UNCERTAIN), 2);
 
-        // The reachable shape, for contrast: the scan stops before the day.
+        // A mixed shape, for contrast: the scan stops before the day.
         let mixed = [
             (String::from("2004"), UNCERTAIN),
             (String::from("06"), UNCERTAIN),
             (String::from("11"), Qualifier::default()),
         ];
         assert_eq!(qualified_prefix_end(&mixed, UNCERTAIN), 1);
+    }
+
+    /// A date whose every part carries the same qualifier renders as its
+    /// plain body followed by one trailing symbol, or by nothing when
+    /// unqualified: four qualifier states over the three date shapes.
+    #[test]
+    fn uniform_dates_render_one_trailing_qualifier() {
+        let states = [
+            (Qualifier::default(), ""),
+            (UNCERTAIN, "?"),
+            (
+                Qualifier {
+                    uncertain: false,
+                    approximate: true,
+                },
+                "~",
+            ),
+            (
+                Qualifier {
+                    uncertain: true,
+                    approximate: true,
+                },
+                "%",
+            ),
+        ];
+        for (q, symbol) in states {
+            let year = Year {
+                kind: YearKind::Standard {
+                    negative: false,
+                    digits: [Some(2), Some(0), Some(0), Some(4)],
+                },
+                significant_digits: None,
+                qualifier: q,
+            };
+            let month_field = DateField {
+                digits: [Some(0), Some(6)],
+                qualifier: q,
+            };
+            let day_field = DateField {
+                digits: [Some(1), Some(1)],
+                qualifier: q,
+            };
+            let shapes = [
+                (None, None, "2004"),
+                (Some(month_field), None, "2004-06"),
+                (Some(month_field), Some(day_field), "2004-06-11"),
+            ];
+            for (month, day, body) in shapes {
+                let date = Date { year, month, day };
+                assert_eq!(format!("{date}"), format!("{body}{symbol}"));
+            }
+        }
     }
 
     /// The parser only sets `hours_only` on `±hh`, whose minutes are zero, so

@@ -228,3 +228,17 @@ fn julian_day_numbers_match_known_days() {
         assert_eq!(date.julian_day_number(), jdn, "JDN of {date}");
     }
 }
+
+#[test]
+fn bound_dates_print_every_year() {
+    // i64::MIN has no negation: the negative branch prints the magnitude
+    // as unsigned, so the most negative year prints with one minus sign.
+    let date = |year| BoundDate {
+        year,
+        month: 1,
+        day: 1,
+    };
+    assert_eq!(date(i64::MIN).to_string(), "-9223372036854775808-01-01");
+    assert_eq!(date(-5).to_string(), "-0005-01-01");
+    assert_eq!(date(5).to_string(), "0005-01-01");
+}

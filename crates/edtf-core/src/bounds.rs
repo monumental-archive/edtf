@@ -144,7 +144,13 @@ impl BoundDate {
 impl core::fmt::Display for BoundDate {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if self.year < 0 {
-            write!(f, "-{:04}-{:02}-{:02}", -self.year, self.month, self.day)
+            write!(
+                f,
+                "-{:04}-{:02}-{:02}",
+                self.year.unsigned_abs(),
+                self.month,
+                self.day
+            )
         } else {
             write!(f, "{:04}-{:02}-{:02}", self.year, self.month, self.day)
         }
