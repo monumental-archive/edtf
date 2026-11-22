@@ -6,9 +6,9 @@
 --   * the prebuilt-tarball smoke test, via psql -f, against a real install
 --
 -- Deliberately not a second, weaker set of assertions written for the smoke
--- test. "Exercise each function" would duplicate what the pgrx tests already
--- encode and rot within two releases; this is the one source of truth for
--- "does this extension work".
+-- test, and not mirrored by Rust tests in src/lib.rs: a copy would drift and
+-- rot within two releases; this is the one source of truth for "does this
+-- extension work". A new SQL assertion is a row here, never a new pgrx test.
 --
 -- Every check is a plpgsql ASSERT, so the first failure aborts with the
 -- message and a non-zero exit under `psql -v ON_ERROR_STOP=1`.
