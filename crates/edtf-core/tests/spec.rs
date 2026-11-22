@@ -30,7 +30,7 @@
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 
-use edtf_core::{Edtf, IntervalEndpoint, Precision, SetKind, is_valid, level};
+use edtf_core::{Bound, Edtf, IntervalEndpoint, Precision, SetKind, is_valid, level};
 
 fn assert_level(s: &str, want: u8) {
     assert_eq!(level(s), Some(want), "level of {s:?}");
@@ -237,12 +237,71 @@ fn rejection_edges_carry_precise_errors() {
     fn message_of(s: &str) -> String {
         Edtf::parse(s).unwrap_err().to_string()
     }
-    // Exponent domain cap (the exponent itself, not the resulting year).
-    assert!(message_of("Y1E100001").contains("exponent out of supported range"));
+    // One year range for every spelling (D30): an exponent too large is
+    // the same error as the year it would produce.
+    assert!(message_of("Y1E100001").contains("year out of supported range"));
     // Shift minutes are a separate field from shift magnitude (±14:00).
     assert!(message_of("1985-04-12T10:00:00+05:60").contains("shift minutes must be 00-59"));
     // A set range is a single '..' between two dates.
     assert!(message_of("[1985..1990..1995]").contains("multiple '..'"));
+}
+
+/// Decision D30: a year has at most 18 digits, whichever way it is spelled,
+/// and every year that parses can be bounded, compared and ordered.
+#[test]
+fn years_have_one_supported_range() {
+    fn message_of(s: &str) -> String {
+        Edtf::parse(s).map_or_else(|e| e.message.to_owned(), |v| format!("valid: {v}"))
+    }
+    for s in [
+        "Y999999999999999999",
+        "Y-999999999999999999",
+        "Y9E17",
+        "Y99E16",
+    ] {
+        assert!(is_valid(s), "{s:?} is at or inside the limit");
+    }
+    for s in [
+        "Y1000000000000000000",
+        "Y1E18",
+        "Y-1E18",
+        "Y9223372036854775807",
+        "Y1E19",
+        "Y1E30",
+        "Y1E100000",
+        "Y10000000000000000000",
+        "Y1E100001",
+    ] {
+        assert_eq!(message_of(s), "year out of supported range", "{s:?}");
+    }
+    // A significant-digit sweep stays inside the limit because the year does.
+    assert_invalid("Y9E18S1");
+    assert_invalid("Y99E17S1");
+    let b = Edtf::parse("Y9E17S1").unwrap().bounds();
+    let (Bound::Date(lo), Bound::Date(hi)) = (b.earliest, b.latest) else {
+        panic!("Y9E17S1 must have date bounds, got {b:?}");
+    };
+    assert_eq!(
+        (lo.to_string(), hi.to_string()),
+        (
+            "900000000000000000-01-01".to_owned(),
+            "999999999999999999-12-31".to_owned()
+        )
+    );
+    // No interval or set can hide an uncomputable year any more.
+    for s in [
+        "Y1E30/1985",
+        "Y2E30/Y1E30",
+        "Y8E20202/Y9E18S1",
+        "[Y1E19,1985]",
+        "{Y1E19..Y1E19}",
+    ] {
+        assert_invalid(s);
+    }
+    assert_eq!(
+        message_of("Y9E17/Y8E17"),
+        "interval end precedes interval start"
+    );
 }
 
 #[test]

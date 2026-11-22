@@ -48,21 +48,13 @@
     clippy::integer_division_remainder_used,
     reason = "same integer calendar arithmetic as the code under test"
 )]
-#![expect(
-    clippy::let_underscore_must_use,
-    reason = "the result is deliberately discarded; the assertion above covers it"
-)]
-#![expect(
-    clippy::let_underscore_untyped,
-    reason = "the discarded value's type is fixed by the call it comes from"
-)]
 #![expect(clippy::panic, reason = "a panic in a test IS the failure signal")]
 #![expect(
     clippy::missing_panics_doc,
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 
-use edtf_core::Edtf;
+use edtf_core::{Bound, Edtf, IntervalEndpoint};
 
 struct Rng(u64);
 
@@ -102,8 +94,6 @@ const ALPHABET: &[u8] = b"0123456789XYESTZ?~%-+:./,{}[]";
 fn check(input: &str) {
     // Any panic aborts the test; any Ok must round-trip semantically.
     if let Ok(parsed) = Edtf::parse(input) {
-        // Bounds must be total too (found overflowing on Y9E18S1 by fuzzing).
-        let _ = parsed.bounds();
         let rendered = parsed.to_string();
         let reparsed = Edtf::parse(&rendered).unwrap_or_else(|e| {
             panic!("accepted {input:?}, but canonical form {rendered:?} fails to reparse: {e}")
@@ -111,6 +101,30 @@ fn check(input: &str) {
         assert_eq!(
             parsed, reparsed,
             "round trip changed meaning for {input:?} (canonical {rendered:?})"
+        );
+        // Every accepted value can be bounded (decision D30): a bound is
+        // Unknown only on the side of an interval whose endpoint there is
+        // Unknown. A date, a datetime or a set never has an unknown bound.
+        // (Bounds overflowed on Y9E18S1 before D30, found by fuzzing.)
+        let bounds = parsed.bounds();
+        let (start_unknown, end_unknown) = match parsed {
+            Edtf::Interval(iv) => (
+                matches!(iv.start, IntervalEndpoint::Unknown),
+                matches!(iv.end, IntervalEndpoint::Unknown),
+            ),
+            Edtf::Date(_) | Edtf::DateTime(_) | Edtf::Set(_) => (false, false),
+        };
+        assert_eq!(
+            matches!(bounds.earliest, Bound::Unknown),
+            start_unknown,
+            "accepted {input:?}, but its earliest bound is {:?}",
+            bounds.earliest
+        );
+        assert_eq!(
+            matches!(bounds.latest, Bound::Unknown),
+            end_unknown,
+            "accepted {input:?}, but its latest bound is {:?}",
+            bounds.latest
         );
     }
 }
@@ -142,6 +156,30 @@ fn random_bytes_never_panic() {
         if let Ok(s) = core::str::from_utf8(&buf) {
             check(s);
         }
+    }
+}
+
+/// The edges of D30's one supported year range, through the generators' check.
+///
+/// Whatever side of the line each lands on, an accepted one keeps the bound
+/// promise. Before D30, `Y1E19` was accepted with unknown bounds.
+#[test]
+fn year_range_edges_keep_the_bound_promise() {
+    for s in [
+        "Y999999999999999999",
+        "Y-999999999999999999",
+        "Y9E17",
+        "Y9E17S1",
+        "Y1E18",
+        "Y1E19",
+        "Y9E18S1",
+        "Y1E30/1985",
+        "[Y1E19,1985]",
+        "{Y1E19..Y1E19}",
+        "Y9E17/..",
+        "/Y9E17",
+    ] {
+        check(s);
     }
 }
 
