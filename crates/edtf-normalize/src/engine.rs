@@ -1506,8 +1506,26 @@ fn date_unit(s: &str, opts: Options, lang: &Lang) -> Option<usize> {
         .chain(iter::once(s.len()))
         .rfind(|&end| {
             let t = &s[..end];
-            !sub_year_collides(t, opts, lang)
+            !opens_number_suffix(&s[end..], lang)
+                && !sub_year_collides(t, opts, lang)
                 && matches!(edtf_token(t, lang), Some((Edtf::Date(d), _)) if d.month().is_some())
+        })
+}
+
+/// Whether `rest` opens one of the language's hyphen number suffixes.
+///
+/// The suffix ("-й" in "11-й", "-е" in "1980-е") must end at a space, a
+/// hyphen or the end. Such a hyphen binds the number before it, so a
+/// date unit never ends there (N4).
+fn opens_number_suffix(rest: &str, lang: &Lang) -> bool {
+    let rest = rest.to_lowercase();
+    lang.ordinal_suffixes
+        .iter()
+        .chain(lang.decade_suffixes)
+        .filter(|suffix| suffix.starts_with('-'))
+        .any(|suffix| {
+            rest.strip_prefix(suffix)
+                .is_some_and(|after| after.is_empty() || after.starts_with([' ', '-']))
         })
 }
 
