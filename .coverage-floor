@@ -24,13 +24,19 @@ rust-branches 90
 #
 # fuzz-normalize: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.
-# fuzz-normalize measured: 74.7
-fuzz-normalize 72.7
+# Reset 2026-11-23 (#367, owner's ruling): properties.rs compiles into
+# every fuzz target under cfg(fuzzing); covered library lines unchanged,
+# main fbf3923 2300/2972 vs branch 2300/2972 (3348 with properties.rs).
+# fuzz-normalize measured: 68.6
+fuzz-normalize 66.6
 #
 # fuzz-parse: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.
-# fuzz-parse measured: 54.2
-fuzz-parse 52.2
+# Reset 2026-11-23 (#367, owner's ruling): properties.rs compiles into
+# every fuzz target under cfg(fuzzing); covered library lines unchanged,
+# main fbf3923 951/1749 vs branch 951/1749 (2125 with properties.rs).
+# fuzz-parse measured: 44.7
+fuzz-parse 42.7
 #
 # fuzz-relate: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.

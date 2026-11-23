@@ -8,8 +8,8 @@ Command-line EDTF (ISO 8601-2:2019 Annex A) toolbox over `edtf-core`:
 - `level` — minimum conformance level (0/1/2).
 - `info` — JSON summary of each input (kind, precision, bounds, flags).
 - `relation` — three-valued temporal relations between two expressions.
-- `from-julian` — proleptic Julian (Old Style) → Gregorian conversion via
-  `edtf-calendars`.
+- `from-julian` — proleptic Julian (Old Style) → Gregorian EDTF via
+  `edtf-calendars`; a result EDTF cannot spell is refused.
 
 Run `edtf --help` for usage. Part of the
 [`edtf`](https://github.com/monumental-archive/edtf) crate family.

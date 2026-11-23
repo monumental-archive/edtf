@@ -31,7 +31,7 @@ that is valid in your application is valid in your database — always:
 | --- | --- |
 | **`edtf-core`** | The implementation. `#![no_std]`, zero runtime dependencies. Parsing, validation, level classification, calendar bounds, three-valued temporal relations, value enumeration, canonical formatting, positioned errors. Validating constructors: a value that exists is valid. Optional `serde` feature (a value is its canonical string). |
 | **`edtf-normalize`** | Deterministic prose-date → EDTF normalizer at the human input boundary: `"1980s"` → `198X`, `"circa 1920"` → `1920~`, `"около 1920 г."` → `1920~`. Honest ambiguity (`"12/04/1985"` returns both readings, never a guess), every output valid canonical EDTF by construction. English and Russian pattern tables; `no_std` + `alloc`, no third-party dependencies (only `edtf-core`). |
-| **`edtf-calendars`** | Proleptic Julian (Old Style) → Gregorian conversion at the ingest boundary: day precision converts exactly, year/month precision returns honest earliest/latest spans. `#![no_std]`, no third-party dependencies (only `edtf-core`). |
+| **`edtf-calendars`** | Proleptic Julian (Old Style) → Gregorian conversion at the ingest boundary: day precision converts exactly, year/month precision returns an honest EDTF interval, and a result EDTF cannot spell is refused. `#![no_std]`, no third-party dependencies (only `edtf-core`). |
 | **`edtf-wasm`** | WebAssembly bindings for JavaScript: `isValid`, `level`, `canonical`, `parse` (JSON summary), `relation`, and `normalize` (prose → EDTF via `edtf-normalize`). |
 | **`edtf-postgres`** | Postgres extension (via [pgrx], Postgres 15–19): `edtf_valid()`, `edtf_level()`, `edtf_canonical()`, `edtf_min()`, `edtf_max()`, `edtf_relation()` as SQL functions. |
 | **`edtf-cli`** | The `edtf` command-line tool: `validate` / `canonical` / `level` / `info` over arguments or stdin, plus `relation` (three-valued comparison of two expressions) and `from-julian` (Old Style → Gregorian EDTF). Installable anywhere via `cargo install edtf-cli` (or pin it with mise: `"cargo:edtf-cli"`). |
@@ -282,14 +282,16 @@ enforced, implementation extensions pinned as must-rejects, every
 divergence a documented decision), ~200 spec-derived assertions, bounds
 verification, a canonical-form round-trip property over all fixtures,
 model-side property tests (proptest generates random valid values as
-structured data and checks round-trip identity, level stability and bounds
-ordering), and a deterministic fuzz harness (hundreds of thousands of
-hostile inputs per run; the parser must never panic, and everything it
-accepts must round-trip). On top of that, coverage-guided fuzzing
-(`fuzz/`, cargo-fuzz) runs nightly in CI against the same never-panic and
-round-trip properties, the relation algebra over pairs of parsed values,
-and the normaliser (whatever prose it is given, its output must be
-canonical EDTF).
+structured data and checks round-trip identity, level stability, bounds
+ordering, the relation algebra, upper-case letters, no whitespace, and
+qualification never moving bounds), and a deterministic fuzz harness
+(hundreds of thousands of hostile inputs per run; the parser must never
+panic, and everything it accepts must keep the same rules). On top of
+that, coverage-guided fuzzing (`fuzz/`, cargo-fuzz) runs nightly in CI
+against the same never-panic property and the same rules over parsed
+values and pairs of them, and the normaliser (whatever prose it is given,
+its output must be canonical EDTF). Each general rule is asserted once,
+in `crates/edtf-core/src/properties.rs`, and every engine drives it.
 Parse errors carry the byte offset of the problem:
 `1985-02-30` → `invalid EDTF at offset 8: day is out of range for the month`.
 

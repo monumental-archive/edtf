@@ -278,6 +278,7 @@ components;
 9. `Y`-prefix only with |year| > 9999 (D1); no month/day after it.
 10. Sets non-empty, comma-separated, no spaces, `..` per 6.3; braces balanced.
 11. Reject whitespace anywhere in any expression.
+12. Letters (`T` `Z` `X` `Y` `E` `S`) are upper case only (D32).
 
 ## 8. Level classification (a parse result should report the minimum level)
 
@@ -413,8 +414,10 @@ of this implementation. Each is enforced by tests in `crates/edtf-core/tests/`.
   possible-everything and never definite, even where the other endpoint
   could in principle constrain them (`1985/` vs `../1980`); (e) bounds are
   day-granular, so same-day datetimes are definitely equal. Enforced by
-  `tests/relation.rs` (pinned table) and `tests/props.rs` (converse
-  symmetry, soundness, D18 agreement).
+  `tests/relation.rs` (pinned table) and the rules in
+  `src/properties.rs` (converse symmetry, soundness, D18 agreement, and
+  qualification never moving bounds), driven by proptest and the fuzz
+  targets alike.
 - **D24 — enumeration domain (`values()`):** the spec grounds exactly three
   value-set constructions — set range expansion (6.3 c, 6.4),
   unspecified-digit completions (9.2.2 reads `1560-X2` as "either February
@@ -544,6 +547,15 @@ of this implementation. Each is enforced by tests in `crates/edtf-core/tests/`.
   serde as the string it is the `parse` target again — the
   `constructors_build_only_valid_values` property covers the
   constructors).
+- **D32 — EDTF letters are upper case only:** `T`, `Z`, `X`, `Y`, `E`
+  and `S` are written in upper case, and their lower-case forms are
+  refused: `198x`, `y17e7`, `1950s2` and `1985-04-12t23:20:30z` are not
+  EDTF. Neither ISO 8601-1 nor ISO 8601-2 (2019) gives a lower-case form
+  of any of them. The normaliser reads lower case as prose input (N18,
+  `docs/normalize-notes.md`); the core parser does not. Enforced by
+  `tests/spec.rs` (the four rows above) and by the
+  `letters_are_upper_case_only` property, which lowers each letter of
+  every generated and fuzzed value in turn.
 
 ## 10. Test-suite sources
 

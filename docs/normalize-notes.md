@@ -96,6 +96,25 @@ against the N-number.
   through the same endpoint pairing, so they cannot disagree. A range may
   start and end in the same year (`1914-1914` → `1914/1914`); only a
   reversed range is refused. Year 0 is 1 BC, so it refuses elision too.
+  The months rule is one case of a wider one: **a date is one unit**. In
+  ISO 8601 extended format the hyphen separates a date's own components
+  (ISO 8601-1 §3.2.6), so a hyphen inside a run that core reads as one
+  date with a month, season or sub-year code — masked digits and a
+  leading minus included — is never a range separator: "1985-04-1990" →
+  `1985-04/1990`, "1000-01-01-1000" → `1000-01-01/1000`,
+  "1985-04-12–1986" → `1985-04-12/1986`. The unit is the longest such
+  run from a token start or from just after a candidate hyphen, ending
+  at a hyphen, a space or the end; core is the authority on what one
+  date is, so the normaliser keeps no copy of the date grammar. A bare
+  year is not a unit, and a colliding sub-year token (N13) is not one
+  either, since its hyphen is the very question N13 answers. Every other
+  hyphen is a candidate; one that reads is the answer, and several that
+  read give every split's readings, left to right (N14). The same scan
+  runs before lower-casing, so a piece between candidates that is EDTF
+  keeps its case as a whole EDTF token does (N18): "XXXX-01-1985" reads
+  exactly as "XXXX-01 - 1985", notes included. ISO's `--`
+  interval separator is not adopted ("by mutual agreement" only, and
+  EDTF does not use it): "1985-04-12--1986" is refused.
 - **N5 — all-numeric dates:** "12/04/1985" is DD/MM or MM/DD; without context
   the order is *unknowable* and the result is `Ambiguous` with both readings
   — never python-edtf's silent `dayfirst=False` guess. Resolution, in
@@ -184,7 +203,9 @@ against the N-number.
   `XXXX-01-12`. Never an assumed current year — the normalizer has no clock
   on purpose (determinism: same input, same output, forever). Inside a range
   the year is elided, not missing — N16 governs there, and `XXXX` never
-  leaks into a range that states its year. A year-less date is no
+  leaks into a range or "or" list that states its year, whether masked
+  here or typed as EDTF. A bare `XXXX` year is not a year-less date: it
+  has no month for a stated year to scope. A year-less date is no
   operand for before, after, on or before, or on or after (N8): only
   "until" and "since" take it. python-edtf's broader masked-precision
   prose ("day in Spring 1849" → `1849-21-XX`) is not
@@ -274,6 +295,14 @@ against the N-number.
   same holds between alternatives: "June or July 1940" is
   `[1940-06,1940-07]`. When the alternatives that state a year disagree,
   or state one that is not fully specified, the input is refused.
+  Year-less is a property of the value, not of how it was read: a month
+  or day whose year is the fully masked `XXXX` inherits alike whether N9
+  masked it or the input typed it ("from XXXX-01 to 1985" →
+  `1985-01/1985`, as "from January to 1985"). A bare `XXXX` is not
+  year-less: it is a year that is unknown, with nothing for a stated year
+  to scope, so "from XXXX to 1985" stays `XXXX/1985`. A partly masked
+  year (`XX85`) is a stated year that is not fully specified, so it
+  refuses as above.
 - **N17 — cross-year winters are ambiguous:** "winter 1941-42" (also
   "-1942", "зима 1941-1942 гг.") names either ONE winter spanning the year
   boundary — EDTF's code 24 wraps, so `1941-24` already covers Dec 1941 –

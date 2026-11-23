@@ -74,9 +74,14 @@ containers per major as well.
 their committed corpus; the nightly `deep-tests` workflow runs `audit:fuzz`
 on each under AddressSanitizer on the dated nightly declared as
 `FUZZ_TOOLCHAIN`. There are four targets: `parse` (never panics),
-`roundtrip` (canonical form, bounds, enumeration), `relate` (the relation
-algebra over two parsed values) and `normalize` (the normaliser's output
-is canonical EDTF, under every option). The seed corpus is committed under
+`roundtrip` (canonical form, bounds, enumeration, upper-case letters, no
+whitespace, qualification never moving bounds), `relate` (the relation
+algebra, and for two dates order and interval, over two parsed values)
+and `normalize` (the normaliser's output is canonical EDTF, under every
+option). `roundtrip` and `relate` hold no assertion of their own: they
+feed parsed values to the checks in `crates/edtf-core/src/properties.rs`,
+which the proptest engine and the deterministic harness beside it drive
+too, so each general rule is asserted once. The seed corpus is committed under
 `fuzz/corpus/<target>/`, and `crates/edtf-core/tests/fuzz_corpus.rs` holds
 it to the fixtures: every EDTF string they define must be a file there,
 and the `normalize` corpus holds the natural-language inputs too.
@@ -90,7 +95,11 @@ writes any missing seed; a crash the fuzzer finds is committed beside them.
   `relation.rs` (three-valued Allen relations), `enumerate.rs` (lazy value
   enumeration), `display.rs` (canonical form). Every module is private and
   the crate exports named types only; downstream crates construct values
-  through this model, so outputs are valid by construction.
+  through this model, so outputs are valid by construction. The one
+  exception is `properties.rs`, the crate's general rules (each an
+  observation and a pure check), which exists only under `cfg(test)` and
+  cargo-fuzz's `cfg(fuzzing)`: no ordinary build or doc sees it. The
+  workspace lints declare `cfg(fuzzing)` for that reason.
 - `edtf-normalize` builds EDTF through `edtf-core`'s validating constructors
   (D31), so a refusal is its calendar check;
   ambiguous input (e.g. `12/04/1985`) returns every reading, never a guess.

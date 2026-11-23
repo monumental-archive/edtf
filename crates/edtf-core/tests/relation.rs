@@ -3,7 +3,7 @@
 
 //! Pinned hand-worked relation cases (issue #22's test ceremony) across
 //! masks, qualifiers, seasons, open/unknown ends, Y-years, sets and
-//! datetimes. Property-level invariants live in `tests/props.rs`.
+//! datetimes. Property-level invariants live in `src/properties.rs`.
 
 #![expect(
     clippy::min_ident_chars,

@@ -79,6 +79,9 @@ variant_size_differences = "warn"
 single_use_lifetimes = "warn"
 explicit_outlives_requirements = "warn"
 rust_2024_compatibility = { level = "warn", priority = -1 }
+# `fuzzing` is the cfg cargo-fuzz builds with; edtf-core's property
+# module exists only under it and `test` (#367).
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
