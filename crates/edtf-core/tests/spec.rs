@@ -336,3 +336,37 @@ fn component_flags_reach_into_interval_endpoints() {
     assert!(Edtf::parse("1985?/..").unwrap().is_uncertain());
     assert!(!Edtf::parse("../1985").unwrap().is_uncertain());
 }
+
+#[test]
+fn summary_spells_every_kind_precision_and_bound() {
+    // Kinds, and the precision word only dates and datetimes carry.
+    for (input, kind, precision) in [
+        ("1985", "date", Some("year")),
+        ("1985-04", "date", Some("month")),
+        ("2001-21", "date", Some("season")),
+        ("1985-04-12", "date", Some("day")),
+        ("1985-04-12T10:00:00Z", "datetime", Some("day")),
+        ("1985/1987", "interval", None),
+        ("[1985,1987]", "set", None),
+    ] {
+        let s = Edtf::parse(input).unwrap().summary();
+        assert_eq!(s.kind, kind, "{input}");
+        assert_eq!(s.precision, precision, "{input}");
+    }
+    // The four bound cases: a day, either infinity, and unknown (None).
+    let s = Edtf::parse("../1985-04").unwrap().summary();
+    assert_eq!(s.earliest.as_deref(), Some("-infinity"));
+    assert_eq!(s.latest.as_deref(), Some("1985-04-30"));
+    let s = Edtf::parse("1985-04-12/..").unwrap().summary();
+    assert_eq!(s.earliest.as_deref(), Some("1985-04-12"));
+    assert_eq!(s.latest.as_deref(), Some("infinity"));
+    let s = Edtf::parse("1985/").unwrap().summary();
+    assert_eq!(s.latest, None);
+    // Canonical form, level and the three flags ride along.
+    let s = Edtf::parse("?2004-?06-?11").unwrap().summary();
+    assert_eq!(s.canonical, "2004-06-11?");
+    assert_eq!(s.level, 1);
+    assert!(s.uncertain && !s.approximate && !s.unspecified);
+    let s = Edtf::parse("156X~").unwrap().summary();
+    assert!(!s.uncertain && s.approximate && s.unspecified);
+}

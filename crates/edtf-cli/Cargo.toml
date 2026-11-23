@@ -18,6 +18,6 @@ name = "edtf"
 path = "src/main.rs"
 
 [dependencies]
-edtf-core = { workspace = true }
+edtf-core = { workspace = true, features = ["serde"] }
 edtf-calendars = { workspace = true }
 serde_json = { workspace = true }
