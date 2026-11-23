@@ -316,6 +316,7 @@ fn roman_num(t: &str) -> Option<u32> {
     // IX, XL, XC) go negative on the first symbol and recover on the next.
     let mut total: i64 = 0;
     for (i, &v) in vals.iter().enumerate() {
+        // mutants:equivalent replace + with *: `vals[i * 1..]` is `vals[i..]`, which adds only vals[i] itself to the look-ahead, and `n > v` is false for n == v.
         if vals[i + 1..].iter().any(|&n| n > v) {
             total -= i64::from(v);
         } else {
@@ -399,6 +400,7 @@ fn strip_qualifiers(s: &str, lang: &Lang) -> (String, Qualifier) {
     let mut toks: Vec<&str> = s.split(' ').filter(|t| !t.is_empty()).collect();
     let mut q = Qualifier::default();
     'outer: loop {
+        // mutants:equivalent replace > with >=: dropping a lone qualifier or noise word leaves an empty remainder, and neither "" nor any such word parses in any caller (none is a number, ordinal, Roman numeral or no-date word).
         if toks.len() > 1 {
             let head = strip_dot(toks[0].trim_end_matches(':'));
             if lang.noise_leading.contains(&head) {
@@ -427,6 +429,7 @@ fn strip_qualifiers(s: &str, lang: &Lang) -> (String, Qualifier) {
                 }
             }
         }
+        // mutants:equivalent replace > with >=: dropping a lone trailing qualifier or noise word leaves an empty remainder, and neither "" nor any such word parses in any caller.
         if toks.len() > 1 {
             let tail = strip_dot(toks[toks.len() - 1]);
             if lang.noise_trailing.contains(&tail) {
@@ -457,6 +460,7 @@ fn strip_qualifiers(s: &str, lang: &Lang) -> (String, Qualifier) {
 /// over "н э".
 fn split_era<'a>(toks: &[&'a str], lang: &Lang) -> Option<(bool, Vec<&'a str>)> {
     for (phrase, bc) in lang.eras {
+        // mutants:equivalent replace > with >=: a token list that IS an era phrase leaves an empty core, which parses to None; no era phrase parses on its own either.
         if toks.len() > phrase.len() {
             let tail = &toks[toks.len() - phrase.len()..];
             if tail.iter().zip(*phrase).all(|(t, w)| eq_dotless(t, w)) {
@@ -781,6 +785,7 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
     };
     // A year marker may sit BEFORE the era phrase ("44 г. до н. э.") — strip
     // trailing noise again now that the era is off (N3 scope).
+    // mutants:equivalent replace > with >=: popping a lone trailing noise word ("года") leaves an empty core; neither the word nor an empty core parses.
     while core_toks.len() > 1
         && lang
             .noise_trailing
@@ -829,6 +834,7 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
     if era.is_none() && core_toks.len() >= 2 {
         if let Some(DecadeParse::Bare(tens)) = decade_tok(core_toks[0], lang) {
             let mut rest = core_toks[1..].to_vec();
+            // mutants:equivalent replace > with >=: stripping a lone noise word after a decade leaves no century tokens; no noise word reads as a century either.
             while rest.len() > 1 && lang.noise_trailing.contains(&strip_dot(rest[0])) {
                 rest.remove(0);
             }
@@ -956,6 +962,7 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
 /// drop any noise between it and the rest ("first half OF THE 19th century").
 fn split_modifier<'a>(toks: &[&'a str], lang: &Lang) -> Option<(Span, Vec<&'a str>)> {
     let matched = lang.modifiers.iter().find_map(|(phrase, span)| {
+        // mutants:equivalent replace > with >=: a bare modifier phrase gives an empty remainder (None); unmatched, the phrase alone also parses to None.
         (toks.len() > phrase.len() && toks.iter().zip(*phrase).all(|(t, w)| strip_dot(t) == *w))
             .then(|| (*span, toks[phrase.len()..].to_vec()))
     });
@@ -975,6 +982,7 @@ fn split_modifier<'a>(toks: &[&'a str], lang: &Lang) -> Option<(Span, Vec<&'a st
         out.extend_from_slice(tail_toks);
         Some((span, out))
     })?;
+    // mutants:equivalent replace > with >=: stripping a lone noise word after the modifier leaves nothing; the noise word is no decade or century either.
     while rest.len() > 1 && lang.noise_leading.contains(&strip_dot(rest[0])) {
         rest.remove(0);
     }
@@ -1003,6 +1011,7 @@ fn with_note(s: Single, note: Note) -> Single {
 /// Match a leading phrase from a longest-first phrase list.
 fn match_head<'a>(toks: &[&'a str], phrases: &[&[&str]]) -> Option<Vec<&'a str>> {
     for phrase in phrases {
+        // mutants:equivalent replace > with >=: a bare open-range phrase gives an empty remainder, which parses to None, as does the unmatched phrase alone.
         if toks.len() > phrase.len() && toks.iter().zip(*phrase).all(|(t, w)| strip_dot(t) == *w) {
             return Some(toks[phrase.len()..].to_vec());
         }

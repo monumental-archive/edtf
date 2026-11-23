@@ -3,9 +3,16 @@
 # .github/workflows/mutants.yml (the canon's repo-mutants.yml) and never in
 # the gate or the audit. Every crate is mutated, edtf-postgres included.
 # The measure is no unexplained surviving mutant: kill a survivor with an
-# assertion, or record it below as an `exclude_re` entry with a `#` line
-# above it saying why the mutant is equivalent. Never `#[mutants::skip]`
-# (a dependency in shipped code).
+# assertion, or record it as equivalent AT ITS SITE, on the line directly
+# above the mutant, so the record moves with the code (canon #1987):
+#
+#   // mutants:equivalent <mutation>: <reason>
+#
+# `<mutation>` is cargo-mutants' own text without its ` in <function>`.
+# `git grep -n 'mutants:equivalent'` lists every record. This file holds
+# only rules that are not a site, each under a `#` line saying why, and
+# never a line and column. Never `#[mutants::skip]` (a dependency in
+# shipped code).
 
 exclude_re = [
   # edtf-postgres's `tests::` functions are test code: pgrx compiles its
@@ -13,39 +20,4 @@ exclude_re = [
   # cargo-mutants' own test filter (it skips `#[test]` and `cfg(test)`)
   # does not recognise, so it mutates the tests themselves.
   '^crates/edtf-postgres/src/lib\.rs:[0-9]+:[0-9]+: replace (tests::|.* in tests::)',
-  # edtf-normalize roman_num: `vals[i * 1..]` is `vals[i..]`, which adds
-  # only vals[i] itself to the look-ahead, and `n > v` is false for n == v.
-  '^crates/edtf-normalize/src/engine\.rs:323:19: replace \+ with \* in roman_num$',
-  # edtf-normalize strip_qualifiers: dropping a lone qualifier or noise word
-  # leaves an empty remainder, and neither "" nor any such word parses in
-  # any caller (none is a number, ordinal, Roman numeral or no-date word).
-  '^crates/edtf-normalize/src/engine\.rs:404:23: replace > with >= in strip_qualifiers$',
-  # Same for a lone trailing qualifier or noise word: empty or not, no parse.
-  '^crates/edtf-normalize/src/engine\.rs:432:23: replace > with >= in strip_qualifiers$',
-  # edtf-normalize split_era: a token list that IS an era phrase leaves an
-  # empty core, which parses to None; no era phrase parses on its own either.
-  '^crates/edtf-normalize/src/engine\.rs:462:23: replace > with >= in split_era$',
-  # edtf-normalize parse_single: popping a lone trailing noise word ("года")
-  # leaves an empty core; neither the word nor an empty core parses.
-  '^crates/edtf-normalize/src/engine\.rs:786:27: replace > with >= in parse_single$',
-  # edtf-normalize parse_single: stripping a lone noise word after a decade
-  # leaves no century tokens; no noise word reads as a century either.
-  '^crates/edtf-normalize/src/engine\.rs:834:30: replace > with >= in parse_single$',
-  # edtf-normalize split_modifier: a bare modifier phrase gives an empty
-  # remainder (None); unmatched, the phrase alone also parses to None.
-  '^crates/edtf-normalize/src/engine\.rs:961:21: replace > with >= in split_modifier$',
-  # edtf-normalize split_modifier: stripping a lone noise word after the
-  # modifier leaves nothing; the noise word is no decade or century either.
-  '^crates/edtf-normalize/src/engine\.rs:980:22: replace > with >= in split_modifier$',
-  # edtf-normalize match_head: a bare open-range phrase gives an empty
-  # remainder, which parses to None, as does the unmatched phrase alone.
-  '^crates/edtf-normalize/src/engine\.rs:1008:23: replace > with >= in match_head$',
-  # edtf-core year_leap_possible: `v * 10 - d` folds the digits to -v
-  # instead of v, and is_leap is rem_euclid-based, so is_leap(-v) ==
-  # is_leap(v) for every year; no input can tell the two apart.
-  '^crates/edtf-core/src/parser\.rs:542:32: replace \+ with - in year_leap_possible$',
-  # edtf-core year_leap_possible: dropping the sign negation only flips the
-  # year's sign, and is_leap (rem_euclid-based) is symmetric under negation,
-  # so no input can tell the two apart.
-  '^crates/edtf-core/src/parser\.rs:544:40: delete - in year_leap_possible$',
 ]
