@@ -833,3 +833,68 @@ fn any_edtf_value_is_an_alternative_and_a_span_an_operand() {
         no_match(input);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Survivors of the weekly mutation run (#386)
+
+/// The `reading` of every interpretation of an ambiguous input, in order.
+#[track_caller]
+fn readings(input: &str) -> Vec<String> {
+    match normalize(input) {
+        Outcome::Ambiguous(a) => a.interpretations.into_iter().map(|i| i.reading).collect(),
+        other => panic!("expected Ambiguous for {input:?}, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_one_range_set_is_a_span_operand() {
+    // A one-element set is its element; a range element is a span, read by
+    // its near edge (N8).
+    ok("before [1900..1910]", "[..1899]");
+    ok("after [1900..1910]", "[1911..]");
+}
+
+#[test]
+fn a_span_with_a_year_less_end_is_no_set_operand() {
+    // `xxxx` is a year-less operand, so a span with it at either end has no
+    // unit for the four set rows, whichever end the row reads (N8).
+    ok("xxxx to 1900", "XXXX/1900");
+    no_match("after xxxx to 1900");
+    no_match("before 1900 to xxxx");
+}
+
+#[test]
+fn alternatives_and_range_ends_keep_their_readings() {
+    // A set's reading names its alternatives' readings (N14); a range's
+    // names its ends' (N5).
+    assert_eq!(
+        readings("12/04/1985 or 1990"),
+        ["day-month-year", "month-day-year"]
+    );
+    assert_eq!(
+        readings("12/04/1985 to 1990"),
+        ["day-month-year", "month-day-year"]
+    );
+    assert_eq!(
+        readings("12/04/1985 to 11/03/1990"),
+        [
+            "day-month-year to day-month-year",
+            "day-month-year to month-day-year",
+            "month-day-year to day-month-year",
+            "month-day-year to month-day-year",
+        ]
+    );
+}
+
+#[test]
+fn a_qualified_century_part_notes_its_mask() {
+    // A qualifier drops a century part to its century's mask (N1, N10):
+    // the part's note becomes the mask's, and the dropped modifier is noted.
+    match normalize("ca. early 19th century") {
+        Outcome::Normalized(n) => {
+            assert_eq!(n.edtf, "18XX~");
+            assert_eq!(n.notes, [Note::CenturyMask, Note::ModifierDropped]);
+        }
+        other => panic!("expected Normalized, got {other:?}"),
+    }
+}
