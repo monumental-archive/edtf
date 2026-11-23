@@ -283,11 +283,11 @@ against the N-number.
   colliding sub-year token, which stays N13's question. Any EDTF value
   may be an alternative ("1914 or 1985/1990", "1914 or [1667,1668]"); an
   interval with two dated ends is a span, so it is a before/after operand
-  by its start or its end (N8); a set of several elements, a datetime or an interval with an open
-  or unknown end is no operand, and none of these is a range end. The note
-  `EdtfCaseNormalized` is attached exactly when the fold changed the
-  text, and `AlreadyValidEdtf` only when the EDTF token is the whole
-  input.
+  by its start or its end (N8); a set of several elements, a datetime or
+  an interval with an open or unknown end is no operand, and none of
+  these is a range end. The note `EdtfCaseNormalized` is attached exactly
+  when the fold changed the text, and `AlreadyValidEdtf` only when the
+  EDTF token is the whole input.
 
 ## 3. Test ceremony
 
