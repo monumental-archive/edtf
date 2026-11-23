@@ -5,11 +5,14 @@
 //! in both directions, offset monotonicity, and span lengths that match
 //! the Julian calendar's own day counts.
 //!
-//! The Gregorian JDN formula below is a test-local oracle, implemented
-//! independently of the crate (same spirit as `edtf-core/tests/props.rs`
-//! re-deriving the leap rule): day counting happens on the Gregorian day
-//! scale only, so a bug in the crate's Julian arithmetic cannot cancel
-//! itself out.
+//! The arithmetic is also searched over its whole input domain (#345):
+//! every `i64` year, edges weighted in, crossed with every `u8` month and
+//! day. There the oracles are test-local: the Julian leap rule, month
+//! lengths and a Julian day count are re-derived below, independently of
+//! the crate (same spirit as `edtf-core/tests/props.rs` re-deriving the
+//! leap rule), and the Gregorian side is `edtf-core`'s own
+//! `BoundDate::julian_day_number`, so a bug in the crate's Julian
+//! arithmetic cannot cancel itself out.
 
 #![expect(
     clippy::expect_used,
@@ -37,7 +40,8 @@
 )]
 
 use edtf_calendars::{
-    Converted, JulianDate, convert, gregorian_to_julian, is_julian_leap, julian_to_gregorian,
+    CalendarError, Converted, JulianDate, convert, gregorian_to_julian, is_julian_leap,
+    julian_to_gregorian,
 };
 use edtf_core::BoundDate;
 use proptest::prelude::*;
@@ -156,5 +160,131 @@ proptest! {
         prop_assert_eq!(convert(y, Some(m), Some(1)), Ok(Converted::Day(earliest)));
         let last = julian_last_day(m, is_julian_leap(y));
         prop_assert_eq!(convert(y, Some(m), Some(last)), Ok(Converted::Day(latest)));
+    }
+}
+
+/// The Julian leap rule, re-derived: every fourth year, no century
+/// exception, astronomical numbering. Deliberately not the crate's
+/// `is_julian_leap`, so a change to that rule is a counter-example here.
+const fn julian_leap(y: i64) -> bool {
+    y.rem_euclid(4) == 0
+}
+
+/// Whether the fields name a proleptic Julian calendar date.
+fn names_julian_date(year: i64, month: u8, day: u8) -> bool {
+    (1..=12).contains(&month) && day >= 1 && day <= julian_last_day(month, julian_leap(year))
+}
+
+/// Julian Day Number of a proleptic Julian date, by counting days.
+///
+/// Not the crate's Fliegel–Van Flandern form: the days before year
+/// `y` (365 a year plus one per leap year from 0 up to `y`, which is
+/// `⌊(y + 3) / 4⌋` for either sign), then the days before the month, then
+/// the day. Julian 0000-01-01 is JDN 1 721 058.
+fn julian_day_count(year: i64, month: u8, day: u8) -> i128 {
+    let y = i128::from(year);
+    let before_month: i128 = (1..month)
+        .map(|m| i128::from(julian_last_day(m, julian_leap(year))))
+        .sum();
+    1_721_058 + 365 * y + (y + 3).div_euclid(4) + before_month + i128::from(day) - 1
+}
+
+/// The JDNs of the first and last Gregorian days whose year fits `i64`.
+fn gregorian_jdn_limits() -> (i128, i128) {
+    let first = BoundDate::new(i64::MIN, 1, 1).expect("1 January exists in every year");
+    let last = BoundDate::new(i64::MAX, 12, 31).expect("31 December exists in every year");
+    (first.julian_day_number(), last.julian_day_number())
+}
+
+/// Any `i64` year, with the edges weighted in: the `i64` limits, the
+/// Julian years where the Gregorian year leaves `i64`, the years around
+/// zero and the reform, and leap and century years.
+fn any_year() -> impl Strategy<Value = i64> {
+    // Where the Gregorian year leaves `i64`. Only a centre for sampling;
+    // the properties judge the result by the oracles above.
+    let edge = |d| {
+        gregorian_to_julian(d)
+            .expect("the Julian year of an i64 Gregorian limit fits i64")
+            .year
+    };
+    let low = edge(BoundDate::new(i64::MIN, 1, 1).expect("1 January exists"));
+    let high = edge(BoundDate::new(i64::MAX, 12, 31).expect("31 December exists"));
+    prop_oneof![
+        4 => any::<i64>(),
+        2 => i64::MIN..=i64::MIN + 400,
+        2 => i64::MAX - 400..=i64::MAX,
+        2 => low - 400..=low + 400,
+        2 => high - 400..=high + 400,
+        2 => -10_000_i64..=10_000,
+        2 => (i64::MIN.div_euclid(400) + 1..=i64::MAX.div_euclid(400)).prop_map(|c| c * 400),
+        2 => (i64::MIN.div_euclid(100) + 1..=i64::MAX.div_euclid(100)).prop_map(|c| c * 100),
+    ]
+}
+
+/// Any month and day value.
+///
+/// Most draws are `0..=13` and `0..=32`, where
+/// the valid values and the first invalid ones on each side sit; February
+/// and the days 28 to 32, where the leap rule and the month lengths
+/// decide, are weighted in; the rest are any `u8`.
+fn any_fields() -> impl Strategy<Value = (u8, u8)> {
+    let month = prop_oneof![3 => 0_u8..=13, 1 => Just(2_u8), 1 => any::<u8>()];
+    let day = prop_oneof![2 => 0_u8..=32, 2 => 28_u8..=32, 1 => any::<u8>()];
+    (month, day)
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(8192))]
+
+    /// `julian_to_gregorian` returns for any `i64` year and any `u8`
+    /// month and day, and refuses with `InvalidDate` exactly when the
+    /// fields name no Julian calendar date.
+    #[test]
+    fn julian_to_gregorian_is_total_and_refuses_exactly_non_dates(
+        year in any_year(), (month, day) in any_fields()
+    ) {
+        let result = julian_to_gregorian(JulianDate { year, month, day });
+        prop_assert_eq!(
+            result == Err(CalendarError::InvalidDate),
+            !names_julian_date(year, month, day),
+            "Julian {}-{}-{} gave {:?}", year, month, day, result
+        );
+    }
+
+    /// Every day `julian_to_gregorian` returns is the Julian date's own
+    /// day, and `gregorian_to_julian` takes it back to the date given,
+    /// over the whole `i64` year range.
+    #[test]
+    fn every_converted_day_round_trips_over_all_years(
+        year in any_year(), (month, day) in any_fields()
+    ) {
+        let date = JulianDate { year, month, day };
+        if let Ok(g) = julian_to_gregorian(date) {
+            prop_assert_eq!(
+                g.julian_day_number(), julian_day_count(year, month, day),
+                "Julian {} gave {}", date, g
+            );
+            prop_assert_eq!(gregorian_to_julian(g), Ok(date), "via {}", g);
+        }
+    }
+
+    /// The only other refusal is `OutOfRange`, and it comes exactly when
+    /// the Julian date's Gregorian year leaves `i64`.
+    #[test]
+    fn out_of_range_only_past_the_i64_years(
+        year in any_year(), (month, day) in any_fields()
+    ) {
+        let (first, last) = gregorian_jdn_limits();
+        let named = names_julian_date(year, month, day);
+        let past = named && !(first..=last).contains(&julian_day_count(year, month, day));
+        let result = julian_to_gregorian(JulianDate { year, month, day });
+        prop_assert_eq!(
+            result == Err(CalendarError::OutOfRange), past,
+            "Julian {}-{}-{} gave {:?}", year, month, day, result
+        );
+        prop_assert!(
+            matches!(result, Ok(_) | Err(CalendarError::OutOfRange)) || !named,
+            "Julian {}-{}-{} gave {:?}", year, month, day, result
+        );
     }
 }
