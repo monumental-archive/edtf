@@ -15,7 +15,10 @@
 # and advisory that is legitimately absent here. Two graphs, two policies.
 #
 # cargo-deny picks this up automatically for `--manifest-path fuzz/Cargo.toml`
-# because fuzz/ is its own workspace root. `task lint:fuzz` runs it.
+# because fuzz/ is its own workspace root. No gate task reads it yet: run
+# `cargo deny --locked --manifest-path fuzz/Cargo.toml --config
+# fuzz/deny.toml check bans licenses sources`, until the canon's lint:deny
+# runs once per tracked workspace (monumental-archive/.github#2009).
 
 [graph]
 all-features = true

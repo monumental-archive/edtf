@@ -28,8 +28,9 @@ default-members = [
   "crates/edtf-wasm",
   "crates/edtf-cli",
 ]
-# fuzz/ stays excluded: cargo-fuzz targets need nightly and libfuzzer, and
-# must not drag those into the everyday workspace build.
+# fuzz/ stays excluded: it is its own workspace, so libfuzzer and its C++
+# build stay out of the everyday build. The gate builds its targets on
+# the stable pin; only running them under the fuzzer needs nightly.
 exclude = ["fuzz"]
 
 [workspace.dependencies]
