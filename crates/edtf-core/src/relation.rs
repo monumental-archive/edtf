@@ -45,10 +45,6 @@
     reason = "a one-use std path written in full at the call site is clearer than an import that only appears once"
 )]
 #![expect(
-    clippy::single_call_fn,
-    reason = "a named helper used once is extraction for readability, which is the opposite of a defect; several are also the named steps the module docs describe"
-)]
-#![expect(
     clippy::exhaustive_enums,
     reason = "these enums enumerate what ISO 8601-2 defines; the spec fixes the variants, so non_exhaustive would promise additions the format cannot make"
 )]

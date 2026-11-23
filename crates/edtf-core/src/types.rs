@@ -36,10 +36,6 @@
     reason = "every flagged operation is bounded where it stands: slice indices by a length guard on the line above, digit values to 0-9 by the match arm that binds them, and the JDN forms by being computed in i128 so any i64 year fits. The operations that genuinely could leave range already use checked_/saturating_ and return an error rather than wrapping"
 )]
 #![expect(
-    clippy::single_call_fn,
-    reason = "a named helper used once is extraction for readability, which is the opposite of a defect; several are also the named steps the module docs describe"
-)]
-#![expect(
     clippy::wildcard_enum_match_arm,
     reason = "the wildcard covers variants the arm above has already narrowed by construction; naming them would be dead code the compiler cannot check"
 )]

@@ -34,10 +34,6 @@
     reason = "a and b are the two operands of the interval relation algebra and ab/ba its two directions; that is the notation the invariants are written in"
 )]
 #![expect(
-    clippy::single_call_fn,
-    reason = "one named helper per assertion group is what makes the test readable"
-)]
-#![expect(
     clippy::arithmetic_side_effects,
     reason = "test arithmetic is over literal fixtures and generator-bounded values; an overflow here would fail the test, which is the signal"
 )]
@@ -76,10 +72,6 @@
 #![expect(
     clippy::unnecessary_lazy_evaluations,
     reason = "the closure form keeps the two arms parallel to read"
-)]
-#![expect(
-    clippy::tests_outside_test_module,
-    reason = "an integration test under tests/ is compiled as its own crate whose every item is test support, so there is no non-test code for a mod tests to separate it from"
 )]
 
 use edtf_core::{

@@ -15,10 +15,6 @@
     reason = "the corpus is Russian prose dates; Cyrillic literals are the subject under test"
 )]
 #![expect(
-    clippy::tests_outside_test_module,
-    reason = "an integration test under tests/ is compiled as its own crate whose every item is test support, so there is no non-test code for a mod tests to separate it from"
-)]
-#![expect(
     clippy::min_ident_chars,
     reason = "the test bodies use the same y/m/d date-component names as the code they exercise"
 )]

@@ -21,19 +21,11 @@
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]
 #![expect(
-    clippy::tests_outside_test_module,
-    reason = "an integration test under tests/ is compiled as its own crate whose every item is test support, so there is no non-test code for a mod tests to separate it from"
-)]
-#![expect(
     clippy::missing_panics_doc,
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 #![expect(clippy::panic, reason = "a panic in a test IS the failure signal")]
 #![expect(clippy::std_instead_of_alloc, reason = "this target links std")]
-#![expect(
-    clippy::single_call_fn,
-    reason = "one named helper per step is what makes the test readable"
-)]
 
 use std::collections::BTreeSet;
 use std::env;
