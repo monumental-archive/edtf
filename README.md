@@ -268,7 +268,7 @@ checksum lockfile; git hooks (lefthook) and CI run the same gauntlet:
 ```sh
 mise install       # pinned Rust + all linters
 mise run ci        # the org gate: every linter, then the test suite
-mise run wasm      # build the WebAssembly artifact
+mise run wasm:pack # build the WebAssembly artifact (npm package)
 mise run test:pgrx # Postgres extension tests, every declared major
 ```
 
