@@ -16,13 +16,17 @@
 )]
 
 use edtf_calendars::{
-    CalendarError, Converted, JulianDate, convert, gregorian_to_julian, is_julian_leap,
-    julian_to_gregorian,
+    CalendarError, JulianDate, convert, gregorian_to_julian, is_julian_leap, julian_to_gregorian,
+    parse_julian,
 };
-use edtf_core::BoundDate;
+use edtf_core::{BoundDate, Edtf};
 
 const fn j(year: i64, month: u8, day: u8) -> JulianDate {
     JulianDate { year, month, day }
+}
+
+fn edtf(text: &str) -> Edtf {
+    Edtf::parse(text).unwrap_or_else(|e| panic!("{text}: {e}"))
 }
 
 fn g(year: i64, month: u8, day: u8) -> BoundDate {
@@ -99,31 +103,19 @@ fn astronomical_numbering() {
 }
 
 /// Precision honesty: a Julian year or month never converts to a single
-/// Gregorian year or month — `convert` returns an explicit span.
+/// Gregorian year or month — `convert` returns an explicit interval.
 #[test]
 fn precision_honesty() {
     // The issue's example: Julian 1917 spans two Gregorian years.
-    assert_eq!(
-        convert(1917, None, None),
-        Ok(Converted::Span {
-            earliest: g(1917, 1, 14),
-            latest: g(1918, 1, 13),
-        })
-    );
+    assert_eq!(convert(1917, None, None), Ok(edtf("1917-01-14/1918-01-13")));
     // Julian February 1900 straddles the 12→13 offset change *inside* the
     // month, and its last day is the century leap day.
     assert_eq!(
         convert(1900, Some(2), None),
-        Ok(Converted::Span {
-            earliest: g(1900, 2, 13),
-            latest: g(1900, 3, 13),
-        })
+        Ok(edtf("1900-02-13/1900-03-13"))
     );
     // Day precision converts exactly.
-    assert_eq!(
-        convert(1917, Some(12), Some(25)),
-        Ok(Converted::Day(g(1918, 1, 7)))
-    );
+    assert_eq!(convert(1917, Some(12), Some(25)), Ok(edtf("1918-01-07")));
     // A day without a month is not a precision, it is a mistake.
     assert_eq!(
         convert(1917, None, Some(25)),
@@ -139,22 +131,93 @@ fn precision_honesty() {
     );
 }
 
-/// Conversion output feeds edtf-core's model directly: the honest EDTF for
-/// a Julian year is an interval between the two bound days.
+/// A result EDTF cannot spell is refused.
+///
+/// A Gregorian day outside the years
+/// −9999 to 9999 needs the `Y` form, which carries no month or day. The
+/// edges sit where Julian and Gregorian years part: Julian 9999 ends in
+/// Gregorian 10000, and Julian -9999 begins in Gregorian -10000.
 #[test]
-fn spans_feed_edtf_intervals() {
-    let Ok(Converted::Span { earliest, latest }) = convert(1917, None, None) else {
-        panic!("year converts to a span");
-    };
-    let interval = format!("{earliest}/{latest}");
-    assert_eq!(interval, "1917-01-14/1918-01-13");
-    assert!(edtf_core::is_valid(&interval));
+fn results_without_an_edtf_spelling_are_refused() {
+    assert_eq!(
+        convert(9999, Some(12), Some(31)),
+        Err(CalendarError::OutOfRange)
+    );
+    assert_eq!(convert(9999, None, None), Err(CalendarError::OutOfRange));
+    assert_eq!(
+        convert(10000, Some(1), Some(1)),
+        Err(CalendarError::OutOfRange)
+    );
+    assert_eq!(convert(10000, None, None), Err(CalendarError::OutOfRange));
+    assert_eq!(convert(-9999, None, None), Err(CalendarError::OutOfRange));
+    assert_eq!(
+        convert(i64::MIN, None, None),
+        Err(CalendarError::OutOfRange)
+    );
+    // The last spellable Julian day, and the first.
+    assert_eq!(convert(9999, Some(10), Some(19)), Ok(edtf("9999-12-31")));
+    assert_eq!(
+        convert(9999, Some(10), Some(20)),
+        Err(CalendarError::OutOfRange)
+    );
+    assert_eq!(convert(-9999, Some(3), Some(19)), Ok(edtf("-9999-01-01")));
+    assert_eq!(
+        convert(-9999, Some(3), Some(18)),
+        Err(CalendarError::OutOfRange)
+    );
+}
+
+/// The text forms: `Y`, `Y-MM`, `Y-MM-DD`.
+///
+/// Astronomical year, an optional `-` and no `+`. A leading `+` is the case a digit check alone refuses:
+/// `i64::from_str` accepts it, so without the check `+1917` would read.
+#[test]
+fn parse_julian_reads_the_three_forms() {
+    assert_eq!(parse_julian("1917"), Ok((1917, None, None)));
+    assert_eq!(parse_julian("1917-10"), Ok((1917, Some(10), None)));
+    assert_eq!(parse_julian("1917-10-25"), Ok((1917, Some(10), Some(25))));
+    assert_eq!(parse_julian("-0044-03-15"), Ok((-44, Some(3), Some(15))));
+    // Shape only: the calendar check is `convert`'s.
+    assert_eq!(parse_julian("1917-13-99"), Ok((1917, Some(13), Some(99))));
+    for bad in [
+        "",
+        "-",
+        "+1917",
+        "-+44-03-15",
+        "1917-2-3",
+        "191A",
+        "1917-",
+        "1917-10-25-01",
+        "1917-aa",
+        "--1917",
+        " 1917",
+    ] {
+        assert_eq!(parse_julian(bad), Err(CalendarError::Malformed), "{bad:?}");
+    }
+    // A year of the right shape that will not fit `i64` is out of range,
+    // and the most negative `i64` fits.
+    assert_eq!(
+        parse_julian("-9223372036854775808"),
+        Ok((i64::MIN, None, None))
+    );
+    assert_eq!(
+        parse_julian("9223372036854775808"),
+        Err(CalendarError::OutOfRange)
+    );
+    assert_eq!(
+        parse_julian("99999999999999999999999999999999999999999-01"),
+        Err(CalendarError::OutOfRange)
+    );
 }
 
 /// Errors and dates render for diagnostics; the negative-year form keeps the
 /// astronomical sign and four-digit padding.
 #[test]
 fn display_forms() {
+    assert_eq!(
+        CalendarError::Malformed.to_string(),
+        "expected a Julian date as Y, Y-MM or Y-MM-DD"
+    );
     assert_eq!(
         CalendarError::InvalidDate.to_string(),
         "not a valid calendar date"

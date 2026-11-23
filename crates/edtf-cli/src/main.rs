@@ -45,10 +45,6 @@
     reason = "matching through a reference without restating & at every level is the idiomatic form the rest of this crate uses"
 )]
 #![expect(
-    clippy::arithmetic_side_effects,
-    reason = "every flagged operation is bounded where it stands: slice indices by a length guard on the line above, digit values to 0-9 by the match arm that binds them, and the JDN forms by being computed in i128 so any i64 year fits. The operations that genuinely could leave range already use checked_/saturating_ and return an error rather than wrapping"
-)]
-#![expect(
     clippy::unreachable,
     reason = "an unreachable! whose comment names the caller-side check that makes it unreachable — a deliberate assertion of an invariant, not an unhandled case"
 )]
@@ -87,7 +83,8 @@ COMMANDS:
     from-julian  convert proleptic Julian (Old Style) dates to Gregorian
         EDTF; input Y, Y-MM or Y-MM-DD (astronomical years). Year/month
         precision prints an interval, never a bare 'converted' year \u{2014}
-        Julian 1917 is 1917-01-14/1918-01-13
+        Julian 1917 is 1917-01-14/1918-01-13. A result outside the
+        Gregorian years -9999 to 9999 has no EDTF spelling and is refused
 
 OPTIONS:
     -h, --help       show this help
@@ -202,48 +199,15 @@ fn process(cmd: &str, input: &str, out: &mut impl Write) -> bool {
 
 /// Handle one `from-julian` input; returns false if it was invalid.
 fn from_julian(input: &str, out: &mut impl Write) -> bool {
-    let Some((year, month, day)) = parse_julian_parts(input) else {
-        eprintln!("{input}: expected a Julian date as Y, Y-MM or Y-MM-DD");
-        return false;
-    };
-    match edtf_calendars::convert(year, month, day) {
-        Ok(edtf_calendars::Converted::Day(d)) => writeln!(out, "{d}").is_ok(),
-        Ok(edtf_calendars::Converted::Span { earliest, latest }) => {
-            writeln!(out, "{earliest}/{latest}").is_ok()
-        }
+    match edtf_calendars::parse_julian(input)
+        .and_then(|(year, month, day)| edtf_calendars::convert(year, month, day))
+    {
+        Ok(value) => writeln!(out, "{value}").is_ok(),
         Err(e) => {
             eprintln!("{input}: {e}");
             false
         }
     }
-}
-
-/// Split `Y`, `Y-MM` or `Y-MM-DD` (astronomical year, may be negative)
-/// into numeric parts. Returns None on any other shape.
-fn parse_julian_parts(input: &str) -> Option<(i64, Option<u8>, Option<u8>)> {
-    let (negative, rest) = input
-        .strip_prefix('-')
-        .map_or((false, input), |rest| (true, rest));
-    let mut parts = rest.split('-');
-    let year_digits = parts.next()?;
-    if year_digits.is_empty() || !year_digits.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    let year: i64 = year_digits.parse().ok()?;
-    let year = if negative { -year } else { year };
-    let two_digit = |s: Option<&str>| match s {
-        None => Some(None),
-        Some(s) if s.len() == 2 && s.bytes().all(|b| b.is_ascii_digit()) => {
-            Some(Some(s.parse::<u8>().ok()?))
-        }
-        Some(_) => None,
-    };
-    let month = two_digit(parts.next())?;
-    let day = two_digit(parts.next())?;
-    if parts.next().is_some() {
-        return None;
-    }
-    Some((year, month, day))
 }
 
 /// The `info` command's JSON object for one parsed expression: core's
@@ -311,14 +275,10 @@ mod tests {
         assert_eq!(dispatch("validate", "1985-02-30"), (false, String::new()));
     }
 
-    /// The year must be bare ASCII digits after an optional `-`. A leading
-    /// `+` is the case the digit check alone refuses: `i64::from_str`
-    /// accepts it, so without the check `+1917` would convert silently.
+    /// The year must be bare ASCII digits after an optional `-`
+    /// (`edtf-calendars`' `parse_julian`): a refusal writes nothing.
     #[test]
     fn julian_year_refuses_an_explicit_plus_sign() {
-        assert_eq!(parse_julian_parts("1917"), Some((1917, None, None)));
-        assert_eq!(parse_julian_parts("+1917"), None);
-        assert_eq!(parse_julian_parts("-+44-03-15"), None);
         assert_eq!(
             dispatch("from-julian", "+1917-10-25"),
             (false, String::new())
