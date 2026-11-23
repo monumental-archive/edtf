@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: Copyright (c) the edtf contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Model-side property tests: generate random *valid* EDTF values as
-//! structured data and check invariants over every one of them.
+//! The proptest engine: generate random *valid* EDTF values as structured
+//! data and hold every one of them to the rules in `properties`.
 //!
-//! This is the complementary bug class to the string-side fuzzing in
-//! `tests/fuzz.rs` and `fuzz/`: values the parser may never produce but the
-//! type system can represent, and invariant violations on shapes random
-//! strings rarely reach.
+//! This is the complementary bug class to the string-side engines (the
+//! deterministic `harness` and the cargo-fuzz targets): values the parser
+//! may never produce but the type system can represent, and rule
+//! violations on shapes random strings rarely reach.
 //!
 //! Generators are constructive rather than filtered: masks are applied to an
 //! already-valid concrete date (so at least that completion stays valid,
@@ -16,7 +16,6 @@
 //! only generated in shapes `Display` can spell.
 
 #![expect(
-    clippy::unwrap_used,
     clippy::expect_used,
     reason = "test/bench code: a panic here is the failure signal, not a crash path"
 )]
@@ -24,14 +23,6 @@
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "generator and oracle ranges are bounded by construction"
-)]
-#![expect(
-    clippy::non_ascii_literal,
-    reason = "proptest! expands to code carrying the generated corpus, which includes the Cyrillic month and century forms this crate normalises"
-)]
-#![expect(
-    clippy::min_ident_chars,
-    reason = "a and b are the two operands of the interval relation algebra and ab/ba its two directions; that is the notation the invariants are written in"
 )]
 #![expect(
     clippy::arithmetic_side_effects,
@@ -46,6 +37,10 @@
     reason = "casting fixture values the test itself bounded"
 )]
 #![expect(
+    clippy::non_ascii_literal,
+    reason = "proptest! expands to code carrying the generated corpus, which includes the Cyrillic month and century forms this crate normalises"
+)]
+#![expect(
     clippy::pattern_type_mismatch,
     reason = "matching through a reference without restating & at every level"
 )]
@@ -54,12 +49,12 @@
     reason = "rebinding a value through the transformation under test"
 )]
 #![expect(
-    clippy::integer_division,
-    reason = "same integer calendar arithmetic as the code under test"
-)]
-#![expect(
     clippy::absolute_paths,
     reason = "a one-use std path written in full at the call site"
+)]
+#![expect(
+    clippy::integer_division,
+    reason = "same integer calendar arithmetic as the code under test"
 )]
 #![expect(
     clippy::indexing_slicing,
@@ -70,12 +65,19 @@
     reason = "an unreachable! naming the invariant the fixture guarantees"
 )]
 
-use edtf_core::{
-    Bound, BoundDate, Date, DateField, DateTime, Edtf, Interval, IntervalEndpoint, Modality,
-    Qualifier, Relation, Set, SetElement, SetKind, SetRange, Time, TimeShift, Unenumerable, Year,
-    YearKind,
-};
+use alloc::{string::ToString as _, vec, vec::Vec};
+
 use proptest::prelude::*;
+
+use super::{
+    check_bound_day, check_letters, check_order, check_pair, check_qualification, check_value,
+    check_whitespace, observe_bound_day, observe_letters, observe_order, observe_pair,
+    observe_qualification, observe_value, observe_whitespace,
+};
+use crate::{
+    Bound, BoundDate, Date, DateField, DateTime, Edtf, Interval, IntervalEndpoint, Qualifier, Set,
+    SetElement, SetKind, SetRange, Time, TimeShift, Year, YearKind,
+};
 
 // ------------------------------------------------------------ calendar
 
@@ -491,230 +493,60 @@ fn edtf() -> impl Strategy<Value = Edtf> {
 
 // ------------------------------------------------------------ properties
 
-proptest! {
-    // Cheap cases (sub-second for all four properties together), so run
-    // well above the default 256.
-    #![proptest_config(ProptestConfig::with_cases(2048))]
-
-    /// `Display` → `parse` round-trips to the *identical* value — generative
-    /// over the model, not just over strings the parser accepted first.
-    #[test]
-    fn display_parse_roundtrips_to_identity(v in edtf()) {
-        let s = v.to_string();
-        let reparsed = Edtf::parse(&s);
-        prop_assert_eq!(reparsed, Ok(v), "canonical form was {:?}", s);
-    }
-
-    /// `is_valid(to_string())` holds for every generated value.
-    #[test]
-    fn display_of_every_value_is_valid(v in edtf()) {
-        let s = v.to_string();
-        prop_assert!(edtf_core::is_valid(&s), "rejected {:?}", s);
-    }
-
-    /// `level()` is 0-2 and stable under round-trip.
-    #[test]
-    fn level_is_classified_and_roundtrip_stable(v in edtf()) {
-        prop_assert!(v.level() <= 2);
-        let s = v.to_string();
-        let reparsed = Edtf::parse(&s);
-        prop_assert!(reparsed.is_ok(), "rejected {:?}", s);
-        prop_assert_eq!(reparsed.unwrap().level(), v.level(), "input {:?}", s);
-    }
-
-    /// `bounds()` is total (returns without panicking) and ordered:
-    /// earliest <= latest whenever both are concrete days.
-    #[test]
-    fn bounds_are_total_and_ordered(v in edtf()) {
-        let b = v.bounds();
-        if let (Bound::Date(lo), Bound::Date(hi)) = (b.earliest, b.latest) {
-            prop_assert!(lo <= hi, "earliest {} > latest {} for {}", lo, hi, v);
-        }
-    }
-
-    /// `relation()` is converse-symmetric: swapping the operands maps every
-    /// relation to its converse with the same modality (issue #22's
-    /// antisymmetry ceremony, strengthened to all six relations).
-    #[test]
-    fn relation_is_converse_symmetric(a in edtf(), b in edtf()) {
-        let ab = a.relation(&b);
-        let ba = b.relation(&a);
-        for r in Relation::ALL {
-            prop_assert_eq!(
-                ab.modality(r), ba.modality(r.converse()),
-                "{} vs {}: {:?} != converse", a, b, r
-            );
-        }
-    }
-
-    /// The possible-set is sound: never empty, at most one Definite (and
-    /// then nothing else possible), Definite only ever Before/After/Equal,
-    /// and any Unknown bound on either side means possible-everything.
-    #[test]
-    fn relation_possible_set_is_sound(a in edtf(), b in edtf()) {
-        let rel = a.relation(&b);
-        let possible: Vec<Relation> = rel.possible().collect();
-        prop_assert!(!possible.is_empty(), "{} vs {}: empty possible set", a, b);
-        let definite: Vec<Relation> =
-            Relation::ALL.into_iter().filter(|r| rel.is_definite(*r)).collect();
-        prop_assert!(definite.len() <= 1, "{} vs {}: two definites", a, b);
-        prop_assert_eq!(rel.definite(), definite.first().copied());
-        if let Some(d) = rel.definite() {
-            prop_assert_eq!(&possible, &[d], "{} vs {}: definite must be sole", a, b);
-            prop_assert!(
-                matches!(d, Relation::Before | Relation::After | Relation::Equal),
-                "{} vs {}: containment/overlap can never be forced", a, b
-            );
-        }
-        let unknown = |bd: Bound| bd == Bound::Unknown;
-        if [a.bounds(), b.bounds()]
-            .iter()
-            .any(|bo| unknown(bo.earliest) || unknown(bo.latest))
-        {
-            for r in Relation::ALL {
-                prop_assert_eq!(
-                    rel.modality(r), Modality::Possible,
-                    "{} vs {}: Unknown must be possible-everything", a, b
-                );
-            }
-        }
-    }
-
-    /// Definite-Before agrees with the bounds regions directly: it holds
-    /// exactly when A's latest day precedes B's earliest day and no bound
-    /// anywhere is Unknown (Unknown is possible-everything even when the
-    /// other bounds alone would settle the comparison).
-    #[test]
-    fn definite_before_matches_bounds(a in edtf(), b in edtf()) {
-        let no_unknown = [a.bounds(), b.bounds()]
-            .iter()
-            .all(|bo| bo.earliest != Bound::Unknown && bo.latest != Bound::Unknown);
-        let expected = no_unknown && matches!(
-            (a.bounds().latest, b.bounds().earliest),
-            (Bound::Date(hi), Bound::Date(lo)) if hi < lo
-        );
-        prop_assert_eq!(
-            a.relation(&b).is_definite(Relation::Before), expected,
-            "{} vs {}", a, b
-        );
-    }
-
-    /// D18 consistency: any interval the parser accepts as `a/b` must not
-    /// relate its endpoints as Definitely-After.
-    #[test]
-    fn interval_endpoints_never_definitely_after(iv in interval()) {
-        let s = Edtf::Interval(iv).to_string();
-        let Ok(Edtf::Interval(parsed)) = Edtf::parse(&s) else {
-            return Err(TestCaseError::fail(format!("{s} did not reparse as interval")));
-        };
-        if let (IntervalEndpoint::Date(start), IntervalEndpoint::Date(end)) =
-            (parsed.start(), parsed.end())
-        {
-            let rel = Edtf::Date(start).relation(&Edtf::Date(end));
-            prop_assert!(
-                !rel.is_definite(Relation::After),
-                "parser accepted {} yet start is definitely after end", s
-            );
-        }
-    }
-
-    /// Every expression relates to itself reflexively-honestly: Equal is
-    /// always possible, and single-day expressions are definitely Equal.
-    #[test]
-    fn self_relation_admits_equal(v in edtf()) {
-        let rel = v.relation(&v);
-        prop_assert!(rel.is_possible(Relation::Equal), "{}", v);
-        if let (Bound::Date(lo), Bound::Date(hi)) = (v.bounds().earliest, v.bounds().latest) {
-            if lo == hi {
-                prop_assert_eq!(rel.definite(), Some(Relation::Equal), "{}", v);
-            }
-        }
-    }
-}
-
-// ------------------------------------------------- values() (D24-D29)
-
-/// The structural rule for when `values()` must fail (D24-D25): an
-/// interval, or a set holding an unbounded element. Every year sweep fits
-/// (D30), so nothing else fails.
-fn expected_unenumerable(v: &Edtf) -> Option<Unenumerable> {
-    match v {
-        Edtf::Interval(_) => Some(Unenumerable::Interval),
-        Edtf::Set(s) => s
-            .elements()
-            .iter()
-            .any(|e| matches!(e, SetElement::OnOrBefore(_) | SetElement::OnOrAfter(_)))
-            .then_some(Unenumerable::UnboundedSetElement),
-        Edtf::Date(_) | Edtf::DateTime(_) => None,
-    }
-}
-
-/// Cap on how much of a (possibly astronomically large) value stream a
-/// property consumes per case.
+/// How much of a (possibly astronomically large) value stream a property
+/// consumes per case.
 const VALUES_CAP: usize = 600;
 
 proptest! {
+    #![proptest_config(ProptestConfig::with_cases(2048))]
+
+    /// Every generated value keeps the value rule: canonical form, level,
+    /// qualification, bounds, enumeration and self-relation.
+    #[test]
+    fn every_value_keeps_the_value_rule(v in edtf()) {
+        check_value(&observe_value(&v, VALUES_CAP));
+    }
+
+    /// Every pair of generated values relates soundly.
+    #[test]
+    fn every_pair_relates_soundly(a in edtf(), b in edtf()) {
+        check_pair(&observe_pair(&a, &b));
+    }
+
+    /// Order, relation and interval agree (D18, D23).
+    #[test]
+    fn order_relation_and_interval_agree(a in date(), b in date()) {
+        check_order(&observe_order(a, b));
+    }
+
+    /// Qualification never moves bounds (D23 a).
+    #[test]
+    fn qualification_never_moves_bounds(d in date()) {
+        check_qualification(&observe_qualification(d));
+    }
+
+    /// EDTF letters are upper case only (D32).
+    #[test]
+    fn letters_are_upper_case_only(v in edtf()) {
+        check_letters(&observe_letters(&v.to_string()));
+    }
+}
+
+proptest! {
+    // Each case parses four variants per character of the canonical form.
     #![proptest_config(ProptestConfig::with_cases(512))]
 
-    /// `values()` errs exactly when the structural rule of D24-D25 says so
-    /// - total agreement, no other failure mode.
+    /// No whitespace anywhere (spec-notes §7 rule 11).
     #[test]
-    fn values_err_matches_structure(v in edtf()) {
-        prop_assert_eq!(v.values().err(), expected_unenumerable(&v), "{}", v);
+    fn whitespace_is_never_accepted(v in edtf()) {
+        check_whitespace(&observe_whitespace(&v.to_string()));
     }
+}
 
-    /// Every yielded value round-trips through Display identically, is
-    /// concrete (no X digits), and its bounds lie within the input's.
-    #[test]
-    fn values_are_valid_concrete_and_within_bounds(v in edtf()) {
-        let Ok(vals) = v.values() else { return Ok(()); };
-        let outer = v.bounds();
-        for item in vals.take(VALUES_CAP) {
-            let s = item.to_string();
-            let reparsed = Edtf::parse(&s);
-            prop_assert_eq!(reparsed.as_ref(), Ok(&item), "{} yielded {}", v, s);
-            prop_assert!(!item.has_unspecified(), "{} yielded masked {}", v, s);
-            let b = item.bounds();
-            if let (Bound::Date(olo), Bound::Date(ilo)) = (outer.earliest, b.earliest) {
-                prop_assert!(olo <= ilo, "{} yielded {} before earliest bound", v, s);
-            }
-            if let (Bound::Date(ohi), Bound::Date(ihi)) = (outer.latest, b.latest) {
-                prop_assert!(ihi <= ohi, "{} yielded {} after latest bound", v, s);
-            }
-        }
-    }
+// ----------------------------------------------------- values() oracles
 
-    /// A single date's values ascend strictly, start exactly at the
-    /// expression's earliest bound, and (when the stream is exhausted
-    /// within the cap) end exactly at its latest bound.
-    #[test]
-    fn single_date_values_ascend_and_agree_with_bounds(d in date()) {
-        let v = Edtf::Date(d);
-        let Ok(mut vals) = v.values() else { return Ok(()); };
-        let first = vals.next().expect("D11 guarantees a completion");
-        prop_assert_eq!(first.bounds().earliest, v.bounds().earliest, "{}", v);
-        let mut last = first;
-        let mut exhausted = true;
-        for _ in 0..VALUES_CAP {
-            match vals.next() {
-                None => break,
-                Some(item) => {
-                    if let (Bound::Date(p), Bound::Date(c)) =
-                        (last.bounds().earliest, item.bounds().earliest)
-                    {
-                        prop_assert!(p < c, "{}: {} not after {}", v, item, last);
-                    }
-                    last = item;
-                }
-            }
-        }
-        if vals.next().is_some() {
-            exhausted = false;
-        }
-        if exhausted {
-            prop_assert_eq!(last.bounds().latest, v.bounds().latest, "{}", v);
-        }
-    }
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
 
     /// A set of concrete singleton elements enumerates exactly those
     /// elements, verbatim, in written order (D29).
@@ -732,7 +564,7 @@ proptest! {
             Set::new(kind, dates.iter().copied().map(SetElement::Date).collect())
                 .expect("a set with members"),
         );
-        let got: Vec<Edtf> = set.values().unwrap().collect();
+        let got: Vec<Edtf> = set.values().expect("a set of dates enumerates").collect();
         let want: Vec<Edtf> = dates.into_iter().map(Edtf::Date).collect();
         prop_assert_eq!(got, want, "{}", set);
     }
@@ -765,7 +597,7 @@ proptest! {
         let yq = d.year().qualifier();
         let mut want: Vec<Edtf> = Vec::new();
         for y in years {
-            let year = Year::from_value(y).unwrap().with_qualifier(yq);
+            let year = Year::from_value(y).expect("a four-digit year").with_qualifier(yq);
             for m in (1..=12_u8).filter(|m| field_admits(&month, *m)) {
                 let mf = Some(field_of(field_digits(m), month.qualifier()));
                 match d.day() {
@@ -782,7 +614,7 @@ proptest! {
                 }
             }
         }
-        let got: Vec<Edtf> = Edtf::Date(d).values().unwrap().collect();
+        let got: Vec<Edtf> = Edtf::Date(d).values().expect("a date enumerates").collect();
         prop_assert_eq!(got, want, "input {}", Edtf::Date(d));
     }
 }
@@ -962,11 +794,9 @@ proptest! {
     /// A value that exists is valid (decision D31).
     ///
     /// Every constructor is called on arbitrary arguments — any `i64`, any
-    /// `u8`, any digit mask — and returns; every value it builds prints,
-    /// classifies, bounds, enumerates and relates without panicking, and
-    /// parses back from its canonical text to itself. A bound day the
-    /// constructor accepts is a real day: it steps and orders like its
-    /// Julian Day Number.
+    /// `u8`, any digit mask — and returns; every value it builds keeps the
+    /// value rule and relates soundly to a fixed one. A bound day the
+    /// constructor accepts is a real day.
     #[test]
     fn constructors_build_only_valid_values(
         dates in [date_args(), date_args(), date_args(), date_args()],
@@ -975,33 +805,14 @@ proptest! {
         shape in (0_u8..=4, 0_u8..=4, any::<bool>(), any::<[bool; 4]>()),
         day in (prop_oneof![any::<i64>(), -10_000_i64..=10_000], any::<u8>(), any::<u8>()),
     ) {
-        let fixed = Edtf::parse("1985-04").unwrap();
+        let fixed = Edtf::parse("1985-04").expect("a fixture");
         for value in build_values(&dates, plain, time, shape) {
-            let text = value.to_string();
-            prop_assert!(value.level() <= 2, "{}", text);
-            let bounds = value.bounds();
-            if let (Bound::Date(lo), Bound::Date(hi)) = (bounds.earliest, bounds.latest) {
-                prop_assert!(lo <= hi, "{}", text);
-            }
-            if let Ok(values) = value.values() {
-                for item in values.take(3) {
-                    let shown = item.to_string();
-                    prop_assert!(edtf_core::is_valid(&shown), "{} yielded {}", text, shown);
-                }
-            }
-            prop_assert!(value.relation(&value).is_possible(Relation::Equal), "{}", text);
-            prop_assert!(value.relation(&fixed).possible().next().is_some(), "{}", text);
-            prop_assert_eq!(Edtf::parse(&text), Ok(value), "canonical form {:?}", text);
+            check_value(&observe_value(&value, 3));
+            check_pair(&observe_pair(&value, &fixed));
         }
         let (year, month, day_of_month) = day;
         if let Ok(bd) = BoundDate::new(year, month, day_of_month) {
-            let jdn = bd.julian_day_number();
-            if let Some(next) = bd.next_day() {
-                prop_assert!(bd < next && next.julian_day_number() == jdn + 1, "{}", bd);
-            }
-            if let Some(prev) = bd.previous_day() {
-                prop_assert!(prev < bd && prev.julian_day_number() == jdn - 1, "{}", bd);
-            }
+            check_bound_day(&observe_bound_day(bd));
         }
     }
 }

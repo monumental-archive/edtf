@@ -3,8 +3,8 @@
 
 //! Coverage-guided never-panic target: `Edtf::parse` must return, not crash,
 //! on arbitrary UTF-8. The deterministic harness in
-//! `crates/edtf-core/tests/fuzz.rs` guards every CI push; this one digs
-//! deeper on a schedule (the nightly `deep-tests` workflow).
+//! `crates/edtf-core/src/properties/harness.rs` guards every CI push; this
+//! one digs deeper on a schedule (the nightly `deep-tests` workflow).
 
 #![no_main]
 

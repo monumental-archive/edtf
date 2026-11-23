@@ -182,6 +182,12 @@ fn decisions() {
     assert_invalid("{1960, 1961}"); // space
     assert_invalid("[..]");
     assert_invalid("1985-04-12/1985-04-12T10:00:00"); // datetime interval endpoint
+
+    // D32: EDTF letters are upper case only.
+    assert_invalid("198x");
+    assert_invalid("y17e7");
+    assert_invalid("1950s2");
+    assert_invalid("1985-04-12t23:20:30z");
 }
 
 #[test]
