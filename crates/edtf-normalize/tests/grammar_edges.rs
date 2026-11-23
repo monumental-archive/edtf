@@ -646,6 +646,12 @@ fn a_typed_masked_year_inherits_like_a_prose_one() {
         [Note::EndpointYearDistributed]
     );
     assert_eq!(normalize("XXXX-01 or 1985"), normalize("january or 1985"));
+    // A bare `XXXX` is an unknown year, not a year-less date: it has
+    // nothing for a stated year to scope (N9).
+    ok("from XXXX to 1985", "XXXX/1985");
+    ok("XXXX or 1985", "[XXXX,1985]");
+    // Two year-less ends keep their masks, typed or prose (N16).
+    ok("XXXX-01 to june", "XXXX-01/XXXX-06");
 }
 
 #[test]

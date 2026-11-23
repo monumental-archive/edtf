@@ -1200,6 +1200,15 @@ fn open_expr(open: Open, operand: &Expr, q: Qualifier) -> Option<Expr> {
     // A year-less operand ("June" is `XXXX-06`, N9) has no unit of its
     // own: one read off core's 0000–9999 bounds would state a year the
     // prose never gave. Only "until" and "since" take it, as written.
+    let year_less = |d: &Date| {
+        matches!(
+            d.year().kind(),
+            YearKind::Standard {
+                negative: _,
+                digits: [None, None, None, None],
+            }
+        )
+    };
     if !matches!(open, Open::Until | Open::Since) && (year_less(&start) || year_less(&end)) {
         return None;
     }
@@ -1595,19 +1604,22 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
     })
 }
 
-/// A date with no stated year: its year is the fully masked `XXXX`.
+/// A month or day whose year is not given: a fully masked `XXXX` year with
+/// a month (N9).
 ///
-/// It holds whether a prose month masked the year (N9) or the input typed
-/// it as EDTF. A partly masked year (`XX85`) states a year that is not
-/// fully specified.
+/// It holds whether a prose month masked the year or the input typed it as
+/// EDTF. A bare `XXXX` is a year that is unknown, not a year-less date: it
+/// has nothing for a stated year to scope. A partly masked year (`XX85`)
+/// states a year that is not fully specified.
 const fn year_less(d: &Date) -> bool {
-    matches!(
-        d.year().kind(),
-        YearKind::Standard {
-            negative: _,
-            digits: [None, None, None, None],
-        }
-    )
+    d.month().is_some()
+        && matches!(
+            d.year().kind(),
+            YearKind::Standard {
+                negative: _,
+                digits: [None, None, None, None],
+            }
+        )
 }
 
 /// N16: a stated year scopes every year-less date beside it — both range
