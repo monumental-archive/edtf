@@ -47,8 +47,7 @@ enum Seeds {
 /// The fuzz targets under `fuzz/fuzz_targets/` and the seed set each one
 /// holds; a target added later gets its corpus directory by joining this
 /// list.
-const TARGETS: [(&str, Seeds); 4] = [
-    ("parse", Seeds::Edtf),
+const TARGETS: [(&str, Seeds); 3] = [
     ("roundtrip", Seeds::Edtf),
     ("relate", Seeds::Edtf),
     ("normalize", Seeds::Prose),

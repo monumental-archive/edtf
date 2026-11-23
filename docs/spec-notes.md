@@ -544,7 +544,7 @@ of this implementation. Each is enforced by tests in `crates/edtf-core/tests/`.
   plausibly and wrongly, and every future method would have to remember);
   field-by-field serde behind `try_from` mirror types (publishes the
   internal structure as a wire format); a `deserialize` fuzz target (with
-  serde as the string it is the `parse` target again — the
+  serde as the string it is what `roundtrip` already searches — the
   `constructors_build_only_valid_values` property covers the
   constructors).
 - **D32 — EDTF letters are upper case only:** `T`, `Z`, `X`, `Y`, `E`

@@ -73,8 +73,8 @@ containers per major as well.
 `lint:fuzz-build` proves the targets still compile on stable and replays
 their committed corpus; the nightly `deep-tests` workflow runs `audit:fuzz`
 on each under AddressSanitizer on the dated nightly declared as
-`FUZZ_TOOLCHAIN`. There are four targets: `parse` (never panics),
-`roundtrip` (canonical form, bounds, enumeration, upper-case letters, no
+`FUZZ_TOOLCHAIN`. There are three targets: `roundtrip` (never panics on
+any string, canonical form, bounds, enumeration, upper-case letters, no
 whitespace, qualification never moving bounds), `relate` (the relation
 algebra, and for two dates order and interval, over two parsed values)
 and `normalize` (the normaliser's output is canonical EDTF, under every
