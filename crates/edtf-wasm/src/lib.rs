@@ -147,9 +147,11 @@ pub struct InterpretationJson {
 struct NormalizeOptionsJson {
     /// BCP-47-ish language tag selecting the table set ("en", "ru").
     language: Option<String>,
-    /// How to read an ambiguous all-numeric date ("day-first", "month-first").
+    /// How to read an ambiguous all-numeric date: `"dayFirst"` or
+    /// `"monthFirst"` (N5).
     numeric_order: Option<String>,
-    /// Century assumed for a two-digit year, when the caller states one.
+    /// Century that resolves a bare decade ("the 80s"), e.g. `1900`;
+    /// domain `0..=9999` (N6).
     default_century: Option<u16>,
 }
 

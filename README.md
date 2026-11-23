@@ -101,8 +101,8 @@ gets a documented note.
   explicit-form designator system are not EDTF and do not parse.
 
 Every grammar production and every judgment call is documented with ISO
-section citations in [docs/spec-notes.md](docs/spec-notes.md), including 29
-resolved decisions (D1–D30) and one identified erratum in the ISO text
+section citations in [docs/spec-notes.md](docs/spec-notes.md), including the
+resolved decisions (D1 onward) and one identified erratum in the ISO text
 itself (Annex A.6.3 Example 2, which contradicts its own normative clause).
 
 ## Usage
@@ -152,7 +152,7 @@ them.
 
 ```bash
 VERSION=1.3.4
-PG=18                 # 14, 15, 16, 17 or 18
+PG=18                 # v1.3.x: 14 to 18; from v2.0.0: 15 to 19
 ARCH=amd64            # amd64 or arm64 — dpkg's spelling, not uname's
 FILE="edtf_postgres-${VERSION}-pg${PG}-linux-${ARCH}.tar.gz"
 
@@ -228,9 +228,10 @@ cluster before upgrading.
 
 #### Support matrix
 
-| Postgres | `amd64` | `arm64` | glibc floor |
-| --- | --- | --- | --- |
-| 14, 15, 16, 17, 18 | ✅ | ✅ | 2.36 |
+| Release | Postgres | `amd64` | `arm64` | glibc floor |
+| --- | --- | --- | --- | --- |
+| v1.3.5 | 14, 15, 16, 17, 18 | ✅ | ✅ | 2.36 |
+| v2.0.0 on | 15, 16, 17, 18, 19 | ✅ | ✅ | 2.36 |
 
 Built inside `postgres:<major>-bookworm` against that image's pgdg
 `pg_config`, and installed-and-exercised on both bookworm and trixie before
