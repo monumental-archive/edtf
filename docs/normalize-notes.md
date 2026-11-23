@@ -189,10 +189,13 @@ against the N-number.
   `xxxx` — is refused for the four set rows: its units would be read off
   core's 0000–9999 bounds (`[..0000-05]` for "before June"), stating a
   year the prose never gave. "until" and "since" take it as written
-  ("until June" → `../XXXX-06`). The four set rows refuse a span with a
-  year-less end too, whichever end the row reads: "xxxx to 1900" is
-  `XXXX/1900`, but "after xxxx to 1900" is refused. A partly masked
-  year still reads
+  ("until June" → `../XXXX-06`). A span is read by one end per set
+  row, so a row refuses it only when the end the row reads is year-less
+  ("xxxx to 1900" is `XXXX/1900`): "before" and "on or after" read the
+  start, so "before xxxx to 1900" and "on or after xxxx to 1900" are
+  refused; "on or before" and "after" read the end, so "after xxxx to
+  1900" is `[1901..]` and "on or before 1900 to xxxx" is refused, while
+  "before 1900 to xxxx" is `[..1899]`. A partly masked year still reads
   ("before 19XX" → `[..1899]`). A set of several elements, a datetime and
   an interval with an open or unknown end are refused as operands. An operand with
   several readings gives one output per reading, and a reading with no

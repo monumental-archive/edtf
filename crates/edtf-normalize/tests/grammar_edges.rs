@@ -855,12 +855,15 @@ fn a_one_range_set_is_a_span_operand() {
 }
 
 #[test]
-fn a_span_with_a_year_less_end_is_no_set_operand() {
-    // `xxxx` is a year-less operand, so a span with it at either end has no
-    // unit for the four set rows, whichever end the row reads (N8).
+fn a_span_is_refused_only_by_a_year_less_end_its_row_reads() {
+    // Each set row reads one end of a span; only a year-less end it reads
+    // refuses the input, since `xxxx` has no unit of its own (N8).
     ok("xxxx to 1900", "XXXX/1900");
-    no_match("after xxxx to 1900");
-    no_match("before 1900 to xxxx");
+    ok("after xxxx to 1900", "[1901..]");
+    no_match("on or after xxxx to 1900");
+    no_match("before xxxx to 1900");
+    ok("before 1900 to xxxx", "[..1899]");
+    no_match("on or before 1900 to xxxx");
 }
 
 #[test]
