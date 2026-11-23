@@ -351,6 +351,13 @@ fn ranges_inherit_years_and_winters_stay_honest() {
     ambiguous("зима 1941-1942 гг.", &["1941-24", "1941-24/1942"]);
     // N4: BC starts refuse elided end years in Russian too.
     no_match("с 500 до н. э. по 18");
+    // A typed `XXXX` year inherits as a prose month does (N9, N16), and
+    // refuses beside an ambiguous decade as the prose month does.
+    ok("с XXXX-01 по 1985", "1985-01/1985", 0);
+    assert_eq!(
+        normalize_with("с XXXX-01 по 1000-е", ru()),
+        normalize_with("с января по 1000-е", ru())
+    );
 }
 
 #[test]

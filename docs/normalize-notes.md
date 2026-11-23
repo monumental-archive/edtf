@@ -184,7 +184,8 @@ against the N-number.
   `XXXX-01-12`. Never an assumed current year — the normalizer has no clock
   on purpose (determinism: same input, same output, forever). Inside a range
   the year is elided, not missing — N16 governs there, and `XXXX` never
-  leaks into a range that states its year. A year-less date is no
+  leaks into a range or "or" list that states its year, whether masked
+  here or typed as EDTF. A year-less date is no
   operand for before, after, on or before, or on or after (N8): only
   "until" and "since" take it. python-edtf's broader masked-precision
   prose ("day in Spring 1849" → `1849-21-XX`) is not
@@ -274,6 +275,11 @@ against the N-number.
   same holds between alternatives: "June or July 1940" is
   `[1940-06,1940-07]`. When the alternatives that state a year disagree,
   or state one that is not fully specified, the input is refused.
+  Year-less is a property of the value, not of how it was read: a date
+  whose year is the fully masked `XXXX` inherits alike whether N9 masked
+  it or the input typed it ("from XXXX-01 to 1985" → `1985-01/1985`, as
+  "from January to 1985"). A partly masked year (`XX85`) is a stated year
+  that is not fully specified, so it refuses as above.
 - **N17 — cross-year winters are ambiguous:** "winter 1941-42" (also
   "-1942", "зима 1941-1942 гг.") names either ONE winter spanning the year
   boundary — EDTF's code 24 wraps, so `1941-24` already covers Dec 1941 –
