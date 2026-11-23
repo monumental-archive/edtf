@@ -34,7 +34,8 @@
 
 use edtf_core::Edtf;
 use edtf_normalize::{
-    Language, NoMatchReason, Note, NumericOrder, Options, Outcome, normalize, normalize_with,
+    Century, Language, NoMatchReason, Note, NumericOrder, Options, Outcome, normalize,
+    normalize_with,
 };
 
 fn ru() -> Options {
@@ -748,7 +749,7 @@ fn a_range_end_reads_as_it_reads_alone() {
     no_match_with(
         "June - the 80s",
         Options {
-            default_century: Some(1900),
+            default_century: Century::new(1900),
             ..Options::default()
         },
     );

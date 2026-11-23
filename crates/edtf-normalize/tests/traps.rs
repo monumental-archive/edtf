@@ -33,7 +33,7 @@
 )]
 
 use edtf_core::Edtf;
-use edtf_normalize::{Note, NumericOrder, Options, Outcome, normalize, normalize_with};
+use edtf_normalize::{Century, Note, NumericOrder, Options, Outcome, normalize, normalize_with};
 
 /// Assert a Normalized outcome with the given canonical EDTF and level.
 #[track_caller]
@@ -157,7 +157,7 @@ fn bare_decades_are_ambiguous() {
     ambiguous("the 80s", &["188X", "198X"]);
     ambiguous("'80s", &["188X", "198X"]);
     let opts = Options {
-        default_century: Some(1900),
+        default_century: Century::new(1900),
         ..Options::default()
     };
     match normalize_with("the 80s", opts) {
@@ -489,16 +489,24 @@ fn dead_readings_poison_the_whole_input() {
 }
 
 #[test]
-fn out_of_domain_default_century_is_ignored() {
-    // Domain 0..=9999 (documented); larger values behave as unset.
+fn default_century_holds_only_a_century() {
+    // Only a century's first year constructs: a multiple of 100 in
+    // 0..=9900 (N6). 1950 is refused, never read as 1900.
+    for first_year in [0, 1900, 9900] {
+        let century = Century::new(first_year).expect("a first year constructs");
+        assert_eq!(century.first_year(), first_year);
+    }
+    for not_a_century in [1950, 9999, 10000] {
+        assert_eq!(Century::new(not_a_century), None, "{not_a_century}");
+    }
     let opts = Options {
-        default_century: Some(10000),
+        default_century: Century::new(1900),
         ..Options::default()
     };
-    assert!(matches!(
-        normalize_with("the 80s", opts),
-        Outcome::Ambiguous(_)
-    ));
+    match normalize_with("the 80s", opts) {
+        Outcome::Normalized(n) => assert_eq!(n.edtf, "198X"),
+        other => panic!("expected Normalized, got {other:?}"),
+    }
 }
 
 #[test]

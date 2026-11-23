@@ -612,6 +612,12 @@ fn decade_tok(t: &str, lang: &Lang) -> Option<DecadeParse> {
     }
 }
 
+/// Whether `year` is a century's first year in `0..=9900`, the domain of
+/// [`crate::Century`] (N6).
+pub(crate) const fn is_century_first_year(year: u16) -> bool {
+    year <= 9900 && year % 100 == 0
+}
+
 /// Turn a decade reading into a candidate set, honouring the options.
 fn decade_single(parse: DecadeParse, opts: Options) -> Reading {
     match parse {
@@ -628,27 +634,23 @@ fn decade_single(parse: DecadeParse, opts: Options) -> Reading {
                 notes: vec![Note::DecadeAmbiguity],
             },
         ],
-        DecadeParse::Bare(tens) => {
-            // Domain 0..=9999 (documented on Options); larger values would
-            // build unrenderable years, so they are ignored as if unset.
-            opts.default_century.filter(|c| *c <= 9999).map_or_else(
-                || {
-                    let mk = |p3: u16| Candidate {
-                        expr: Expr::Date(decade_date(p3)),
-                        reading: format!("the {p3}0s"),
-                        notes: vec![Note::DecadeAmbiguity],
-                    };
-                    vec![mk(180 + u16::from(tens)), mk(190 + u16::from(tens))]
-                },
-                |century| {
-                    let p3 = century / 100 * 10 + u16::from(tens);
-                    one(
-                        Expr::Date(decade_date(p3)),
-                        vec![Note::DefaultCenturyApplied],
-                    )
-                },
-            )
-        }
+        DecadeParse::Bare(tens) => opts.default_century.map_or_else(
+            || {
+                let mk = |p3: u16| Candidate {
+                    expr: Expr::Date(decade_date(p3)),
+                    reading: format!("the {p3}0s"),
+                    notes: vec![Note::DecadeAmbiguity],
+                };
+                vec![mk(180 + u16::from(tens)), mk(190 + u16::from(tens))]
+            },
+            |century| {
+                let p3 = century.first_year() / 10 + u16::from(tens);
+                one(
+                    Expr::Date(decade_date(p3)),
+                    vec![Note::DefaultCenturyApplied],
+                )
+            },
+        ),
     }
 }
 
