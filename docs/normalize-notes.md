@@ -129,10 +129,14 @@ against the N-number.
   whole input applies to every component ("circa June 1940" → `1940-06~`,
   rendered in core's canonical trailing form) and, on intervals, to every
   dated endpoint: "circa 1914-1918" → `1914~/1918~`, "1868-1871?" →
-  `1868?/1871?`. python-edtf attaches the trailing qualifier to the end year
-  only (`1868/1871?`); prose uncertainty scopes the whole range, so we
-  diverge. Endpoint-local qualifiers stay local: "1856-ca. 1865" →
-  `1856/1865~`.
+  `1868?/1871?`. The symbols `?`, `~` and `%` scope alike, and like a
+  trailing qualifier word: a trailing symbol on a range or an "or" list
+  scopes all of it ("1868-1871~" → `1868~/1871~`, "1914 or 1985~" →
+  `1914~` or `1985~`). Text that is valid EDTF as it stands carries its
+  own qualifiers and passes through untouched ("1984?/2004~"). python-edtf
+  attaches the trailing qualifier to the end year only (`1868/1871?`);
+  prose uncertainty scopes the whole range, so we diverge. Endpoint-local
+  qualifiers stay local: "1856-ca. 1865" → `1856/1865~`.
 - **N11 — no substring extraction:** inputs with trailing annotations
   ("1861-67 (later print)", "1863, printed 1870", "birthday in 1872") are
   `NoMatch`, full stop. python-edtf extracts a date from all of these; that
@@ -200,9 +204,18 @@ against the N-number.
 - **N18 — EDTF letters in either case:** EDTF notation is read in either
   letter case, as a whole input and as a token inside a phrase ("198x" →
   `198X`; "before 198X" → `../198X`; "198X or 1990" → `198X` or `1990`).
-  A whole input is tried as EDTF before it is read as prose, so Russian
-  "xxxx" is the masked year `XXXX`, not a century; forty as a Roman
-  numeral is XL.
+  A whole input and a one-token part of a phrase alike are tried as EDTF
+  before they are read as prose, so Russian "xxxx" and "до xxxx" are the
+  masked year `XXXX` and `../XXXX`, not a century; forty as a Roman
+  numeral is XL ("до xxxx века" is still `../39XX`). The one exception is
+  a colliding sub-year token, which stays N13's question. Any EDTF value
+  may be an alternative ("1914 or 1985/1990", "1914 or [1667,1668]"); an
+  interval with two dated ends is a span, so it is a before/after operand
+  by its near edge (N8); a set, a datetime or an interval with an open or
+  unknown end is neither an operand nor a range end. The note
+  `EdtfCaseNormalized` is attached exactly when the fold changed the
+  text, and `AlreadyValidEdtf` only when the EDTF token is the whole
+  input.
 
 ## 3. Test ceremony
 

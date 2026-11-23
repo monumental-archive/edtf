@@ -75,6 +75,8 @@
     reason = "rebinding a value to itself after a narrowing conversion"
 )]
 
+use core::iter;
+
 use alloc::{
     format,
     string::{String, ToString as _},
@@ -93,12 +95,25 @@ use crate::{
 // Internal shapes
 
 /// A matched expression before qualification and rendering.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum Expr {
     /// A single date.
     Date(Date),
-    /// An interval between two dates.
+    /// An interval, from the prose grammar or an EDTF token.
     Interval(Interval),
+    /// Any other EDTF value an EDTF token holds: a set or a datetime. It
+    /// reads as a whole input and as an "or" alternative only (N18).
+    Value(Edtf),
+}
+
+impl From<Edtf> for Expr {
+    fn from(value: Edtf) -> Self {
+        match value {
+            Edtf::Date(d) => Self::Date(d),
+            Edtf::Interval(iv) => Self::Interval(iv),
+            other @ (Edtf::DateTime(_) | Edtf::Set(_)) => Self::Value(other),
+        }
+    }
 }
 
 /// One reading of an ambiguous input.
@@ -112,13 +127,17 @@ struct Candidate {
     notes: Vec<Note>,
 }
 
-/// Result of the single-expression grammar.
-#[derive(Debug, Clone)]
-enum Single {
-    /// One reading, with the notes that justify it.
-    One(Expr, Vec<Note>),
-    /// Several readings the input admits, all reported.
-    Many(Vec<Candidate>),
+/// Every reading a phrase, or a part of one, admits: never empty. One
+/// candidate is a plain answer; several are reported, never picked from.
+type Reading = Vec<Candidate>;
+
+/// A reading with one candidate.
+fn one(expr: Expr, notes: Vec<Note>) -> Reading {
+    vec![Candidate {
+        expr,
+        reading: String::new(),
+        notes,
+    }]
 }
 
 // ---------------------------------------------------------------------------
@@ -296,11 +315,14 @@ fn ordinal_num(t: &str, lang: &Lang) -> Option<u32> {
         .map(|&(_, v)| v)
 }
 
-/// Roman numeral 1–99 ("xix" → 19), tolerating Cyrillic lookalike letters —
-/// real Russian sources routinely type "ХІХ век" with Cyrillic Х.
+/// Roman numeral 1–99 ("xix" → 19).
+///
+/// Cyrillic lookalike letters are tolerated — real Russian sources
+/// routinely type "ХІХ век" with Cyrillic Х. ASCII letters are read in either case: preprocessing keeps an EDTF token as
+/// typed, and "XXXX" is one ("XXXX века" → `39XX`).
 fn roman_num(t: &str) -> Option<u32> {
     let mut vals = Vec::new();
-    for c in t.chars() {
+    for c in t.chars().map(|c| c.to_ascii_lowercase()) {
         vals.push(match c {
             'i' | '\u{456}' => 1, // і (Cyrillic/Ukrainian i)
             'v' => 5,
@@ -369,15 +391,42 @@ fn year_num(t: &str) -> Option<i32> {
 // ---------------------------------------------------------------------------
 // Preprocessing and qualifier stripping
 
-/// Lowercase, unify dashes/apostrophes, drop commas, collapse whitespace.
+/// The one place input is read as EDTF (N18): the text as typed, then
+/// with its ASCII letters upper-cased. The flag says whether the fold
+/// changed the text.
+fn edtf_token(t: &str) -> Option<(Edtf, bool)> {
+    let upper = t.to_ascii_uppercase();
+    let folded = (upper != t).then_some((upper.as_str(), true));
+    iter::once((t, false))
+        .chain(folded)
+        .find_map(|(text, fold)| Some((Edtf::parse(text).ok()?, fold)))
+}
+
+/// Unify dashes and collapse whitespace; lower-case every prose token.
+///
+/// Per whitespace-separated token: an EDTF token is kept as typed (its letter case and commas are notation, N18); any other is
+/// lower-cased, its apostrophes unified and its commas dropped.
 fn preprocess(input: &str) -> String {
-    let mut s = String::with_capacity(input.len());
-    for ch in input.chars() {
-        match ch {
-            '\u{2013}' | '\u{2014}' => s.push('-'),
-            '\u{2019}' => s.push('\''),
-            ',' => s.push(' '),
-            c => s.extend(c.to_lowercase()),
+    let dashed: String = input
+        .chars()
+        .map(|c| match c {
+            '\u{2013}' | '\u{2014}' => '-',
+            c => c,
+        })
+        .collect();
+    let mut s = String::with_capacity(dashed.len());
+    for tok in dashed.split_whitespace() {
+        s.push(' ');
+        if edtf_token(tok).is_some() {
+            s.push_str(tok);
+            continue;
+        }
+        for ch in tok.chars() {
+            match ch {
+                '\u{2019}' => s.push('\''),
+                ',' => s.push(' '),
+                c => s.extend(c.to_lowercase()),
+            }
         }
     }
     let mut out = String::with_capacity(s.len());
@@ -393,12 +442,19 @@ fn preprocess(input: &str) -> String {
 /// Strip noise and qualifier words from around an expression.
 ///
 /// Leading noise ("the", "в"), trailing noise ("гг.", "года"), leading and
-/// trailing qualifier words, and attached approximate prefixes ("c1860",
-/// "ок.1920"). Returns the remainder and the accumulated whole-expression
-/// qualifier (N10).
+/// trailing qualifier words, attached approximate prefixes ("c1860",
+/// "ок.1920") and a trailing `?`, `~` or `%` on the last token ("1868-1871?").
+/// Returns the remainder and the accumulated whole-expression qualifier
+/// (N10). Text that is one EDTF token ("1984?/2004~") carries its own
+/// qualifiers and is returned untouched (N18).
 fn strip_qualifiers(s: &str, lang: &Lang) -> (String, Qualifier) {
     let mut toks: Vec<&str> = s.split(' ').filter(|t| !t.is_empty()).collect();
     let mut q = Qualifier::default();
+    if let [t] = toks.as_slice() {
+        if edtf_token(t).is_some() {
+            return (String::from(*t), q);
+        }
+    }
     'outer: loop {
         // mutants:equivalent replace > with >=: dropping a lone qualifier or noise word leaves an empty remainder, and neither "" nor any such word parses in any caller (none is a number, ordinal, Roman numeral or no-date word).
         if toks.len() > 1 {
@@ -444,6 +500,19 @@ fn strip_qualifiers(s: &str, lang: &Lang) -> (String, Qualifier) {
             if lang.uncertain_trailing.contains(&tail) {
                 q.uncertain = true;
                 toks.pop();
+                continue;
+            }
+        }
+        if let Some(last) = toks.last_mut() {
+            if let Some(rest) = last.strip_suffix(['?', '~', '%']) {
+                // The symbol is the one ASCII byte just stripped.
+                let symbol = last.as_bytes()[rest.len()];
+                q.uncertain |= symbol != b'~';
+                q.approximate |= symbol != b'?';
+                *last = rest;
+                if rest.is_empty() {
+                    toks.pop();
+                }
                 continue;
             }
         }
@@ -514,10 +583,10 @@ fn decade_tok(t: &str, lang: &Lang) -> Option<DecadeParse> {
 }
 
 /// Turn a decade reading into a candidate set, honouring the options.
-fn decade_single(parse: DecadeParse, opts: Options) -> Single {
+fn decade_single(parse: DecadeParse, opts: Options) -> Reading {
     match parse {
-        DecadeParse::Exact(p3) => Single::One(Expr::Date(decade_date(p3)), Vec::new()),
-        DecadeParse::CenturyAmbig(p3, p2) => Single::Many(vec![
+        DecadeParse::Exact(p3) => one(Expr::Date(decade_date(p3)), Vec::new()),
+        DecadeParse::CenturyAmbig(p3, p2) => vec![
             Candidate {
                 expr: Expr::Date(decade_date(p3)),
                 reading: format!("decade ({p3}X)"),
@@ -528,7 +597,7 @@ fn decade_single(parse: DecadeParse, opts: Options) -> Single {
                 reading: format!("century ({p2}XX)"),
                 notes: vec![Note::DecadeAmbiguity],
             },
-        ]),
+        ],
         DecadeParse::Bare(tens) => {
             // Domain 0..=9999 (documented on Options); larger values would
             // build unrenderable years, so they are ignored as if unset.
@@ -539,11 +608,11 @@ fn decade_single(parse: DecadeParse, opts: Options) -> Single {
                         reading: format!("the {p3}0s"),
                         notes: vec![Note::DecadeAmbiguity],
                     };
-                    Single::Many(vec![mk(180 + u16::from(tens)), mk(190 + u16::from(tens))])
+                    vec![mk(180 + u16::from(tens)), mk(190 + u16::from(tens))]
                 },
                 |century| {
                     let p3 = century / 100 * 10 + u16::from(tens);
-                    Single::One(
+                    one(
                         Expr::Date(decade_date(p3)),
                         vec![Note::DefaultCenturyApplied],
                     )
@@ -671,13 +740,13 @@ fn dmy(d: u32, m: u32, y: i32) -> Option<Expr> {
     reason = "y/m/d/a/b are date-field names; the arms ARE the grammar"
 )]
 /// Read an all-numeric date token, reporting every ordering it admits.
-fn numeric_token(t: &str, opts: Options, lang: &Lang) -> Option<Single> {
+fn numeric_token(t: &str, opts: Options, lang: &Lang) -> Option<Reading> {
     let sep = numeric_sep(t)?;
     let parts: Vec<&str> = t.split(sep).collect();
     let vals: Vec<u32> = parts.iter().map(|p| num(p)).collect::<Option<_>>()?;
     match (parts.as_slice(), vals.as_slice()) {
         // Year first is order-unambiguous: 1985/04/12.
-        ([py, _, _], &[y, m, d]) if py.len() == 4 => Some(Single::One(
+        ([py, _, _], &[y, m, d]) if py.len() == 4 => Some(one(
             dmy(d, m, i32::try_from(y).ok()?)?,
             vec![Note::NumericUnambiguous],
         )),
@@ -687,11 +756,11 @@ fn numeric_token(t: &str, opts: Options, lang: &Lang) -> Option<Single> {
             let day_first = dmy(a, b, y);
             let month_first = dmy(b, a, y);
             match (a > 12, b > 12) {
-                (true, false) => Some(Single::One(day_first?, vec![Note::NumericUnambiguous])),
-                (false, true) => Some(Single::One(month_first?, vec![Note::NumericUnambiguous])),
+                (true, false) => Some(one(day_first?, vec![Note::NumericUnambiguous])),
+                (false, true) => Some(one(month_first?, vec![Note::NumericUnambiguous])),
                 (true, true) => None,
                 (false, false) if a == b => {
-                    Some(Single::One(day_first?, vec![Note::NumericOrderIrrelevant]))
+                    Some(one(day_first?, vec![Note::NumericOrderIrrelevant]))
                 }
                 (false, false) => {
                     let (order, note) = match (opts.numeric_order, lang.implied_numeric_order) {
@@ -700,10 +769,8 @@ fn numeric_token(t: &str, opts: Options, lang: &Lang) -> Option<Single> {
                         (None, None) => (None, Note::NumericOrderAmbiguous),
                     };
                     match order {
-                        Some(NumericOrder::DayFirst) => Some(Single::One(day_first?, vec![note])),
-                        Some(NumericOrder::MonthFirst) => {
-                            Some(Single::One(month_first?, vec![note]))
-                        }
+                        Some(NumericOrder::DayFirst) => Some(one(day_first?, vec![note])),
+                        Some(NumericOrder::MonthFirst) => Some(one(month_first?, vec![note])),
                         None => {
                             let cand = |e: Option<Expr>, reading: &str| {
                                 e.map(|expr| Candidate {
@@ -719,36 +786,34 @@ fn numeric_token(t: &str, opts: Options, lang: &Lang) -> Option<Single> {
                             .into_iter()
                             .flatten()
                             .collect();
-                            (!readings.is_empty()).then_some(Single::Many(readings))
+                            (!readings.is_empty()).then_some(readings)
                         }
                     }
                 }
             }
         }
-        // A sub-year code: "1985-21" (N13). A token that is also an elided
-        // range ("1914-21") is not read here: the range grammar reads it,
-        // giving both readings where a span may stand and refusing it as a
-        // range endpoint, which cannot hold a span (N13).
-        ([py, pb], &[y, code]) if is_sub_year_token(t) => match endpoint_pair(py, pb, opts, lang) {
-            None => {
-                let (y, code) = (i32::try_from(y).ok()?, u8::try_from(code).ok()?);
-                Some(Single::One(Expr::Date(date_ym(y, code)?), Vec::new()))
-            }
-            Some(_) => None,
-        },
         // Month and year: 7/2008, 04.1985.
         ([pa, py], &[m, y]) if pa.len() <= 2 && py.len() == 4 && (1..=12).contains(&m) => {
             let (y, m) = (i32::try_from(y).ok()?, u8::try_from(m).ok()?);
-            Some(Single::One(Expr::Date(date_ym(y, m)?), Vec::new()))
+            Some(one(Expr::Date(date_ym(y, m)?), Vec::new()))
         }
-        // Year then small field: 1985/4, 1985-4 (a full "1985-04" is already
-        // valid EDTF and never reaches the grammar).
+        // Year then small field: 1985/4, 1985-4 (a full "1985-04" is an EDTF
+        // token, read before the prose arms).
         ([py, pb], &[y, m]) if py.len() == 4 && pb.len() <= 2 && (1..=12).contains(&m) => {
             let (y, m) = (i32::try_from(y).ok()?, u8::try_from(m).ok()?);
-            Some(Single::One(Expr::Date(date_ym(y, m)?), Vec::new()))
+            Some(one(Expr::Date(date_ym(y, m)?), Vec::new()))
         }
         _ => None,
     }
+}
+
+/// Whether a sub-year-code token is also an elided range ("1914-21").
+///
+/// Such a token is not an atom: the range grammar reads it, giving both readings where a span
+/// may stand and refusing it as a range endpoint, which cannot hold a span
+/// (N13).
+fn sub_year_collides(t: &str, opts: Options, lang: &Lang) -> bool {
+    is_sub_year_token(t) && endpoint_pair(&t[..4], &t[5..], opts, lang).is_some()
 }
 
 /// `NNNN-NN` with NN a sub-year code 21–41: four digits, a hyphen, two
@@ -767,16 +832,35 @@ fn is_sub_year_token(t: &str) -> bool {
 // ---------------------------------------------------------------------------
 // The single-expression grammar
 
-/// Match one date-ish expression. `in_range` suppresses interval-producing
-/// forms (century parts) so range endpoints stay dates (N1 scope).
+/// Match one date-ish expression: the atom reader every construct reads its
+/// parts through. `in_range` suppresses interval-producing forms (century
+/// parts) so range endpoints stay dates (N1 scope).
 #[expect(
     clippy::too_many_lines,
     reason = "the ordered arms ARE the grammar (N11); order carries meaning"
 )]
-fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<Single> {
+fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<Reading> {
     // An empty token list (callers never produce one) falls through every
     // arm to the final `_ => None`.
     let toks: Vec<&str> = s.split(' ').filter(|t| !t.is_empty()).collect();
+
+    // A one-token atom is tried as EDTF before any prose arm, as a whole
+    // input and inside a phrase alike (N18). A colliding sub-year token is
+    // the range grammar's question instead (N13). The as-typed note is
+    // kept only where the token is the whole input (`combine`, `run`).
+    if let [t] = toks.as_slice() {
+        if sub_year_collides(t, opts, lang) {
+            return None;
+        }
+        if let Some((value, folded)) = edtf_token(t) {
+            let note = if folded {
+                Note::EdtfCaseNormalized
+            } else {
+                Note::AlreadyValidEdtf
+            };
+            return Some(one(Expr::from(value), vec![note]));
+        }
+    }
 
     // Trailing era phrase, if any ("500 bc", "xix век до н. э.").
     let (era, mut core_toks) = match split_era(&toks, lang) {
@@ -817,7 +901,7 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
             if roman {
                 notes.push(Note::RomanCentury);
             }
-            return Some(Single::One(expr, notes));
+            return Some(one(expr, notes));
         }
         return None;
     }
@@ -827,7 +911,7 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
         if roman {
             notes.push(Note::RomanCentury);
         }
-        return Some(Single::One(expr, notes));
+        return Some(one(expr, notes));
     }
 
     // Decade of an explicit century: "60-е годы XIX века" → 186X (N6).
@@ -844,7 +928,7 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
                 if roman {
                     notes.push(Note::RomanCentury);
                 }
-                return Some(Single::One(Expr::Date(decade_date(prefix3)), notes));
+                return Some(one(Expr::Date(decade_date(prefix3)), notes));
             }
         }
     }
@@ -860,7 +944,7 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
                 } else {
                     Vec::new()
                 };
-                return Some(Single::One(Expr::Date(date_y(y)?), notes));
+                return Some(one(Expr::Date(date_y(y)?), notes));
             }
         }
         return None;
@@ -869,14 +953,14 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
     match core_toks.as_slice() {
         [t] => {
             if let Some(y) = year_num(t) {
-                return Some(Single::One(Expr::Date(date_y(y)?), Vec::new()));
+                return Some(one(Expr::Date(date_y(y)?), Vec::new()));
             }
             if let Some(d) = decade_tok(t, lang) {
                 return Some(decade_single(d, opts));
             }
             if let Some(m) = table_u8(t, lang.months) {
                 // "January" → XXXX-01 (N9).
-                return Some(Single::One(
+                return Some(one(
                     Expr::Date(Date {
                         year: masked_year(),
                         month: Some(quiet(m)),
@@ -885,35 +969,13 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
                     vec![Note::MissingYearMasked],
                 ));
             }
-            if let Some(single) = numeric_token(t, opts, lang) {
-                return Some(single);
-            }
-            // A token that is an EDTF date, in either letter case (N18).
-            // Not tried for a sub-year-code token: numeric_token's answer
-            // there is final, so a colliding one stays a range-grammar
-            // question (N13).
-            if is_sub_year_token(t) {
-                return None;
-            }
-            match Edtf::parse(&t.to_ascii_uppercase()) {
-                Ok(Edtf::Date(d)) => {
-                    let notes = if t.bytes().any(|b| b.is_ascii_alphabetic()) {
-                        vec![Note::EdtfCaseNormalized]
-                    } else {
-                        Vec::new()
-                    };
-                    Some(Single::One(Expr::Date(d), notes))
-                }
-                // A datetime, interval or set is not a reading: no EDTF
-                // form says "before" a time of day (N18).
-                _ => None,
-            }
+            numeric_token(t, opts, lang)
         }
         [a, b] => {
             // "spring 2001" / "весной 2001" / "2001 spring" (N7).
             for (st, yt) in [(a, b), (b, a)] {
                 if let (Some(code), Some(y)) = (table_u8(st, lang.seasons), year_num(yt)) {
-                    return Some(Single::One(
+                    return Some(one(
                         Expr::Date(Date {
                             month: Some(quiet(code)),
                             ..date_y(y)?
@@ -925,13 +987,13 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
             // "June 1940" / "1940 June".
             for (mt, yt) in [(a, b), (b, a)] {
                 if let (Some(m), Some(y)) = (table_u8(mt, lang.months), year_num(yt)) {
-                    return Some(Single::One(Expr::Date(date_ym(y, m)?), Vec::new()));
+                    return Some(one(Expr::Date(date_ym(y, m)?), Vec::new()));
                 }
             }
             // "January 12" / "12 January" → XXXX-01-12 (N9).
             for (mt, dt) in [(a, b), (b, a)] {
                 if let (Some(m), Some(d)) = (table_u8(mt, lang.months), day_num(dt, lang)) {
-                    return Some(Single::One(
+                    return Some(one(
                         Expr::Date(Date {
                             year: masked_year(),
                             month: Some(quiet(m)),
@@ -949,7 +1011,7 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<S
                 if let (Some(d), Some(m), Some(y)) =
                     (day_num(dt, lang), table_u8(mt, lang.months), year_num(c))
                 {
-                    return Some(Single::One(Expr::Date(date_ymd(y, m, d)?), Vec::new()));
+                    return Some(one(Expr::Date(date_ymd(y, m, d)?), Vec::new()));
                 }
             }
             None
@@ -989,20 +1051,12 @@ fn split_modifier<'a>(toks: &[&'a str], lang: &Lang) -> Option<(Span, Vec<&'a st
     Some((span, rest))
 }
 
-/// The candidate with one more note attached.
-fn with_note(s: Single, note: Note) -> Single {
-    match s {
-        Single::One(e, mut notes) => {
-            notes.push(note);
-            Single::One(e, notes)
-        }
-        Single::Many(mut cands) => {
-            for c in &mut cands {
-                c.notes.push(note);
-            }
-            Single::Many(cands)
-        }
+/// The reading with one more note on every candidate.
+fn with_note(mut reading: Reading, note: Note) -> Reading {
+    for c in &mut reading {
+        c.notes.push(note);
     }
+    reading
 }
 
 // ---------------------------------------------------------------------------
@@ -1021,28 +1075,71 @@ fn match_head<'a>(toks: &[&'a str], phrases: &[&[&str]]) -> Option<Vec<&'a str>>
 
 /// Everything a whole input, or one "or" alternative, can be (N4, N8, N14).
 ///
-/// A date, a two-sided range or an open range. It is never a range
-/// endpoint, so the single-expression grammar may read a span here.
-fn parse_reading(s: &str, opts: Options, lang: &Lang) -> Option<Single> {
+/// A date, a two-sided range, an open range or an EDTF token. It is never a
+/// range endpoint, so the single-expression grammar may read a span here.
+fn parse_reading(s: &str, opts: Options, lang: &Lang) -> Option<Reading> {
     let toks: Vec<&str> = s.split(' ').collect();
     parse_single(s, opts, lang, false)
         .or_else(|| parse_open(&toks, opts, lang))
         .or_else(|| parse_range(s, &toks, opts, lang))
 }
 
+/// The one way a construct reads its parts (N14, N16).
+///
+/// Walks every combination of the parts' readings. Each combination takes
+/// year inheritance first (`distribute_year`), then the construct's own
+/// `build` step; a combination that fails refuses the whole input, because
+/// promoting the survivors would fake certainty the prose never had. A part
+/// is never the whole input, so an as-typed EDTF token inside a construct
+/// carries no note (N18).
+fn combine(
+    parts: &[Reading],
+    build: impl Fn(Vec<Candidate>) -> Option<Reading>,
+) -> Option<Reading> {
+    let mut combos: Vec<Vec<Candidate>> = vec![Vec::new()];
+    for part in parts {
+        let mut next = Vec::with_capacity(combos.len() * part.len());
+        for prefix in &combos {
+            for c in part {
+                let mut c = c.clone();
+                c.notes.retain(|n| *n != Note::AlreadyValidEdtf);
+                let mut combo = prefix.clone();
+                combo.push(c);
+                next.push(combo);
+            }
+        }
+        combos = next;
+    }
+    let mut out = Vec::new();
+    for mut combo in combos {
+        // An interval or other EDTF value neither gives nor takes a year.
+        let mut dated: Vec<(&mut Date, &mut Vec<Note>)> = combo
+            .iter_mut()
+            .filter_map(|c| match &mut c.expr {
+                Expr::Date(d) => Some((d, &mut c.notes)),
+                Expr::Interval(_) | Expr::Value(_) => None,
+            })
+            .collect();
+        distribute_year(&mut dated)?;
+        out.extend(build(combo)?);
+    }
+    Some(out)
+}
+
 /// "before X" → `../X`, "after X" → `X/..` (interval reading, N8).
 ///
 /// X is any reading. Before a span is before its start and after a span is
-/// after its end, so a two-sided span gives its near edge; an open one
-/// ("before after 1900") gives nothing (N8).
-fn parse_open(toks: &[&str], opts: Options, lang: &Lang) -> Option<Single> {
+/// after its end, so a two-sided span gives its near edge. An open span
+/// ("before after 1900"), a set or a datetime gives nothing (N8, N18).
+fn parse_open(toks: &[&str], opts: Options, lang: &Lang) -> Option<Reading> {
     let (before, rest) = match_head(toks, lang.before_phrases)
         .map(|rest| (true, rest))
         .or_else(|| match_head(toks, lang.after_phrases).map(|rest| (false, rest)))?;
     let (inner, q) = strip_qualifiers(&rest.join(" "), lang);
-    let single = parse_reading(&inner, opts, lang)?;
-    let wrap = |expr: Expr| -> Option<Expr> {
-        let mut d = match expr {
+    let operand = parse_reading(&inner, opts, lang)?;
+    combine(&[operand], |parts| {
+        let [mut c] = <[Candidate; 1]>::try_from(parts).ok()?;
+        let mut d = match c.expr {
             Expr::Date(d) => d,
             Expr::Interval(Interval {
                 start: IntervalEndpoint::Date(start),
@@ -1054,7 +1151,7 @@ fn parse_open(toks: &[&str], opts: Options, lang: &Lang) -> Option<Single> {
                     end
                 }
             }
-            Expr::Interval(_) => return None,
+            Expr::Interval(_) | Expr::Value(_) => return None,
         };
         qualify_date(&mut d, q);
         let (start, end) = if before {
@@ -1062,15 +1159,16 @@ fn parse_open(toks: &[&str], opts: Options, lang: &Lang) -> Option<Single> {
         } else {
             (IntervalEndpoint::Date(d), IntervalEndpoint::Open)
         };
-        Some(Expr::Interval(Interval { start, end }))
-    };
-    map_single(single, wrap, Note::OpenInterval)
+        c.expr = Expr::Interval(Interval { start, end });
+        c.notes.push(Note::OpenInterval);
+        Some(vec![c])
+    })
 }
 
 /// "1863 or 1864 or 1865" → honest ambiguity (N14). Every "or" separates
 /// whole alternatives, each read as a whole input would be; a stated year
 /// scopes the year-less ones (N16).
-fn parse_or(toks: &[&str], opts: Options, lang: &Lang) -> Option<Single> {
+fn parse_or(toks: &[&str], opts: Options, lang: &Lang) -> Option<Reading> {
     let sides: Vec<String> = toks
         .split(|t| lang.or_words.contains(t))
         .map(|side| side.join(" "))
@@ -1078,85 +1176,110 @@ fn parse_or(toks: &[&str], opts: Options, lang: &Lang) -> Option<Single> {
     if sides.len() < 2 {
         return None;
     }
-    let mut cands = Vec::new();
+    let mut parts = Vec::with_capacity(sides.len());
     for side in sides {
         let (inner, q) = strip_qualifiers(&side, lang);
-        // A side with no reading, or with several, refuses the whole input:
-        // nested ambiguity would be a product of guesses.
-        let Single::One(mut expr, mut notes) = parse_reading(&inner, opts, lang)? else {
+        let mut reading = parse_reading(&inner, opts, lang)?;
+        // A side with several readings refuses the whole input: nested
+        // ambiguity would be a product of guesses (N14).
+        if reading.len() != 1 {
             return None;
-        };
-        qualify_expr(&mut expr, q);
-        notes.push(Note::OrAlternatives);
-        cands.push(Candidate {
-            expr,
-            reading: String::from("alternative"),
-            notes,
-        });
+        }
+        for c in &mut reading {
+            qualify_expr(&mut c.expr, q)?;
+        }
+        parts.push(reading);
     }
-    // An interval alternative neither gives nor takes a year.
-    let mut dated: Vec<(&mut Date, &mut Vec<Note>)> = cands
-        .iter_mut()
-        .filter_map(|c| match &mut c.expr {
-            Expr::Date(d) => Some((d, &mut c.notes)),
-            Expr::Interval(_) => None,
-        })
-        .collect();
-    distribute_year(&mut dated)?;
-    Some(Single::Many(cands))
+    combine(&parts, |alternatives| {
+        Some(
+            alternatives
+                .into_iter()
+                .map(|mut c| {
+                    c.notes.push(Note::OrAlternatives);
+                    c.reading = String::from("alternative");
+                    c
+                })
+                .collect(),
+        )
+    })
 }
 
 /// Two-sided ranges: "from X to Y", "с X по Y", "X to Y", "X-Y".
-fn parse_range(s: &str, toks: &[&str], opts: Options, lang: &Lang) -> Option<Single> {
-    let word_split = |toks: &[&str], sep: &str| -> Option<(String, String)> {
-        let pos = toks.iter().position(|t| *t == sep)?;
-        Some((toks[..pos].join(" "), toks[pos + 1..].join(" ")))
-    };
+///
+/// One splitter: the range word and the hyphen are each tried at every
+/// position, left to right, and the first position whose two sides read
+/// wins ("от 44 г. до н. э. до 1914", where the era phrase holds the
+/// separator word).
+fn parse_range(s: &str, toks: &[&str], opts: Options, lang: &Lang) -> Option<Reading> {
     for (lead, sep) in lang.range_pairs {
         let inner = match lead {
             Some(l) if toks.first() == Some(l) => &toks[1..],
             Some(_) => continue,
             None => toks,
         };
-        if let Some((l, r)) = word_split(inner, sep) {
-            if let Some(single) = endpoint_pair(&l, &r, opts, lang) {
-                return Some(single);
-            }
+        let found = inner.iter().enumerate().find_map(|(pos, t)| {
+            (t == sep)
+                .then(|| {
+                    endpoint_pair(
+                        &inner[..pos].join(" "),
+                        &inner[pos + 1..].join(" "),
+                        opts,
+                        lang,
+                    )
+                })
+                .flatten()
+        });
+        if found.is_some() {
+            return found;
         }
     }
-    // Hyphen split: try each '-' position left to right.
-    for (i, c) in s.char_indices() {
-        if c != '-' {
-            continue;
-        }
-        let (l, r) = (s[..i].trim(), s[i + 1..].trim());
-        if let Some(single) = endpoint_pair(l, r, opts, lang) {
-            return Some(single);
-        }
-    }
-    None
+    s.char_indices().find_map(|(i, c)| {
+        (c == '-')
+            .then(|| endpoint_pair(s[..i].trim(), s[i + 1..].trim(), opts, lang))
+            .flatten()
+    })
 }
 
-/// Parse both endpoints of a range, with per-endpoint qualifiers
-/// ("1856-ca. 1865" → `1856/1865~`), elided end years ("1914-18", N4), and
-/// bare-ordinal left centuries ("17-19th centuries" → `16XX/18XX`).
+/// Two readings' descriptions, joined for a range built from them.
+fn join_readings(left: &str, right: &str) -> String {
+    let named: Vec<&str> = [left, right]
+        .into_iter()
+        .filter(|r| !r.is_empty())
+        .collect();
+    named.join(" to ")
+}
+
+/// Parse both endpoints of a range.
+///
+/// Per-endpoint qualifiers ("1856-ca. 1865" → `1856/1865~`), elided end
+/// years ("1914-18", N4), and bare-ordinal left centuries ("17-19th
+/// centuries" → `16XX/18XX`). An endpoint with several readings pairs each
+/// with the other side's; a range ambiguous on both sides reports every
+/// combination.
 #[expect(
     clippy::too_many_lines,
     clippy::many_single_char_names,
     reason = "endpoint pairing is one decision table; l/r/a/b/e its algebra"
 )]
-fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<Single> {
+fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<Reading> {
     let (ls, lq) = strip_qualifiers(left, lang);
     let (rs, rq) = strip_qualifiers(right, lang);
     let lres = parse_single(&ls, opts, lang, true);
     let rres = parse_single(&rs, opts, lang, true);
 
-    let (lres, rres) = match (lres, rres) {
-        (Some(l), Some(r)) => (l, r),
+    let pair: [Reading; 2] = match (lres, rres) {
+        (Some(l), Some(r)) => [l, r],
         // "17-19th centuries", "XVII-XIX вв.": a bare ordinal on the left
         // inherits century-ness from the right endpoint.
         (None, Some(r)) => {
-            let Single::One(Expr::Date(rd), rnotes) = &r else {
+            let [
+                Candidate {
+                    expr: Expr::Date(rd),
+                    notes: rnotes,
+                    reading: _,
+                },
+            ] = r.as_slice()
+            else {
                 return None;
             };
             if !rnotes.contains(&Note::CenturyMask) || ls.contains(' ') {
@@ -1174,11 +1297,18 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
             if roman {
                 ns.push(Note::RomanCentury);
             }
-            (Single::One(expr, ns), r)
+            [one(expr, ns), r]
         }
         // "1914 - 18": the right side elides the left year's century (N4).
         (Some(l), None) => {
-            let Single::One(Expr::Date(ld), _) = &l else {
+            let [
+                Candidate {
+                    expr: Expr::Date(ld),
+                    reading: _,
+                    notes: _,
+                },
+            ] = l.as_slice()
+            else {
                 return None;
             };
             let y = i32::try_from(ld.year.value()?).ok()?;
@@ -1205,7 +1335,7 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
                 let (mut a, mut b) = (*ld, date_y(elided)?);
                 qualify_date(&mut a, lq);
                 qualify_date(&mut b, rq);
-                return Some(Single::Many(vec![
+                return Some(vec![
                     Candidate {
                         expr: Expr::Date(season),
                         reading: format!("sub-year code {v} ({})", season_name(v_u8)),
@@ -1216,10 +1346,10 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
                         reading: format!("year range {y}/{elided}"),
                         notes: vec![Note::ElidedEndYear, Note::SeasonRangeCollision],
                     },
-                ]));
+                ]);
             }
-            let r = Single::One(Expr::Date(date_y(elided)?), vec![Note::ElidedEndYear]);
-            (l, r)
+            let r = one(Expr::Date(date_y(elided)?), vec![Note::ElidedEndYear]);
+            [l, r]
         }
         (None, None) => return None,
     };
@@ -1235,66 +1365,31 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
         }
         Some(interval(ld, rd))
     };
-    match (lres, rres) {
-        (Single::One(Expr::Date(mut ld), mut ln), Single::One(Expr::Date(mut rd), mut rn)) => {
-            // "June-July 1940": an endpoint without a year inherits the other
-            // endpoint's stated year — the year is elided, not missing (N16).
-            distribute_year(&mut [(&mut ld, &mut ln), (&mut rd, &mut rn)])?;
-            // "winter 1941-42": one boundary-spanning winter, or winter 1941
-            // through the whole of 1942? Both readings, honestly (N17).
-            if let Some(many) = cross_year_season(&ld, &ln, &rd, &rn, lq, &build) {
-                return Some(many);
-            }
-            let expr = build(&ld, &rd)?;
-            let mut notes = ln;
-            notes.extend(rn);
-            Some(Single::One(expr, notes))
+    // "June-July 1940": an endpoint without a year inherits the other
+    // endpoint's stated year — the year is elided, not missing (N16);
+    // `combine` applies that before this step.
+    combine(&pair, |parts| {
+        let [l, r] = <[Candidate; 2]>::try_from(parts).ok()?;
+        // A range endpoint is a date: an interval, a set or a datetime
+        // cannot stand as one (N1, N18).
+        let (Expr::Date(ld), Expr::Date(rd)) = (&l.expr, &r.expr) else {
+            return None;
+        };
+        // "winter 1941-42": one boundary-spanning winter, or winter 1941
+        // through the whole of 1942? Both readings, honestly (N17).
+        if let Some(both) = cross_year_season(ld, &l.notes, rd, &r.notes, lq, &build) {
+            return Some(both);
         }
-        (Single::One(Expr::Date(ld), ln), Single::Many(cands)) => {
-            // A candidate eliminated here (reversed range) is a prose error
-            // poisoning the whole input, not a disambiguation — refuse.
-            let total = cands.len();
-            let out: Vec<Candidate> = cands
-                .into_iter()
-                .filter_map(|c| {
-                    let Expr::Date(cd) = c.expr else { return None };
-                    let expr = build(&ld, &cd)?;
-                    let mut notes = ln.clone();
-                    notes.extend(c.notes);
-                    Some(Candidate {
-                        expr,
-                        reading: c.reading,
-                        notes,
-                    })
-                })
-                .collect();
-            // `Many` is never built empty, so `out.len() == total` also
-            // guarantees at least one candidate survives.
-            (out.len() == total).then_some(Single::Many(out))
-        }
-        (Single::Many(cands), Single::One(Expr::Date(rd), rn)) => {
-            let total = cands.len();
-            let out: Vec<Candidate> = cands
-                .into_iter()
-                .filter_map(|c| {
-                    let Expr::Date(cd) = c.expr else { return None };
-                    let expr = build(&cd, &rd)?;
-                    let mut notes = c.notes;
-                    notes.extend(rn.clone());
-                    Some(Candidate {
-                        expr,
-                        reading: c.reading,
-                        notes,
-                    })
-                })
-                .collect();
-            // `Many` is never built empty, so `out.len() == total` also
-            // guarantees at least one candidate survives.
-            (out.len() == total).then_some(Single::Many(out))
-        }
-        // A two-sided ambiguity would be a 4-way product — refuse to guess.
-        _ => None,
-    }
+        let expr = build(ld, rd)?;
+        let reading = join_readings(&l.reading, &r.reading);
+        let mut notes = l.notes;
+        notes.extend(r.notes);
+        Some(vec![Candidate {
+            expr,
+            reading,
+            notes,
+        }])
+    })
 }
 
 /// N16: a stated year scopes every year-less date beside it — both range
@@ -1344,7 +1439,7 @@ fn cross_year_season(
     rn: &[Note],
     lq: Qualifier,
     build: &impl Fn(&Date, &Date) -> Option<Expr>,
-) -> Option<Single> {
+) -> Option<Reading> {
     const WINTER: u8 = 24;
     // No grammar arm builds a day without a month, so a month-less right
     // endpoint is a bare year — no day check needed.
@@ -1363,7 +1458,7 @@ fn cross_year_season(
     let mut range_notes = ln.to_vec();
     range_notes.extend(rn.iter().copied());
     range_notes.push(Note::CrossYearSeason);
-    Some(Single::Many(vec![
+    Some(vec![
         Candidate {
             expr: Expr::Date(season),
             reading: String::from("one winter spanning the year boundary"),
@@ -1374,29 +1469,7 @@ fn cross_year_season(
             reading: format!("winter {a} through the whole of {b}"),
             notes: range_notes,
         },
-    ]))
-}
-
-/// Apply a `Single`-level transform that may reject candidates.
-fn map_single(single: Single, wrap: impl Fn(Expr) -> Option<Expr>, note: Note) -> Option<Single> {
-    match single {
-        Single::One(expr, mut notes) => {
-            let expr = wrap(expr)?;
-            notes.push(note);
-            Some(Single::One(expr, notes))
-        }
-        Single::Many(cands) => {
-            let out: Vec<Candidate> = cands
-                .into_iter()
-                .filter_map(|mut c| {
-                    c.expr = wrap(c.expr)?;
-                    c.notes.push(note);
-                    Some(c)
-                })
-                .collect();
-            (!out.is_empty()).then_some(Single::Many(out))
-        }
-    }
+    ])
 }
 
 // ---------------------------------------------------------------------------
@@ -1424,20 +1497,24 @@ const fn qualify_date(d: &mut Date, q: Qualifier) {
     }
 }
 
-/// Distribute a whole-expression qualifier over every date it covers.
-fn qualify_expr(e: &mut Expr, q: Qualifier) {
+/// Distribute a whole-expression qualifier over every date it covers. A
+/// set or a datetime has no place for one, so qualifying it fails (N10).
+fn qualify_expr(e: &mut Expr, q: Qualifier) -> Option<()> {
     match e {
         Expr::Date(d) => qualify_date(d, q),
         Expr::Interval(iv) => {
-            // The grammar only builds `Date` and `Open` endpoints; the
-            // set-only `OnOrBefore`/`OnOrAfter` shapes never occur here.
             for ep in [&mut iv.start, &mut iv.end] {
-                if let IntervalEndpoint::Date(d) = ep {
-                    qualify_date(d, q);
+                match ep {
+                    IntervalEndpoint::Date(d)
+                    | IntervalEndpoint::OnOrBefore(d)
+                    | IntervalEndpoint::OnOrAfter(d) => qualify_date(d, q),
+                    IntervalEndpoint::Open | IntervalEndpoint::Unknown => {}
                 }
             }
         }
+        Expr::Value(_) => return (!q.is_qualified()).then_some(()),
     }
+    Some(())
 }
 
 /// Render through core's canonical Display and re-parse: the calendar check
@@ -1446,6 +1523,7 @@ fn render(expr: Expr) -> Option<(Edtf, String)> {
     let value = match expr {
         Expr::Date(d) => Edtf::Date(d),
         Expr::Interval(iv) => Edtf::Interval(iv),
+        Expr::Value(v) => v,
     };
     let s = value.to_string();
     let reparsed = Edtf::parse(&s).ok()?;
@@ -1457,76 +1535,49 @@ const fn no_match(reason: NoMatchReason) -> Outcome {
     Outcome::NoMatch { reason }
 }
 
-/// Build the public outcome from a candidate set and its qualifier.
-fn outcome_from(single: Single, q: Qualifier, base_notes: Vec<Note>) -> Outcome {
-    match single {
-        Single::One(mut expr, mut notes) => {
-            let distributed = q.is_qualified() && matches!(expr, Expr::Interval(_));
-            qualify_expr(&mut expr, q);
-            match render(expr) {
-                Some((value, edtf)) => {
-                    let mut all = base_notes;
-                    all.append(&mut notes);
-                    if distributed {
-                        all.push(Note::QualifierDistributed);
-                    }
-                    Outcome::Normalized(Normalized {
-                        edtf,
-                        value,
-                        notes: all,
-                    })
-                }
-                None => no_match(NoMatchReason::ImpossibleDate),
-            }
+/// Build the public outcome from a reading.
+fn outcome_from(reading: Reading) -> Outcome {
+    // Fail closed: a reading that dies at the calendar check (February 30,
+    // a reversed masked range) is a prose error, and silently promoting the
+    // survivor would fake certainty the input never had (N14).
+    let total = reading.len();
+    let mut interps: Vec<Interpretation> = reading
+        .into_iter()
+        .filter_map(|c| {
+            let (value, edtf) = render(c.expr)?;
+            Some(Interpretation {
+                edtf,
+                value,
+                reading: c.reading,
+                notes: c.notes,
+            })
+        })
+        .collect();
+    if interps.len() < total {
+        return no_match(NoMatchReason::ImpossibleDate);
+    }
+    // Two readings that render the same are one reading: both of N17's
+    // readings of "before winter 1941-42" start in one winter.
+    let mut seen: Vec<String> = Vec::new();
+    interps.retain(|i| {
+        let fresh = !seen.contains(&i.edtf);
+        if fresh {
+            seen.push(i.edtf.clone());
         }
-        Single::Many(cands) => {
-            // Fail closed: a reading that dies at the calendar check
-            // (February 30, a reversed masked range) is a prose error, and
-            // silently promoting the survivor would fake certainty the input
-            // never had (N14).
-            let total = cands.len();
-            let mut interps: Vec<Interpretation> = cands
-                .into_iter()
-                .filter_map(|mut c| {
-                    qualify_expr(&mut c.expr, q);
-                    let (value, edtf) = render(c.expr)?;
-                    let mut notes = base_notes.clone();
-                    notes.extend(c.notes);
-                    Some(Interpretation {
-                        edtf,
-                        value,
-                        reading: c.reading,
-                        notes,
-                    })
-                })
-                .collect();
-            if interps.len() < total {
-                return no_match(NoMatchReason::ImpossibleDate);
-            }
-            // Two readings that render the same are one reading: both of
-            // N17's readings of "before winter 1941-42" start in one winter.
-            let mut seen: Vec<String> = Vec::new();
-            interps.retain(|i| {
-                let fresh = !seen.contains(&i.edtf);
-                if fresh {
-                    seen.push(i.edtf.clone());
-                }
-                fresh
-            });
-            // `Many` is never built empty, so at least one reading survives.
-            if interps.len() == 1 {
-                let i = interps.remove(0);
-                Outcome::Normalized(Normalized {
-                    edtf: i.edtf,
-                    value: i.value,
-                    notes: i.notes,
-                })
-            } else {
-                Outcome::Ambiguous(Ambiguous {
-                    interpretations: interps,
-                })
-            }
-        }
+        fresh
+    });
+    // A reading is never empty, so at least one interpretation survives.
+    if interps.len() == 1 {
+        let i = interps.remove(0);
+        Outcome::Normalized(Normalized {
+            edtf: i.edtf,
+            value: i.value,
+            notes: i.notes,
+        })
+    } else {
+        Outcome::Ambiguous(Ambiguous {
+            interpretations: interps,
+        })
     }
 }
 
@@ -1534,62 +1585,14 @@ fn outcome_from(single: Single, q: Qualifier, base_notes: Vec<Note>) -> Outcome 
 // Entry point
 
 /// Normalise one input under `opts`; the crate's whole entry point.
+///
+/// A whole input is not special: it is preprocessed, stripped of its
+/// whole-expression qualifiers and read like any "or" alternative, so a
+/// one-token input that is EDTF reads through the atom reader (N18).
 pub(crate) fn run(input: &str, opts: Options) -> Outcome {
     let lang = lang_for(opts.language);
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return no_match(NoMatchReason::OutOfGrammar);
-    }
-
-    // Dash-unified copy of the verbatim input (EDTF is case-sensitive:
-    // X/Y/E/S must survive, so no lowercasing here).
-    let dashed: String = trimmed
-        .chars()
-        .map(|c| match c {
-            '\u{2013}' | '\u{2014}' => '-',
-            c => c,
-        })
-        .collect();
-
-    // "1914-21" is valid EDTF (spring 1914) AND a plausible elided range —
-    // the collision must surface before the passthrough swallows it (N13).
-    if let Some(outcome) = collision_check(&dashed, opts, lang) {
-        return outcome;
-    }
-
-    if let Ok(v) = Edtf::parse(&dashed) {
-        let edtf = v.to_string();
-        let value = Edtf::parse(&edtf).unwrap_or(v);
-        return Outcome::Normalized(Normalized {
-            edtf,
-            value,
-            notes: vec![Note::AlreadyValidEdtf],
-        });
-    }
-
-    // The same notation in another letter case takes the same place: tried
-    // before the input is read as prose (N18).
-    if let Ok(v) = Edtf::parse(&dashed.to_ascii_uppercase()) {
-        let edtf = v.to_string();
-        let value = Edtf::parse(&edtf).unwrap_or(v);
-        return Outcome::Normalized(Normalized {
-            edtf,
-            value,
-            notes: vec![Note::EdtfCaseNormalized],
-        });
-    }
-
-    let mut pre = preprocess(trimmed);
-    let mut q = Qualifier::default();
-    if pre.ends_with('?') {
-        q.uncertain = true;
-        pre.pop();
-        while pre.ends_with(' ') {
-            pre.pop();
-        }
-    }
-    let (rest, q2) = strip_qualifiers(&pre, lang);
-    merge(&mut q, q2);
+    let pre = preprocess(input);
+    let (rest, q) = strip_qualifiers(&pre, lang);
     if rest.is_empty() {
         return no_match(NoMatchReason::OutOfGrammar);
     }
@@ -1598,21 +1601,25 @@ pub(crate) fn run(input: &str, opts: Options) -> Outcome {
         return no_match(NoMatchReason::ExplicitNoDate);
     }
     let toks: Vec<&str> = rest.split(' ').collect();
-
-    parse_reading(&rest, opts, lang)
-        .or_else(|| parse_or(&toks, opts, lang))
-        .map_or_else(
-            || no_match(NoMatchReason::OutOfGrammar),
-            |single| outcome_from(single, q, Vec::new()),
-        )
-}
-
-/// `NNNN-NN` with a sub-year code 21–41: if it is also a plausible elided
-/// range, both readings, through the one range grammar (N4, N13).
-fn collision_check(s: &str, opts: Options, lang: &Lang) -> Option<Outcome> {
-    if !is_sub_year_token(s) {
-        return None;
+    let Some(mut reading) =
+        parse_reading(&rest, opts, lang).or_else(|| parse_or(&toks, opts, lang))
+    else {
+        return no_match(NoMatchReason::OutOfGrammar);
+    };
+    // Already-valid EDTF is noted only where the EDTF token is the whole
+    // input, with nothing stripped from around it (N18).
+    let whole = rest == pre;
+    for c in &mut reading {
+        if !whole {
+            c.notes.retain(|n| *n != Note::AlreadyValidEdtf);
+        }
+        let distributed = q.is_qualified() && matches!(c.expr, Expr::Interval(_));
+        if qualify_expr(&mut c.expr, q).is_none() {
+            return no_match(NoMatchReason::OutOfGrammar);
+        }
+        if distributed {
+            c.notes.push(Note::QualifierDistributed);
+        }
     }
-    let single = endpoint_pair(&s[..4], &s[5..], opts, lang)?;
-    Some(outcome_from(single, Qualifier::default(), Vec::new()))
+    outcome_from(reading)
 }
