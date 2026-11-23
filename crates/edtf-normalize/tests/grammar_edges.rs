@@ -200,6 +200,9 @@ fn a_hyphen_inside_an_iso_date_never_splits_a_range() {
     assert!(notes_of("xxxx-01-1985").contains(&Note::EdtfLettersNormalized));
     ok("circa 1985-04-1990", "1985-04~/1990~"); // a unit starts after a space
     ok("1985 -1990", "1985/1990"); // a bare year is not a unit
+    // `1985-4` is not ISO (core reads no one-digit month), so both hyphens
+    // are candidates and both splits read: every reading, left to right.
+    ambiguous("1985-4-1990", &["1985/1990-04", "1985-04/1990"]);
     // Unchanged by the unit rule.
     ok("1914-18", "1914/1918");
     ok("1985-21-1990", "1985-21/1990");
