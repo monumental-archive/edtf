@@ -39,6 +39,7 @@ variant_size_differences = "warn"
 single_use_lifetimes = "warn"
 explicit_outlives_requirements = "warn"
 rust_2024_compatibility = { level = "warn", priority = -1 }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

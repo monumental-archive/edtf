@@ -81,6 +81,8 @@ mod bounds;
 mod display;
 mod enumerate;
 mod parser;
+#[cfg(any(test, fuzzing))]
+pub mod properties;
 mod relation;
 mod summary;
 mod types;

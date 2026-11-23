@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (c) the edtf contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Deterministic fuzz tests: the parser must never panic on any input, and
-//! every accepted input must survive the canonicalize-reparse round trip.
+//! The deterministic string engine: the parser must never panic on any
+//! input, and every input is held to the rules in `properties`.
 //!
 //! Uses a fixed-seed xorshift generator so failures are reproducible; no
 //! nightly toolchain or external fuzzer needed, so this guards every CI run.
@@ -17,24 +17,12 @@
     reason = "generator and oracle ranges are bounded by construction"
 )]
 #![expect(
-    clippy::min_ident_chars,
-    reason = "the test bodies use the same y/m/d date-component names as the code they exercise"
-)]
-#![expect(
     clippy::indexing_slicing,
     reason = "indexing a fixture the test itself constructed; an out-of-range index is a failing test, not a crash path"
 )]
 #![expect(
-    clippy::absolute_paths,
-    reason = "a one-use std path written in full at the call site"
-)]
-#![expect(
     clippy::as_conversions,
     reason = "casting fixture values the test itself bounded"
-)]
-#![expect(
-    clippy::default_numeric_fallback,
-    reason = "literal fixtures whose type the assertion already fixes"
 )]
 #![expect(
     clippy::arithmetic_side_effects,
@@ -44,13 +32,28 @@
     clippy::integer_division_remainder_used,
     reason = "same integer calendar arithmetic as the code under test"
 )]
-#![expect(clippy::panic, reason = "a panic in a test IS the failure signal")]
+#![expect(
+    clippy::absolute_paths,
+    reason = "a one-use std path written in full at the call site"
+)]
+#![expect(
+    clippy::default_numeric_fallback,
+    reason = "literal fixtures whose type the assertion already fixes"
+)]
 #![expect(
     clippy::missing_panics_doc,
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 
-use edtf_core::{Bound, Edtf, IntervalEndpoint};
+extern crate std;
+
+use alloc::vec::Vec;
+
+use super::{
+    check_letters, check_qualification, check_text, check_value, check_whitespace, observe_letters,
+    observe_qualification, observe_text, observe_value, observe_whitespace,
+};
+use crate::Edtf;
 
 struct Rng(u64);
 
@@ -87,43 +90,24 @@ fn iterations(default: usize) -> usize {
 /// exercise deep parser paths instead of failing on byte one.
 const ALPHABET: &[u8] = b"0123456789XYESTZ?~%-+:./,{}[]";
 
+/// Hold one input string to every rule a string can be held to: the text
+/// rule, and, when it is accepted, the value, letters, whitespace and (for
+/// a date) qualification rules.
 fn check(input: &str) {
-    // Any panic aborts the test; any Ok must round-trip semantically.
-    if let Ok(parsed) = Edtf::parse(input) {
-        let rendered = parsed.to_string();
-        let reparsed = Edtf::parse(&rendered).unwrap_or_else(|e| {
-            panic!("accepted {input:?}, but canonical form {rendered:?} fails to reparse: {e}")
-        });
-        assert_eq!(
-            parsed, reparsed,
-            "round trip changed meaning for {input:?} (canonical {rendered:?})"
-        );
-        // Every accepted value can be bounded (decision D30): a bound is
-        // Unknown only on the side of an interval whose endpoint there is
-        // Unknown. A date, a datetime or a set never has an unknown bound.
-        // (Bounds overflowed on Y9E18S1 before D30, found by fuzzing.)
-        let bounds = parsed.bounds();
-        let (start_unknown, end_unknown) = match parsed {
-            Edtf::Interval(iv) => (
-                matches!(iv.start(), IntervalEndpoint::Unknown),
-                matches!(iv.end(), IntervalEndpoint::Unknown),
-            ),
-            Edtf::Date(_) | Edtf::DateTime(_) | Edtf::Set(_) => (false, false),
-        };
-        assert_eq!(
-            matches!(bounds.earliest, Bound::Unknown),
-            start_unknown,
-            "accepted {input:?}, but its earliest bound is {:?}",
-            bounds.earliest
-        );
-        assert_eq!(
-            matches!(bounds.latest, Bound::Unknown),
-            end_unknown,
-            "accepted {input:?}, but its latest bound is {:?}",
-            bounds.latest
-        );
+    let text = observe_text(input);
+    check_text(&text);
+    if let Ok(value) = text.parsed.as_ref() {
+        check_value(&observe_value(value, VALUES_CHECKED));
+        check_letters(&observe_letters(input));
+        check_whitespace(&observe_whitespace(input));
+        if let &Edtf::Date(date) = value {
+            check_qualification(&observe_qualification(date));
+        }
     }
 }
+
+/// How much of an enumeration each accepted input checks.
+const VALUES_CHECKED: usize = 64;
 
 #[test]
 fn random_grammar_soup_never_panics() {
@@ -155,7 +139,7 @@ fn random_bytes_never_panic() {
     }
 }
 
-/// The edges of D30's one supported year range, through the generators' check.
+/// The edges of D30's one supported year range, through the harness's check.
 ///
 /// Whatever side of the line each lands on, an accepted one keeps the bound
 /// promise. Before D30, `Y1E19` was accepted with unknown bounds.
