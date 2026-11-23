@@ -241,7 +241,7 @@ fn edtf_letters_read_in_either_case() {
     // EDTF notation is read in either letter case, as a whole input and as
     // a token inside a phrase (N18).
     ok("198x", "198X");
-    assert_eq!(notes_of("198x"), [Note::EdtfCaseNormalized]);
+    assert_eq!(notes_of("198x"), [Note::EdtfLettersNormalized]);
     ok("y17e7", "Y17E7");
     ok("1985-04-12t10:00:00z", "1985-04-12T10:00:00Z");
     ok("198x/199x", "198X/199X");
@@ -252,7 +252,7 @@ fn edtf_letters_read_in_either_case() {
     ok("before 198x", "[..1979]");
     assert_eq!(
         notes_of("before 198x"),
-        [Note::EdtfCaseNormalized, Note::BeforeAfter]
+        [Note::EdtfLettersNormalized, Note::BeforeAfter]
     );
     ok("before 198X", "[..1979]");
     assert_eq!(notes_of("before 198X"), [Note::BeforeAfter]);

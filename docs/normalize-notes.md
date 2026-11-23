@@ -252,8 +252,11 @@ against the N-number.
   the claim.
 - **N15 — Roman-numeral centuries (Russian):** "XIX век", "XIX в.",
   "XVII-XIX вв." parse as centuries, including with Cyrillic lookalike
-  letters (Х/х for X, etc.), which real Russian sources routinely contain,
-  and including numerals that *start* with a subtractive pair ("IV век",
+  letters (Х/х for X, etc.), which real Russian sources routinely contain.
+  Those letters are a row of the language's table (`roman_letters`: і, х,
+  л, с, д, м), the same table that holds its EDTF lookalikes (N18); the
+  grammar holds no Cyrillic. Numerals are read in either case, including
+  numerals that *start* with a subtractive pair ("IV век",
   "IX-X вв." — the accumulator is signed for exactly this reason). A *bare*
   Roman numeral is accepted as a century only when it is at least two
   letters ("I" alone is too weak a signal; "I век" is fine). Roman
@@ -277,9 +280,10 @@ against the N-number.
   reported (`CrossYearSeason`), N13-style. A non-adjacent end year
   ("winter 1941-45") has only the range reading. Winter is the only emitted
   season that wraps; the others compose as plain ranges.
-- **N18 — EDTF letters in either case:** EDTF notation is read in either
-  letter case, as a whole input and as a token inside a phrase ("198x" →
-  `198X`; "until 198X" → `../198X`; "198X or 1990" → `[198X,1990]`).
+- **N18 — EDTF letters in either case or script:** EDTF notation is read
+  in either letter case, as a whole input and as a token inside a phrase
+  ("198x" → `198X`; "until 198X" → `../198X`; "198X or 1990" →
+  `[198X,1990]`).
   A whole input and a one-token part of a phrase alike are tried as EDTF
   before they are read as prose, so Russian "xxxx" is the masked year
   `XXXX`, not a century, and "до xxxx" is refused, as any year-less
@@ -290,9 +294,16 @@ against the N-number.
   interval with two dated ends is a span, so it is a before/after operand
   by its start or its end (N8); a set of several elements, a datetime or
   an interval with an open or unknown end is no operand, and none of
-  these is a range end. The note `EdtfCaseNormalized` is attached exactly
-  when the fold changed the text, and `AlreadyValidEdtf` only when the
-  EDTF token is the whole input.
+  these is a range end. Letters of the prose's script that look exactly
+  like EDTF letters are read as those letters, from a row of the
+  language's table (`edtf_letters`): Russian х, у, е, т in either case
+  stand for X, Y, E, T, the Cyrillic letters Unicode's confusables table
+  (18.0.0) lists for them, so "хххх" → `XXXX` and "198х" → `198X`. English
+  has no such row, so English mode refuses both. The fold is tried only
+  on a token, and taken only when the folded text parses as EDTF, so prose
+  is never rewritten. The note `EdtfLettersNormalized` is attached exactly
+  when the fold (of case or script) changed the text, and
+  `AlreadyValidEdtf` only when the EDTF token is the whole input.
 
 ## 3. Test ceremony
 
