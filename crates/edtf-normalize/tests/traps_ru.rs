@@ -108,10 +108,12 @@ fn edtf_letters_read_in_either_case() {
     ok("xxxx век", "39XX", 1);
     ok("xix", "18XX", 1);
     // Inside a phrase a one-token atom is tried as EDTF first too (N18).
-    ok("до xxxx", "../XXXX", 2);
-    ok("до xxxx века", "../39XX", 2);
+    // "до" is strictly before (N8). The year-less XXXX has no unit of its
+    // own, so it is refused; the 40th century reads.
+    no_match("до xxxx");
+    ok("до xxxx века", "[..3899]", 2);
     // An EDTF token keeps its letter case; a Roman numeral reads in either.
-    ok("до XXXX века", "../39XX", 2);
+    ok("до XXXX века", "[..3899]", 2);
 }
 
 #[test]
@@ -133,8 +135,8 @@ fn roman_centuries() {
     ok("I век", "00XX", 1);
     // Cyrillic lookalike letters (Х is Cyrillic here).
     ok("ХIХ век", "18XX", 1);
-    // BC centuries are exact intervals (N2).
-    ok("II век до н. э.", "-0199/-0100", 1);
+    // A BC century is one year of its span (N2).
+    ok("II век до н. э.", "[-0199..-0100]", 2);
     // Numerals STARTING with a subtractive pair (N15 — the underflow trap).
     ok("IV век", "03XX", 1);
     ok("IX век", "08XX", 1);
@@ -190,13 +192,16 @@ fn decade_of_century() {
 
 #[test]
 fn century_parts() {
-    // N1: начало/середина/конец are decade-rounded thirds; halves are halves.
-    ok("начало XIX века", "1801/1830", 0);
-    ok("в начале XIX века", "1801/1830", 0);
-    ok("середина XIX века", "1831/1870", 0);
-    ok("конец XIX века", "1871/1900", 0);
-    ok("первая половина XVIII века", "1701/1750", 0);
-    ok("вторая половина XVIII века", "1751/1800", 0);
+    // N1: начало/середина/конец are decade-rounded thirds; halves are
+    // halves; each is one year of its span (ISO 8601-2 6.2).
+    ok("начало XIX века", "[1800..1829]", 2);
+    ok("в начале XIX века", "[1800..1829]", 2);
+    ok("середина XIX века", "[1830..1869]", 2);
+    ok("конец XIX века", "[1870..1899]", 2);
+    ok("первая половина XVIII века", "[1700..1749]", 2);
+    ok("вторая половина XVIII века", "[1750..1799]", 2);
+    // A qualified part falls back to the century's mask (N1, D27).
+    ok("около начала XIX века", "18XX~", 1);
 }
 
 #[test]
@@ -265,23 +270,35 @@ fn ranges() {
 
 #[test]
 fn before_after() {
-    ok("до 1917", "../1917", 1);
-    ok("до 1917 года", "../1917", 1);
-    ok("после 1917", "1917/..", 1);
-    ok("не позднее 1917", "../1917", 1);
-    ok("не ранее 1917", "1917/..", 1);
+    // N8: standing alone, "до" is exclusive ("по" is the inclusive end).
+    ok("до 1917", "[..1916]", 2);
+    ok("ранее 1917", "[..1916]", 2);
+    ok("до 1917 года", "[..1916]", 2);
+    ok("не позднее 1917", "[..1917]", 2);
+    ok("после 1917", "[1918..]", 2);
+    ok("не ранее 1917", "[1917..]", 2);
+    ok("начиная с 1917", "1917/..", 1);
+    ok("с 1917", "1917/..", 1);
+    ok("до июня 1940", "[..1940-05]", 2);
+    // A season has no predecessor (ISO 8601-2 4.8.1).
+    no_match("до весны 1920");
     // "до" as before-marker vs "до н. э." as era: both at once.
-    ok("до 500 до н. э.", "../-0499", 1);
+    ok("до 500 до н. э.", "[..-0500]", 2);
+    // Inside a range "с … до …" and "от … до …" stay range words.
+    ok("с 1914 до 1918", "1914/1918", 0);
+    ok("от 1914 до 1918", "1914/1918", 0);
 }
 
 #[test]
 fn alternatives() {
-    ambiguous("1863 или 1864", &["1863", "1864"]);
+    // N14: one one-of set (ISO 8601-2 6.2) when every alternative is a date
+    // or a set; each alternative a reading when one is a period.
+    ok("1863 или 1864", "[1863,1864]", 2);
     // Each side is a whole reading; a stated year scopes the others (N14, N16).
     ambiguous("с 1914 по 1918 или 1920", &["1914/1918", "1920"]);
     ambiguous("1914 — 1918 или 1920", &["1914/1918", "1920"]);
-    ambiguous("июнь или июль 1940", &["1940-06", "1940-07"]);
-    ambiguous("начало XIX века или 1850", &["1801/1830", "1850"]);
+    ok("июнь или июль 1940", "[1940-06,1940-07]", 2);
+    ok("начало XIX века или 1850", "[1800..1829,1850]", 2);
 }
 
 #[test]

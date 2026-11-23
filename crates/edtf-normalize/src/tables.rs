@@ -34,6 +34,24 @@ pub(crate) enum Span {
     SecondHalf,
 }
 
+/// What a before/after phrase means (N8). Each row of a language's
+/// `open_phrases` carries one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Open {
+    /// "before", "earlier than", "до": strictly before, `[..pred(lo)]`.
+    Before,
+    /// "no later than", "by", "не позднее": on or before, `[..hi]`.
+    OnOrBefore,
+    /// "until": a period ending, `../X`.
+    Until,
+    /// "after", "later than", "после": strictly after, `[succ(hi)..]`.
+    After,
+    /// "no earlier than", "не ранее": on or after, `[lo..]`.
+    OnOrAfter,
+    /// "since", "начиная с", "с": a period starting, `X/..`.
+    Since,
+}
+
 /// One language's complete table set.
 pub(crate) struct Lang {
     /// Month names and abbreviations (all grammatical forms), → month 1–12.
@@ -68,10 +86,8 @@ pub(crate) struct Lang {
     pub decade_suffixes: &'static [&'static str],
     /// Part-of-century modifier phrases ("early", "первая половина").
     pub modifiers: &'static [(&'static [&'static str], Span)],
-    /// Phrases meaning "before X", longest first (N8).
-    pub before_phrases: &'static [&'static [&'static str]],
-    /// Phrases meaning "after X", longest first (N8).
-    pub after_phrases: &'static [&'static [&'static str]],
+    /// Before/after phrases and what each means, longest phrase first (N8).
+    pub open_phrases: &'static [(&'static [&'static str], Open)],
     /// Words splitting "X or Y" alternatives (N14).
     pub or_words: &'static [&'static str],
     /// Range phrase pairs: optional leading marker + separator word
@@ -199,18 +215,16 @@ static EN: Lang = Lang {
         (&["mid"], Span::Mid),
         (&["late"], Span::Late),
     ],
-    before_phrases: &[
-        &["no", "later", "than"],
-        &["earlier", "than"],
-        &["before"],
-        &["until"],
-        &["by"],
-    ],
-    after_phrases: &[
-        &["no", "earlier", "than"],
-        &["later", "than"],
-        &["after"],
-        &["since"],
+    open_phrases: &[
+        (&["no", "later", "than"], Open::OnOrBefore),
+        (&["no", "earlier", "than"], Open::OnOrAfter),
+        (&["earlier", "than"], Open::Before),
+        (&["later", "than"], Open::After),
+        (&["before"], Open::Before),
+        (&["after"], Open::After),
+        (&["until"], Open::Until),
+        (&["since"], Open::Since),
+        (&["by"], Open::OnOrBefore),
     ],
     or_words: &["or"],
     range_pairs: &[
@@ -464,22 +478,31 @@ static RU: Lang = Lang {
         (&["\u{43a}\u{43e}\u{43d}\u{446}\u{430}"], Span::Late),
         (&["\u{43a}\u{43e}\u{43d}"], Span::Late),
     ],
-    before_phrases: &[
-        &[
-            "\u{43d}\u{435}",
-            "\u{43f}\u{43e}\u{437}\u{434}\u{43d}\u{435}\u{435}",
-        ],
-        &["\u{440}\u{430}\u{43d}\u{435}\u{435}"],
-        &["\u{434}\u{43e}"],
-    ],
-    after_phrases: &[
-        &["\u{43d}\u{435}", "\u{440}\u{430}\u{43d}\u{435}\u{435}"],
-        &[
-            "\u{43d}\u{430}\u{447}\u{438}\u{43d}\u{430}\u{44f}",
-            "\u{441}",
-        ],
-        &["\u{43f}\u{43e}\u{441}\u{43b}\u{435}"],
-        &["\u{441}"],
+    // Standing alone, "до" is exclusive ("по" is the inclusive end); inside
+    // a range ("с … до …", "от … до …") it stays a range word.
+    open_phrases: &[
+        (
+            &[
+                "\u{43d}\u{435}",
+                "\u{43f}\u{43e}\u{437}\u{434}\u{43d}\u{435}\u{435}",
+            ],
+            Open::OnOrBefore,
+        ),
+        (
+            &["\u{43d}\u{435}", "\u{440}\u{430}\u{43d}\u{435}\u{435}"],
+            Open::OnOrAfter,
+        ),
+        (
+            &[
+                "\u{43d}\u{430}\u{447}\u{438}\u{43d}\u{430}\u{44f}",
+                "\u{441}",
+            ],
+            Open::Since,
+        ),
+        (&["\u{440}\u{430}\u{43d}\u{435}\u{435}"], Open::Before),
+        (&["\u{434}\u{43e}"], Open::Before),
+        (&["\u{43f}\u{43e}\u{441}\u{43b}\u{435}"], Open::After),
+        (&["\u{441}"], Open::Since),
     ],
     or_words: &["\u{438}\u{43b}\u{438}"],
     range_pairs: &[

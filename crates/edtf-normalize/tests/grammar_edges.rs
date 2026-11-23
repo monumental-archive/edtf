@@ -198,29 +198,41 @@ fn season_range_collisions_cover_every_season_name() {
 
 #[test]
 fn open_range_over_a_collision_reports_both_readings() {
-    // "before 1914-21": before spring 1914, or before the span 1914-1921,
-    // which is before its start (N8, N13).
-    ambiguous("before 1914-21", &["../1914-21", "../1914"]);
+    // "1914-21" is spring 1914 or the span 1914-1921 (N13). Strictly
+    // before a season has no form, so "before" refuses the input (N14);
+    // on or before reads both.
+    no_match_because(
+        "before 1914-21",
+        Options::default(),
+        NoMatchReason::OutOfGrammar,
+    );
+    ambiguous("no later than 1914-21", &["[..1914-21]", "[..1921]"]);
 }
 
 #[test]
 fn open_ranges_take_a_span_by_its_near_edge() {
     // Before a span is before its start; after it is after its end (N8).
-    ok("before 1914-1918", "../1914");
-    ok("after 1914-1918", "1918/..");
-    ok("after 1914-18", "1918/..");
-    ok("before june-july 1940", "../1940-06");
-    ok("after 2nd century bc", "-0100/..");
-    ok("before early 19th century", "../1801");
+    ok("before 1914-1918", "[..1913]");
+    ok("after 1914-1918", "[1919..]");
+    ok("after 1914-18", "[1919..]");
+    ok("until 1914-1918", "../1918");
+    ok("since 1914-1918", "1914/..");
+    ok("before june-july 1940", "[..1940-05]");
+    ok("after 2nd century bc", "[-0099..]");
+    ok("before early 19th century", "[..1799]");
     assert!(!notes_of("before early 19th century").contains(&Note::ModifierDropped));
-    ok("after late 19th century", "1900/..");
-    ok("before circa 1914-1918", "../1914~");
-    // Both of N17's readings start in the same winter: one reading.
-    ok("before winter 1941-42", "../1941-24");
+    ok("after late 19th century", "[1900..]");
+    ok("before circa 1914-1918", "[..1913~]");
+    ok("circa before 1917", "[..1916~]");
+    // N17's one-winter reading has no predecessor (4.8.1), so strictly
+    // before refuses the input (N14).
+    no_match("before winter 1941-42");
     for input in ["before after 1900", "before before 1900", "after 1918-1914"] {
         no_match_because(input, Options::default(), NoMatchReason::OutOfGrammar);
     }
-    ambiguous("before 1900s", &["../190X", "../19XX"]);
+    // Both readings of "1900s" start in 1900: one answer.
+    ok("before 1900s", "[..1899]");
+    ambiguous("after 1900s", &["[1910..]", "[2000..]"]);
 }
 
 #[test]
@@ -236,19 +248,27 @@ fn edtf_letters_read_in_either_case() {
     ok("198X", "198X");
     assert_eq!(notes_of("198X"), [Note::AlreadyValidEdtf]);
     // The case note is there exactly when the fold changed the text.
-    ok("before 198x", "../198X");
+    ok("before 198x", "[..1979]");
     assert_eq!(
         notes_of("before 198x"),
-        [Note::EdtfCaseNormalized, Note::OpenInterval]
+        [Note::EdtfCaseNormalized, Note::BeforeAfter]
     );
-    ok("before 198X", "../198X");
-    assert_eq!(notes_of("before 198X"), [Note::OpenInterval]);
-    ok("before y17e7", "../Y17E7");
-    ok("before 1985-xx", "../1985-XX");
-    ok("before -0500", "../-0500");
-    ambiguous("198X or 1990", &["198X", "1990"]);
-    ambiguous("1985~ or 1990", &["1985~", "1990"]);
-    ambiguous("2004-06~-11 or 2005", &["2004-06~-11", "2005"]);
+    ok("before 198X", "[..1979]");
+    assert_eq!(notes_of("before 198X"), [Note::BeforeAfter]);
+    ok("until y17e7", "../Y17E7");
+    ok("before 1985-xx", "[..1984-12]");
+    ok("before -0500", "[..-0501]");
+    // An unmasked date is its own unit, in its own year form; a step from
+    // a Y-year is a Y-year (N8).
+    ok("no later than y17e7", "[..Y17E7]");
+    ok("no earlier than y17e7", "[Y17E7..]");
+    ok("before y17e7", "[..Y169999999]");
+    ok("after y17e7", "[Y170000001..]");
+    ok("before circa y17e7", "[..Y169999999~]");
+    ok("after y-17e7", "[Y-169999999..]");
+    ok("198X or 1990", "[198X,1990]");
+    ok("1985~ or 1990", "[1985~,1990]");
+    ok("2004-06~-11 or 2005", "[2004-06~-11,2005]");
     ok("198x to 1995", "198X/1995");
     // No EDTF form says "before" a time of day.
     no_match_because(
@@ -270,15 +290,21 @@ fn edtf_letters_read_in_either_case() {
 #[test]
 fn sub_year_codes_read_inside_a_phrase() {
     // A sub-year code with no elided reading is simply that date (N13).
-    ok("before 1985-21", "../1985-21");
-    ok("after 1985-24", "1985-24/..");
-    ambiguous("1985-21 or 1990", &["1985-21", "1990"]);
+    // A season has no predecessor or successor (4.8.1), so strictly before
+    // or after one is refused; the other rows use the season itself (N8).
+    ok("no later than 1985-21", "[..1985-21]");
+    ok("since 1985-24", "1985-24/..");
+    ok("1985-21 or 1990", "[1985-21,1990]");
     ok("1985-21 to 1990", "1985-21/1990");
     ok("1985-21 - 1990-22", "1985-21/1990-22");
-    ambiguous("before 1914-21", &["../1914-21", "../1914"]);
-    // A colliding token is refused as an alternative or a range endpoint.
+    // A colliding token gives one answer per reading as an alternative: a
+    // set beside the season, the alternatives beside the span (N14).
+    ambiguous("1914-21 or 1930", &["[1914-21,1930]", "1914/1921", "1930"]);
+    // It is refused as a range endpoint.
     for input in [
-        "1914-21 or 1930",
+        "before 1985-21",
+        "after 1985-24",
+        "before 1914-21",
         "1915-21 to 1990",
         "1900 to 1915-21",
         "before 1985-42",
@@ -297,9 +323,9 @@ fn or_needs_an_expression_on_both_sides() {
 }
 
 #[test]
-fn or_refuses_nested_ambiguity() {
-    // "1900s" is itself two readings: a 4-way product would be a guess (N14).
-    no_match("1863 or 1900s");
+fn or_reports_each_reading_of_an_alternative() {
+    // "1900s" is itself two readings: one set per combination (N14).
+    ambiguous("1863 or 1900s", &["[1863,190X]", "[1863,19XX]"]);
 }
 
 // ---------------------------------------------------------------------------
@@ -634,11 +660,13 @@ fn or_sides_are_whole_readings() {
     ambiguous("1914-1914 or 1920", &["1914/1914", "1920"]);
     ambiguous("1914 - 1918 or 1920", &["1914/1918", "1920"]);
     ambiguous("from 1914 to 1918 or 1920", &["1914/1918", "1920"]);
-    ambiguous("before 1863 or 1864", &["../1863", "1864"]);
-    ambiguous("early 19th century or 1850", &["1801/1830", "1850"]);
-    ambiguous("1863 or 1864 or 1865", &["1863", "1864", "1865"]);
+    ok("before 1863 or 1864", "[..1862,1864]");
+    ok("early 19th century or 1850", "[1800..1829,1850]");
+    ok("1863 or 1864 or 1865", "[1863,1864,1865]");
     ambiguous("1914-1918 or 1920", &["1914/1918", "1920"]);
-    for input in ["1918-1914 or 1920", "1914-14 or 1920", "1914-21 or 1930"] {
+    // A qualified century part falls back to its mask inside the set (N1).
+    ok("1863 or circa early 19th century", "[1863,18XX~]");
+    for input in ["1918-1914 or 1920", "1914-14 or 1920"] {
         no_match_because(input, Options::default(), NoMatchReason::OutOfGrammar);
     }
 }
@@ -646,26 +674,21 @@ fn or_sides_are_whole_readings() {
 #[test]
 fn alternatives_share_a_stated_year() {
     // A stated year scopes the year-less alternatives (N16).
-    ambiguous("June or July 1940", &["1940-06", "1940-07"]);
-    ambiguous("June 1940 or July", &["1940-06", "1940-07"]);
-    ambiguous("12 June or 13 July 1940", &["1940-06-12", "1940-07-13"]);
-    match normalize("June or July 1940") {
-        Outcome::Ambiguous(a) => {
-            let inheriting = &a.interpretations.first().expect("two readings").notes;
-            assert!(inheriting.contains(&Note::EndpointYearDistributed));
-            assert!(!inheriting.contains(&Note::MissingYearMasked));
-        }
-        other => panic!("expected Ambiguous, got {other:?}"),
-    }
+    ok("June or July 1940", "[1940-06,1940-07]");
+    ok("June 1940 or July", "[1940-06,1940-07]");
+    ok("12 June or 13 July 1940", "[1940-06-12,1940-07-13]");
+    let inheriting = notes_of("June or July 1940");
+    assert!(inheriting.contains(&Note::EndpointYearDistributed));
+    assert!(!inheriting.contains(&Note::MissingYearMasked));
     // Agreeing stated years scope the year-less side together.
-    ambiguous(
+    ok(
         "June or July 1940 or August 1940",
-        &["1940-06", "1940-07", "1940-08"],
+        "[1940-06,1940-07,1940-08]",
     );
     for input in ["June or July 1940 or August 1941", "June or 1940s"] {
         no_match_because(input, Options::default(), NoMatchReason::OutOfGrammar);
     }
-    ambiguous("May or June", &["XXXX-05", "XXXX-06"]);
+    ok("May or June", "[XXXX-05,XXXX-06]");
     ambiguous("June or 1914-1918", &["XXXX-06", "1914/1918"]);
 }
 
@@ -697,7 +720,7 @@ fn trailing_qualifier_symbols_scope_the_whole_expression() {
     ok("1868-1871?", "1868?/1871?");
     ok("1868-1871~", "1868~/1871~");
     ok("1868-1871%", "1868%/1871%");
-    ambiguous("1914 or 1985~", &["1914~", "1985~"]);
+    ok("1914 or 1985~", "[1914~,1985~]");
     // Valid EDTF carries its own qualifiers and passes through untouched.
     ok("1984?/2004~", "1984?/2004~");
     assert_eq!(notes_of("1984?/2004~"), [Note::AlreadyValidEdtf]);
@@ -748,9 +771,11 @@ fn any_edtf_value_is_an_alternative_and_a_span_an_operand() {
     // An EDTF token holds any value: an alternative may be one (N18); a span
     // is an operand by its near edge (N8).
     ambiguous("1914 or 1985/1990", &["1914", "1985/1990"]);
-    ambiguous("1914 or [1667,1668]", &["1914", "[1667,1668]"]);
-    ok("before 1985/1990", "../1985");
-    ok("after 1985/1990", "1990/..");
+    ok("1914 or [1667,1668]", "[1914,1667,1668]");
+    ok("before 1985/1990", "[..1984]");
+    ok("after 1985/1990", "[1991..]");
+    // A one-element set is its element.
+    ok("before [1667]", "[..1666]");
     // A set, an open interval or a datetime is no before/after operand, and
     // an interval is no range end.
     for input in [

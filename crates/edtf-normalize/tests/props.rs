@@ -56,7 +56,7 @@
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 
-use edtf_core::Edtf;
+use edtf_core::{Edtf, Set, SetElement, SetKind};
 use edtf_normalize::{Language, Options, Outcome, normalize, normalize_with};
 use proptest::prelude::*;
 
@@ -148,24 +148,6 @@ proptest! {
     }
 
     #[test]
-    fn century_parts_partition_the_century(n in 2_u32..=20) {
-        // N1: early ∪ mid ∪ late covers the century exactly, as does
-        // first half ∪ second half.
-        let s = (n as i32 - 1) * 100 + 1;
-        let e = n as i32 * 100;
-        let early = format!("{s:04}/{:04}", s + 29);
-        let mid = format!("{:04}/{:04}", s + 30, s + 69);
-        let late = format!("{:04}/{e:04}", s + 70);
-        let first_half = format!("{s:04}/{:04}", s + 49);
-        let second_half = format!("{:04}/{e:04}", s + 50);
-        assert_normalized(&format!("early {n}th century"), &early, en());
-        assert_normalized(&format!("mid {n}th century"), &mid, en());
-        assert_normalized(&format!("late {n}th century"), &late, en());
-        assert_normalized(&format!("first half of the {n}th century"), &first_half, en());
-        assert_normalized(&format!("second half of the {n}th century"), &second_half, en());
-    }
-
-    #[test]
     fn month_year_forms(y in 1000_i32..=9999, m in 0_usize..12) {
         let expected = format!("{y:04}-{:02}", m + 1);
         assert_normalized(&format!("{} {y}", MONTHS_EN[m]), &expected, en());
@@ -205,11 +187,15 @@ proptest! {
     }
 
     #[test]
-    fn before_after_open_intervals(y in 1000_i32..=9999) {
-        assert_normalized(&format!("before {y}"), &format!("../{y:04}"), en());
-        assert_normalized(&format!("after {y}"), &format!("{y:04}/.."), en());
-        assert_normalized(&format!("до {y}"), &format!("../{y:04}"), ru());
-        assert_normalized(&format!("после {y}"), &format!("{y:04}/.."), ru());
+    fn before_after_exclude_the_year(y in 1000_i32..=9998) {
+        // N8: strictly before and after are one-of sets that exclude the
+        // year; "until" and "since" are periods that reach it.
+        assert_normalized(&format!("before {y}"), &format!("[..{:04}]", y - 1), en());
+        assert_normalized(&format!("after {y}"), &format!("[{:04}..]", y + 1), en());
+        assert_normalized(&format!("until {y}"), &format!("../{y:04}"), en());
+        assert_normalized(&format!("since {y}"), &format!("{y:04}/.."), en());
+        assert_normalized(&format!("до {y}"), &format!("[..{:04}]", y - 1), ru());
+        assert_normalized(&format!("после {y}"), &format!("[{:04}..]", y + 1), ru());
     }
 
     #[test]
@@ -229,6 +215,55 @@ proptest! {
                 }
             }
             Outcome::NoMatch { reason: _ } => {} // Feb 30 and friends fail closed
+        }
+    }
+}
+
+/// The years a one-of range `[a..b]` spans, or a panic naming the input.
+fn one_of_range(input: &str) -> (i64, i64) {
+    match normalize(input) {
+        Outcome::Normalized(n) => match n.value {
+            Edtf::Set(Set {
+                kind: SetKind::OneMember,
+                elements,
+            }) => match elements.as_slice() {
+                &[SetElement::Range(a, b)] => (
+                    a.year.value().expect("a plain year"),
+                    b.year.value().expect("a plain year"),
+                ),
+                other => panic!("expected one range for {input:?}, got {other:?}"),
+            },
+            other => panic!("expected a one-of set for {input:?}, got {other:?}"),
+        },
+        other => panic!("expected Normalized for {input:?}, got {other:?}"),
+    }
+}
+
+/// N1 over N2: every century's parts partition ISO's century.
+///
+/// For every century 2 to 20, early ∪ mid ∪ late and first half ∪ second
+/// half each cover (n-1)00 to (n-1)99 (ISO 8601-1 3.1.2.23), exactly and
+/// without overlap, as one-of ranges (ISO 8601-2 6.2, 6.3 c).
+#[test]
+fn century_parts_partition_the_century() {
+    for n in 2_i64..=20 {
+        let first = (n - 1) * 100;
+        let last = first + 99;
+        for parts in [
+            &["early", "mid", "late"][..],
+            &["first half of the", "second half of the"],
+        ] {
+            let mut next = first;
+            for part in parts {
+                let (a, b) = one_of_range(&format!("{part} {n}th century"));
+                assert_eq!(
+                    a, next,
+                    "{part} {n}th century starts where the last part ended"
+                );
+                assert!(b >= a, "{part} {n}th century");
+                next = b + 1;
+            }
+            assert_eq!(next - 1, last, "the {n}th century's parts end at {last}");
         }
     }
 }

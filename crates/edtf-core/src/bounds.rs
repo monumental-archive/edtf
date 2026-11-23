@@ -135,6 +135,73 @@ impl BoundDate {
             + y.div_euclid(400)
             - 32045
     }
+
+    /// The proleptic-Gregorian day after this one, or `None` past the last
+    /// day of year `i64::MAX`.
+    ///
+    /// The step is meaningful for a real calendar day, which is every
+    /// `BoundDate` that [`Edtf::bounds`] produces. A parsed year is at most
+    /// 18 digits (decision D30), so only a hand-built day overflows.
+    ///
+    /// ```
+    /// use edtf_core::BoundDate;
+    ///
+    /// let leap = BoundDate { year: 2000, month: 2, day: 28 };
+    /// assert_eq!(leap.next_day(), Some(BoundDate { year: 2000, month: 2, day: 29 }));
+    /// ```
+    #[must_use]
+    pub fn next_day(self) -> Option<Self> {
+        if self.day < last_day(self.month, is_leap(self.year)) {
+            Some(Self {
+                day: self.day + 1,
+                ..self
+            })
+        } else if self.month < 12 {
+            Some(Self {
+                year: self.year,
+                month: self.month + 1,
+                day: 1,
+            })
+        } else {
+            Some(Self {
+                year: self.year.checked_add(1)?,
+                month: 1,
+                day: 1,
+            })
+        }
+    }
+
+    /// The proleptic-Gregorian day before this one, or `None` before the
+    /// first day of year `i64::MIN`. The mirror of [`BoundDate::next_day`].
+    ///
+    /// ```
+    /// use edtf_core::BoundDate;
+    ///
+    /// let march = BoundDate { year: 1900, month: 3, day: 1 };
+    /// assert_eq!(march.previous_day(), Some(BoundDate { year: 1900, month: 2, day: 28 }));
+    /// ```
+    #[must_use]
+    pub fn previous_day(self) -> Option<Self> {
+        if self.day > 1 {
+            Some(Self {
+                day: self.day - 1,
+                ..self
+            })
+        } else if self.month > 1 {
+            let month = self.month - 1;
+            Some(Self {
+                year: self.year,
+                month,
+                day: last_day(month, is_leap(self.year)),
+            })
+        } else {
+            Some(Self {
+                year: self.year.checked_sub(1)?,
+                month: 12,
+                day: 31,
+            })
+        }
+    }
 }
 
 impl core::fmt::Display for BoundDate {
@@ -740,6 +807,38 @@ mod tests {
             day: None,
         };
         let _ = extremum(&d, true);
+    }
+
+    fn bd(year: i64, month: u8, day: u8) -> BoundDate {
+        BoundDate { year, month, day }
+    }
+
+    /// A month end, a year end, 29 February in a leap year and its absence
+    /// in 1900: each step lands on the true calendar neighbour, and each
+    /// step undoes the other.
+    #[test]
+    fn next_day_and_previous_day_step_the_calendar() {
+        let pairs = [
+            (bd(1985, 4, 12), bd(1985, 4, 13)),
+            (bd(1985, 4, 30), bd(1985, 5, 1)),
+            (bd(1985, 12, 31), bd(1986, 1, 1)),
+            (bd(2000, 2, 28), bd(2000, 2, 29)),
+            (bd(2000, 2, 29), bd(2000, 3, 1)),
+            (bd(1900, 2, 28), bd(1900, 3, 1)),
+            (bd(0, 1, 1), bd(0, 1, 2)),
+            (bd(-1, 12, 31), bd(0, 1, 1)),
+        ];
+        for (day, next) in pairs {
+            assert_eq!(day.next_day(), Some(next), "{day}");
+            assert_eq!(next.previous_day(), Some(day), "{next}");
+            assert_eq!(day.next_day().and_then(BoundDate::previous_day), Some(day));
+            assert_eq!(
+                next.previous_day().and_then(BoundDate::next_day),
+                Some(next)
+            );
+        }
+        assert_eq!(bd(i64::MAX, 12, 31).next_day(), None);
+        assert_eq!(bd(i64::MIN, 1, 1).previous_day(), None);
     }
 
     #[test]

@@ -16,7 +16,7 @@ The return type is honest — `Normalized { edtf, value, notes }`,
 use edtf_normalize::{normalize, Outcome};
 
 let Outcome::Normalized(n) = normalize("early 19th century") else { panic!() };
-assert_eq!(n.edtf, "1801/1830");
+assert_eq!(n.edtf, "[1800..1829]");
 
 // "12/04/1985" is DD/MM or MM/DD — the form gets both readings, not a guess.
 assert!(matches!(normalize("12/04/1985"), Outcome::Ambiguous(_)));

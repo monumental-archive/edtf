@@ -94,17 +94,17 @@ pub struct Options {
 pub enum Note {
     /// The input was already valid EDTF; only canonicalized.
     AlreadyValidEdtf,
-    /// early/mid/late or half-of-century mapped to a decade-rounded interval
-    /// (N1).
-    CenturyPartInterval,
+    /// early/mid/late or half-of-century mapped to a one-of set over a
+    /// decade-rounded range of years, `[1800..1829]` (N1).
+    CenturyPart,
     /// An early/mid/late modifier was dropped as false precision and recorded
     /// (N1).
     ModifierDropped,
-    /// "19th century" → `18XX`: centuries run 1801–1900 (N2).
+    /// "19th century" → `18XX`: centuries run 1800–1899 (N2).
     CenturyMask,
     /// BC centuries have no digit mask (negative years cannot carry `X`);
-    /// emitted as exact intervals like `-0199/-0100` (N2).
-    BcCenturyInterval,
+    /// emitted as a one-of set over their years, `[-0199..-0100]` (N2).
+    BcCentury,
     /// BC year converted to astronomical numbering: year 0 exists, so
     /// 500 BC → `-0499` (N3).
     AstronomicalYear,
@@ -127,14 +127,16 @@ pub enum Note {
     DefaultCenturyApplied,
     /// Season name mapped to an ISO 8601-2 sub-year grouping code (N7).
     SeasonCode,
-    /// before/after rendered as an open interval `../X` or `X/..` (N8).
-    OpenInterval,
+    /// before/after rendered as a one-of set, `[..1916]` or `[1918..]`, or
+    /// "until"/"since" as an open interval, `../X` or `X/..` (N8).
+    BeforeAfter,
     /// A date with no year: the year is masked as `XXXX` (N9).
     MissingYearMasked,
     /// A whole-expression qualifier was distributed over interval endpoints
     /// (N10).
     QualifierDistributed,
-    /// "X or Y": each alternative reported instead of picking one (N14).
+    /// "X or Y": one one-of set `[X,Y]`, or, when an alternative is a
+    /// period, each alternative reported instead of picking one (N14).
     OrAlternatives,
     /// `NNNN-NN` collides between an EDTF sub-year code and an elided year
     /// range; both readings reported (N13).
@@ -162,8 +164,8 @@ impl Note {
     pub const fn decision(self) -> Option<&'static str> {
         match self {
             Self::AlreadyValidEdtf => None,
-            Self::CenturyPartInterval | Self::ModifierDropped => Some("N1"),
-            Self::CenturyMask | Self::BcCenturyInterval => Some("N2"),
+            Self::CenturyPart | Self::ModifierDropped => Some("N1"),
+            Self::CenturyMask | Self::BcCentury => Some("N2"),
             Self::AstronomicalYear => Some("N3"),
             Self::ElidedEndYear => Some("N4"),
             Self::NumericUnambiguous
@@ -175,7 +177,7 @@ impl Note {
                 Some("N6")
             }
             Self::SeasonCode => Some("N7"),
-            Self::OpenInterval => Some("N8"),
+            Self::BeforeAfter => Some("N8"),
             Self::MissingYearMasked => Some("N9"),
             Self::QualifierDistributed => Some("N10"),
             Self::SeasonRangeCollision => Some("N13"),
@@ -192,15 +194,13 @@ impl Note {
     pub const fn message(self) -> &'static str {
         match self {
             Self::AlreadyValidEdtf => "input was already valid EDTF; canonicalized",
-            Self::CenturyPartInterval => {
-                "part-of-century phrase mapped to a decade-rounded year interval"
-            }
+            Self::CenturyPart => "part-of-century phrase mapped to a set of decade-rounded years",
             Self::ModifierDropped => {
                 "early/mid/late modifier dropped (sub-decade precision would be false)"
             }
-            Self::CenturyMask => "Nth century runs (N-1)01 to N00, so it masks as (N-1)XX",
-            Self::BcCenturyInterval => {
-                "BC centuries cannot be digit-masked; emitted as an exact year interval"
+            Self::CenturyMask => "Nth century runs (N-1)00 to (N-1)99, so it masks as (N-1)XX",
+            Self::BcCentury => {
+                "BC centuries cannot be digit-masked; emitted as a set of their years"
             }
             Self::AstronomicalYear => "BC year converted to astronomical numbering (year 0 exists)",
             Self::ElidedEndYear => "elided end year inherits the start year's century",
@@ -214,12 +214,14 @@ impl Note {
             Self::DecadeAmbiguity => "decade form has more than one plausible reading",
             Self::DefaultCenturyApplied => "bare decade resolved by the configured century",
             Self::SeasonCode => "season mapped to ISO 8601-2 sub-year grouping code",
-            Self::OpenInterval => "before/after expressed as an open interval",
+            Self::BeforeAfter => "before/after expressed as a set; until/since as an open interval",
             Self::MissingYearMasked => "no year given; year masked as XXXX",
             Self::QualifierDistributed => {
                 "whole-expression qualifier applied to every interval endpoint"
             }
-            Self::OrAlternatives => "alternatives reported instead of picking one",
+            Self::OrAlternatives => {
+                "alternatives expressed as a set, or reported instead of picking one"
+            }
             Self::SeasonRangeCollision => {
                 "NNNN-NN is both an EDTF sub-year code and a plausible year range"
             }
