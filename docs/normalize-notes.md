@@ -108,8 +108,13 @@ against the N-number.
   ambiguous and reported as such: "**1900s**" is the 1900–1909 decade
   (`190X`) *or* the century (`19XX`); a **bare decade** ("the 80s", "80-е")
   could sit in any century — we offer the 1800s and 1900s readings, and
-  `Options::default_century` (e.g. `Some(1900)`, domain `0..=9999`) resolves
-  it for forms whose material has a known era. A decade tied to an explicit
+  `Options::default_century` resolves it for forms whose material has a
+  known era. It holds a `Century` named by its first year: only a multiple
+  of 100 from 0 to 9900 constructs (`Century::new(1900)` is the 1900s), so
+  `1950` is refused rather than read as `1900`, and the wasm
+  `defaultCentury` option reports such a value as an option error. The
+  two-digit ISO 8601-1 century (`19` for the 1900s) is rejected: it reads
+  as "the 19th century", which is the 1800s. A decade tied to an explicit
   century is not ambiguous at all: "60-е годы XIX века" → `186X`
   (`DecadeOfCentury`), the idiom behind «шестидесятники». python-edtf is
   internally inconsistent here ("1800s" → `18XX` but "c1900s" → `190X~`) —
