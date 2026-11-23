@@ -29,7 +29,7 @@ that is valid in your application is valid in your database — always:
 
 | Crate | What it is |
 | --- | --- |
-| **`edtf-core`** | The implementation. `#![no_std]`, zero runtime dependencies. Parsing, validation, level classification, calendar bounds, three-valued temporal relations, value enumeration, canonical formatting, positioned errors. Optional `serde` feature. |
+| **`edtf-core`** | The implementation. `#![no_std]`, zero runtime dependencies. Parsing, validation, level classification, calendar bounds, three-valued temporal relations, value enumeration, canonical formatting, positioned errors. Validating constructors: a value that exists is valid. Optional `serde` feature (a value is its canonical string). |
 | **`edtf-normalize`** | Deterministic prose-date → EDTF normalizer at the human input boundary: `"1980s"` → `198X`, `"circa 1920"` → `1920~`, `"около 1920 г."` → `1920~`. Honest ambiguity (`"12/04/1985"` returns both readings, never a guess), every output valid canonical EDTF by construction. English and Russian pattern tables; `no_std` + `alloc`, no third-party dependencies (only `edtf-core`). |
 | **`edtf-calendars`** | Proleptic Julian (Old Style) → Gregorian conversion at the ingest boundary: day precision converts exactly, year/month precision returns honest earliest/latest spans. `#![no_std]`, no third-party dependencies (only `edtf-core`). |
 | **`edtf-wasm`** | WebAssembly bindings for JavaScript: `isValid`, `level`, `canonical`, `parse` (JSON summary), `relation`, and `normalize` (prose → EDTF via `edtf-normalize`). |

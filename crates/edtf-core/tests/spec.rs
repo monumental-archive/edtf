@@ -26,7 +26,10 @@
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 
-use edtf_core::{Bound, Edtf, IntervalEndpoint, Precision, SetKind, is_valid, level};
+use edtf_core::{
+    Bound, Date, DateField, DateTime, Edtf, Interval, IntervalEndpoint, Precision, Qualifier, Set,
+    SetKind, SetRange, Time, TimeShift, ValueError, Year, YearKind, is_valid, level,
+};
 
 fn assert_level(s: &str, want: u8) {
     assert_eq!(level(s), Some(want), "level of {s:?}");
@@ -187,11 +190,11 @@ fn model_accessors() {
         Edtf::Date(d) => d,
         other => panic!("expected date, got {other:?}"),
     };
-    assert!(d.year.qualifier.approximate);
-    assert!(d.month.unwrap().qualifier.approximate);
-    assert!(!d.day.unwrap().qualifier.is_qualified());
+    assert!(d.year().qualifier().approximate);
+    assert!(d.month().unwrap().qualifier().approximate);
+    assert!(!d.day().unwrap().qualifier().is_qualified());
     assert_eq!(d.precision(), Precision::Day);
-    assert_eq!(d.year.value(), Some(2004));
+    assert_eq!(d.year().value(), Some(2004));
 
     let season = match Edtf::parse("2001-21").unwrap() {
         Edtf::Date(d) => d,
@@ -203,14 +206,14 @@ fn model_accessors() {
         Edtf::Interval(iv) => iv,
         other => panic!("expected interval, got {other:?}"),
     };
-    assert!(matches!(iv.end, IntervalEndpoint::Open));
+    assert!(matches!(iv.end(), IntervalEndpoint::Open));
 
     let set = match Edtf::parse("[1667,1760-12]").unwrap() {
         Edtf::Set(s) => s,
         other => panic!("expected set, got {other:?}"),
     };
-    assert_eq!(set.kind, SetKind::OneMember);
-    assert_eq!(set.elements.len(), 2);
+    assert_eq!(set.kind(), SetKind::OneMember);
+    assert_eq!(set.elements().len(), 2);
 }
 
 #[test]
@@ -369,4 +372,286 @@ fn summary_spells_every_kind_precision_and_bound() {
     assert!(s.uncertain && !s.approximate && !s.unspecified);
     let s = Edtf::parse("156X~").unwrap().summary();
     assert!(!s.uncertain && s.approximate && s.unspecified);
+}
+
+/// Under the `serde` feature a value is its canonical EDTF text.
+///
+/// It serialises as the string and deserialises by parsing it, so JSON can
+/// only build what the parser accepts (decision D31). The object is the
+/// field-by-field shape the model once had, holding month 16: it is
+/// refused, not deserialised into a value whose bounds would panic.
+#[cfg(feature = "serde")]
+#[test]
+fn serde_is_the_canonical_string() {
+    let value: Edtf = serde_json::from_str("\"2004-06-11%\"").unwrap();
+    assert_eq!(value, Edtf::parse("2004-06-11%").unwrap());
+    assert_eq!(serde_json::to_string(&value).unwrap(), "\"2004-06-11%\"");
+    let messy: Edtf = serde_json::from_str("\"?2004-?06-?11\"").unwrap();
+    assert_eq!(serde_json::to_string(&messy).unwrap(), "\"2004-06-11?\"");
+
+    let refused = serde_json::from_str::<Edtf>("\"2004-16-11%\"").unwrap_err();
+    assert!(
+        refused
+            .to_string()
+            .contains("month must be 01-12 or a sub-year code 21-41"),
+        "{refused}"
+    );
+    let object = r#"{"Date":{"year":{"kind":{"Standard":{"negative":false,"digits":[2,0,0,4]}},"significant_digits":null,"qualifier":{"uncertain":true,"approximate":true}},"month":{"digits":[1,6],"qualifier":{"uncertain":true,"approximate":true}},"day":{"digits":[1,1],"qualifier":{"uncertain":true,"approximate":true}}}}"#;
+    assert_eq!(serde_json::from_str::<Edtf>(object).ok(), None);
+}
+
+/// Assert each result is refused with exactly its rule's message.
+fn assert_rules(cases: Vec<(Result<(), ValueError>, &str)>) {
+    for (result, message) in cases {
+        assert_eq!(
+            result.map_err(ValueError::message),
+            Err(message),
+            "expected the rule {message:?}"
+        );
+    }
+}
+
+fn year(value: i64) -> Year {
+    Year::from_value(value).unwrap()
+}
+
+fn field(value: u8) -> DateField {
+    DateField::from_value(value).unwrap()
+}
+
+fn date(y: i64, m: Option<u8>, d: Option<u8>) -> Date {
+    Date::new(year(y), m.map(field), d.map(field)).unwrap()
+}
+
+/// A four-digit year of these digits.
+///
+/// # Errors
+///
+/// The rule the digits break, which is what the tests below ask for.
+fn standard(negative: bool, digits: [Option<u8>; 4]) -> Result<Year, ValueError> {
+    Year::new(YearKind::Standard { negative, digits })
+}
+
+/// Every rule a year's constructors check, named in the error: the same
+/// text the parser reports for input that breaks the same rule (D31).
+#[test]
+fn year_constructors_name_the_rule_their_arguments_break() {
+    let exponential = |significand, exponent| {
+        Year::new(YearKind::Exponential {
+            significand,
+            exponent,
+        })
+        .map(drop)
+    };
+    let masked = standard(false, [Some(1), Some(9), None, None]);
+    assert_rules(vec![
+        (
+            standard(false, [Some(10), Some(0), Some(0), Some(0)]).map(drop),
+            "year digits must be 0-9",
+        ),
+        (
+            standard(true, [Some(1), None, Some(0), Some(0)]).map(drop),
+            "negative years cannot contain unspecified digits",
+        ),
+        (
+            standard(true, [Some(0); 4]).map(drop),
+            "-0000 is not a valid year",
+        ),
+        (
+            Year::new(YearKind::Big { value: i64::MAX }).map(drop),
+            "year out of supported range",
+        ),
+        (
+            Year::new(YearKind::Big { value: -9999 }).map(drop),
+            "Y-prefixed years require |year| > 9999",
+        ),
+        (
+            exponential(0, 5),
+            "exponential year significand cannot be zero",
+        ),
+        (exponential(2, 64), "year out of supported range"),
+        (exponential(1, 18), "year out of supported range"),
+        (exponential(9, 3), "Y-prefixed years require |year| > 9999"),
+        (
+            Year::from_value(i64::MIN).map(drop),
+            "year out of supported range",
+        ),
+        (
+            masked.and_then(|y| y.with_significant_digits(2)).map(drop),
+            "significant digits cannot combine with unspecified digits",
+        ),
+        (
+            year(1985).with_significant_digits(5).map(drop),
+            "significant digits must be 1-4 for a four-digit year",
+        ),
+        (
+            year(1985).with_significant_digits(0).map(drop),
+            "significant digits must be 1-4 for a four-digit year",
+        ),
+        (
+            year(12_345).with_significant_digits(6).map(drop),
+            "significant digits exceed the year's digit count",
+        ),
+    ]);
+    assert_eq!(exponential(17, 7), Ok(()));
+}
+
+/// Every rule a date's constructors check, named in the error (D31).
+#[test]
+fn date_constructors_name_the_rule_their_arguments_break() {
+    let sig = year(1985).with_significant_digits(2).unwrap();
+    let masked_month = DateField::new([Some(2), None]).unwrap();
+    assert_rules(vec![
+        (
+            DateField::new([Some(0), Some(10)]).map(drop),
+            "date field digits must be 0-9",
+        ),
+        (
+            DateField::from_value(100).map(drop),
+            "date field digits must be 0-9",
+        ),
+        (
+            Date::new(year(20_000), Some(field(1)), None).map(drop),
+            "Y-prefixed years are year-precision only",
+        ),
+        (
+            Date::new(sig, Some(field(1)), None).map(drop),
+            "significant-digit years are year-precision only",
+        ),
+        (
+            Date::new(year(1985), None, Some(field(1))).map(drop),
+            "a day requires a month",
+        ),
+        (
+            Date::new(year(1985), Some(field(13)), None).map(drop),
+            "month must be 01-12 or a sub-year code 21-41",
+        ),
+        (
+            Date::new(year(1985), Some(field(0)), None).map(drop),
+            "month must be 01-12 or a sub-year code 21-41",
+        ),
+        (
+            Date::new(year(1985), Some(masked_month), None).map(drop),
+            "no calendar month matches the unspecified digits",
+        ),
+        (
+            Date::new(year(1985), Some(field(21)), Some(field(1))).map(drop),
+            "sub-year groupings cannot carry a day",
+        ),
+        (
+            Date::new(year(1985), Some(field(2)), Some(field(29))).map(drop),
+            "day is out of range for the month",
+        ),
+        (
+            Date::new(year(1985), Some(field(4)), Some(field(0))).map(drop),
+            "day is out of range for the month",
+        ),
+    ]);
+    // The rules refuse only what they name: a leap day in a leap year builds.
+    assert_eq!(
+        Date::new(year(2000), Some(field(2)), Some(field(29))).map(drop),
+        Ok(())
+    );
+}
+
+/// Every rule a time's and a date-time's constructors check (D31).
+#[test]
+fn time_constructors_name_the_rule_their_arguments_break() {
+    let midnight = Time::new(0, 0, 0, None).unwrap();
+    let datetime_date = "a date-time's date must be a complete, unqualified YYYY-MM-DD date";
+    assert_rules(vec![
+        (
+            Time::new(24, 0, 0, None).map(drop),
+            "hour must be 00-23 (24 is not allowed)",
+        ),
+        (Time::new(0, 60, 0, None).map(drop), "minute must be 00-59"),
+        (Time::new(0, 0, 61, None).map(drop), "second must be 00-60"),
+        (
+            TimeShift::offset(-841, false).map(drop),
+            "time shift exceeds \u{b1}14:00",
+        ),
+        (
+            TimeShift::offset(90, true).map(drop),
+            "an hours-only time shift has no minutes",
+        ),
+        (
+            DateTime::new(date(1985, Some(4), None), midnight).map(drop),
+            datetime_date,
+        ),
+        (
+            DateTime::new(date(-1985, Some(4), Some(12)), midnight).map(drop),
+            datetime_date,
+        ),
+    ]);
+    assert_eq!(TimeShift::offset(-840, true).map(drop), Ok(()));
+}
+
+/// Every rule an interval's and a set's constructors check (D31).
+#[test]
+fn interval_and_set_constructors_name_the_rule_their_arguments_break() {
+    let y = |v| date(v, None, None);
+    let masked = Date::new(
+        standard(false, [Some(1), Some(9), Some(8), None]).unwrap(),
+        None,
+        None,
+    );
+    let uncertain = Qualifier {
+        uncertain: true,
+        approximate: false,
+    };
+    let sig = Date::new(year(1985).with_significant_digits(2).unwrap(), None, None);
+    assert_rules(vec![
+        (
+            Interval::new(IntervalEndpoint::OnOrAfter(y(1985)), IntervalEndpoint::Open).map(drop),
+            "'..'-suffixed date is only allowed as interval end",
+        ),
+        (
+            Interval::new(
+                IntervalEndpoint::Open,
+                IntervalEndpoint::OnOrBefore(y(1985)),
+            )
+            .map(drop),
+            "'..'-prefixed date is only allowed as interval start",
+        ),
+        (
+            Interval::new(IntervalEndpoint::Open, IntervalEndpoint::Unknown).map(drop),
+            "interval needs at least one dated endpoint",
+        ),
+        (
+            Interval::new(
+                IntervalEndpoint::Date(y(1986)),
+                IntervalEndpoint::Date(y(1985)),
+            )
+            .map(drop),
+            "interval end precedes interval start",
+        ),
+        (
+            Set::new(SetKind::OneMember, Vec::new()).map(drop),
+            "set must contain at least one element",
+        ),
+        (
+            masked.and_then(|a| SetRange::new(a, y(1990))).map(drop),
+            "set range endpoints cannot contain unspecified digits",
+        ),
+        (
+            SetRange::new(y(1985), y(1990).qualified(uncertain)).map(drop),
+            "set range endpoints cannot be qualified",
+        ),
+        (
+            SetRange::new(date(1985, Some(21), None), date(1990, Some(21), None)).map(drop),
+            "set range endpoints cannot be seasons",
+        ),
+        (
+            sig.and_then(|a| SetRange::new(a, y(1990))).map(drop),
+            "set range endpoints cannot carry significant digits",
+        ),
+        (
+            SetRange::new(y(1985), date(1990, Some(1), None)).map(drop),
+            "set range endpoints must share precision",
+        ),
+        (
+            SetRange::new(y(1990), y(1985)).map(drop),
+            "set range end precedes range start",
+        ),
+    ]);
 }

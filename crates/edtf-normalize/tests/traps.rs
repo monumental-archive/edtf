@@ -541,6 +541,36 @@ fn no_match_reasons_discriminate() {
     ));
 }
 
+/// N14: a date the calendar refuses is refused as impossible wherever it
+/// stands.
+///
+/// That holds as a range end on either side, and under before or after. Core
+/// refuses it at construction (D31), so the refusal reaches the outcome
+/// before any construct around the date is read.
+#[test]
+fn an_impossible_date_is_impossible_inside_any_construct() {
+    use edtf_normalize::NoMatchReason;
+    for input in [
+        "February 30 1985 to 1990",
+        "1990 to February 30 1985",
+        "before February 30 1985",
+        "after 30 February 1985",
+        "before February 30",
+        "until February 30 1985",
+        "29 February 1985 or 1986",
+    ] {
+        assert!(
+            matches!(
+                normalize(input),
+                Outcome::NoMatch {
+                    reason: NoMatchReason::ImpossibleDate
+                }
+            ),
+            "{input:?}"
+        );
+    }
+}
+
 #[test]
 fn notes_cite_decisions() {
     let Outcome::Normalized(n) = normalize("500 BC") else {

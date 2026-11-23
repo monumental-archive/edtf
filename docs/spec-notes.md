@@ -446,7 +446,8 @@ of this implementation. Each is enforced by tests in `crates/edtf-core/tests/`.
 - **D27 — set range endpoints must denote single concrete calendar
   values:** an `a..b` endpoint shall be unmasked, unqualified, non-season,
   without significant digits, and both endpoints shall share precision —
-  enforced at parse time (like D18), not enumeration time. Grounds:
+  enforced when the range is built (like D18; D31), not at enumeration
+  time. Grounds:
   6.3 c says both sides "should be of the same precision" (read strictly,
   as D1 reads 4.7.2's "should"); every 6.3/6.4/LoC example is a plain
   year/month/day date; a masked endpoint makes the range a relation
@@ -473,7 +474,7 @@ of this implementation. Each is enforced by tests in `crates/edtf-core/tests/`.
   distinct. `[…]` one-member sets enumerate identically to `{…}` — the
   members are the candidates; the set kind states which apply, not what
   they are.
-- **D30 — one supported year range, enforced at parsing:** a year has at
+- **D30 — one supported year range, enforced at construction:** a year has at
   most 18 digits, `|year| ≤ 999 999 999 999 999 999`, whichever way it is
   spelled. `Y…` computes the year's value once for both forms (written
   out, or `significand × 10^exponent`) and refuses anything past the line
@@ -489,18 +490,60 @@ of this implementation. Each is enforced by tests in `crates/edtf-core/tests/`.
   → 900000000000000000–999999999999999999), so every year that parses can
   be bounded, compared, ordered (D18) and enumerated, and its Julian Day
   Number fits `i128`; at `i64::MAX`, `Y9E18S1` would still sweep past it.
-  Consequence: a parsed value's bound is `Unknown` only on the side of an
+  Consequence: a value's bound is `Unknown` only on the side of an
   interval whose endpoint there is unknown; a date, datetime or set never
-  has an unknown bound (asserted by the fuzz targets). The fallbacks in
-  bounds, relations, D18 and enumeration stay, because the model's fields
-  are public and a hand-built `Year` can still hold any value; only such a
-  value reaches them. ISO 8601-2 sets no upper limit on a year; every
+  has an unknown bound (asserted by the fuzz targets). The line is the
+  `Year` constructor's as well as the parser's (D31), so no value holds a
+  year past it, and bounds, relations, D18 and enumeration keep no
+  fallback for one. ISO 8601-2 sets no upper limit on a year; every
   implementation has one, and this is where this one's single line is —
   10^18 years is about 10^8 times the age of the universe. Rejected: a
   `Bound` variant for "beyond computable" (keeps unorderable years, so D18
   and relations would need big-number comparison), arbitrary-precision
   years (`no_std`, zero dependencies, and a proleptic day at 10^30 years
   means nothing), and keeping the exponent cap as a second rule.
+- **D31 — validity is a property of the value:** a value that exists is
+  valid. Every model type with a rule keeps its state private and is
+  built only through a constructor that checks the rule and returns a
+  `ValueError` naming it; the parser reads text and calls the same
+  constructors, adding only the offset, so each rule's message is written
+  once. A type whose every field combination is valid (`Qualifier`,
+  `ParseError`, `Bounds`, the plain enums) keeps public fields, and
+  `YearKind` is a description `Year::new` checks, not a value. The rules
+  sit with the type that holds every field they read:
+  - a year: digits 0–9; a negative year is unmasked (D21) and not
+    `-0000`; a `Y` year lies beyond ±9999 (D1) and within D30's range,
+    with a non-zero significand; significant digits are 1–4 on a
+    four-digit year and at most the written digits on a `Y` year (D20),
+    and never on a masked one;
+  - a date: only a four-digit year without significant digits carries a
+    month; the month is 01–12 or a sub-year code 21–41, a masked month
+    matches a calendar month (D14); a day needs a month, never sits under
+    a sub-year code, and has at least one valid calendar completion
+    (D11);
+  - a time and its shift: hour 00–23, minute 00–59, second 00–60 (D3); a
+    shift within ±14:00, an hours-only shift a whole number of hours;
+  - a date-time: its date is a plain, complete, unqualified, non-negative
+    `YYYY-MM-DD` (A.4.3);
+  - an interval: `date..` only at the end and `..date` only at the start
+    (10.6), one end dated (D6), the end not before the start (D18);
+  - a set: at least one element; a set range: both ends obey D27, share
+    precision, and are in order (D18);
+  - a bound day (`BoundDate`): a real proleptic-Gregorian day, so its
+    field order and its Julian Day Number order agree.
+  Under the optional `serde` feature an `Edtf` serialises as its canonical
+  text and deserialises by parsing it — the string is the standard's own
+  interchange form, so stored data survives any refactor of the model —
+  and no other model type deserialises. `Bound::Unknown` means an unknown
+  interval end and nothing else. Rejected: validating on deserialise only
+  (leaves the Rust path as programmer error); total methods with a
+  fallback for each impossible case (an invalid value would answer
+  plausibly and wrongly, and every future method would have to remember);
+  field-by-field serde behind `try_from` mirror types (publishes the
+  internal structure as a wire format); a `deserialize` fuzz target (with
+  serde as the string it is the `parse` target again — the
+  `constructors_build_only_valid_values` property covers the
+  constructors).
 
 ## 10. Test-suite sources
 

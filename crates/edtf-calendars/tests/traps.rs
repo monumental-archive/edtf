@@ -25,8 +25,8 @@ const fn j(year: i64, month: u8, day: u8) -> JulianDate {
     JulianDate { year, month, day }
 }
 
-const fn g(year: i64, month: u8, day: u8) -> BoundDate {
-    BoundDate { year, month, day }
+fn g(year: i64, month: u8, day: u8) -> BoundDate {
+    BoundDate::new(year, month, day).unwrap_or_else(|e| panic!("{year}-{month}-{day}: {e}"))
 }
 
 /// The offset is not constant: 10 days at the 1582 reform, 11 from 1700,
@@ -44,17 +44,14 @@ fn offset_steps() {
 }
 
 /// Julian leap rule is every-4-years, no century exception: Julian
-/// 1900-02-29 exists and converts, while Gregorian 1900-02-29 stays
-/// invalid.
+/// 1900-02-29 exists and converts, while Gregorian 1900-02-29 is not a
+/// day at all: `BoundDate` refuses it before any conversion can be asked.
 #[test]
 fn julian_centuries_are_leap_years() {
     assert_eq!(julian_to_gregorian(j(1900, 2, 29)), Ok(g(1900, 3, 13)));
     assert_eq!(julian_to_gregorian(j(1700, 2, 29)), Ok(g(1700, 3, 11)));
     assert_eq!(julian_to_gregorian(j(2100, 2, 29)), Ok(g(2100, 3, 14)));
-    assert_eq!(
-        gregorian_to_julian(g(1900, 2, 29)),
-        Err(CalendarError::InvalidDate)
-    );
+    assert_eq!(BoundDate::new(1900, 2, 29).ok(), None);
     // 2000 is leap in both calendars.
     assert_eq!(julian_to_gregorian(j(2000, 2, 29)), Ok(g(2000, 3, 13)));
     assert_eq!(gregorian_to_julian(g(2000, 2, 29)), Ok(j(2000, 2, 16)));

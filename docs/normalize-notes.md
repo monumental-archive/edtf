@@ -16,11 +16,12 @@ against the N-number.
   one pattern. There is no substring extraction (N11) — pulling dates out of
   running prose is the job of the caller (a human, or an LLM triage step for
   bulk imports whose no-match rows escalate to a human).
-- Values are constructed through the `edtf-core` model and rendered by core's
-  canonical `Display`, then **re-parsed**. Core has no validating
-  constructors, so the re-parse is the calendar check (a constructed
-  February 31 fails closed) and the proof that every output is valid EDTF at
-  a known level.
+- Values are built through `edtf-core`'s validating constructors (D31) and
+  rendered by core's canonical `Display`. A constructor's refusal is the
+  calendar check: a February 31, a February 29 a stated year lacks, or a
+  span that ends before it starts becomes an impossible reading, and the
+  whole input fails closed (N14). A value core built is valid EDTF at a
+  known level, so nothing is re-parsed.
 - The return type is honest: `Normalized { edtf, value, notes }`,
   `Ambiguous { interpretations }`, or `NoMatch { reason }`. Nothing ever
   guesses silently; every non-obvious mapping carries a `Note` citing its

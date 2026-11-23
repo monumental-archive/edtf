@@ -26,25 +26,19 @@
     reason = "indexing a fixture the test itself constructed; an out-of-range index is a failing test, not a crash path"
 )]
 #![expect(
-    clippy::shadow_unrelated,
-    reason = "short-lived rebinding inside one assertion chain"
-)]
-#![expect(
     clippy::missing_panics_doc,
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 
-use edtf_core::{
-    Bound, BoundDate, Date, Edtf, Qualifier, Set, SetElement, SetKind, Year, YearKind,
-};
+use edtf_core::{Bound, BoundDate, Edtf, Year, YearKind};
 use serde_json::Value;
 
 fn bound_str(b: Bound) -> String {
     match b {
         Bound::Date(d) => {
             // Corpus format: big years unpadded, 4-digit years padded.
-            if d.year > 9999 {
-                format!("{}-{:02}-{:02}", d.year, d.month, d.day)
+            if d.year() > 9999 {
+                format!("{}-{:02}-{:02}", d.year(), d.month(), d.day())
             } else {
                 d.to_string()
             }
@@ -123,37 +117,13 @@ fn significant_digit_bounds() {
     assert_bounds("Y3388E2S3", "338000-01-01", "338999-12-31");
     assert_bounds("Y17E7", "170000000-01-01", "170000000-12-31");
     // Found by cargo-fuzz: 9e18 fits in i64 but the S1 sweep's upper end
-    // (9999999999999999999) does not — must degrade to unknown, not panic.
-    // Parsing now refuses the year (D30), so only a hand-built one gets here.
-    let b = Edtf::Date(exponential(9, 18, Some(1))).bounds();
-    assert_eq!(
-        (bound_str(b.earliest), bound_str(b.latest)),
-        ("unknown".into(), "unknown".into())
-    );
-    // At the D30 limit the widest sweep still fits.
+    // (9999999999999999999) does not. No such year exists (D30, D31); at
+    // the limit the widest sweep still fits.
     assert_bounds(
         "Y9E17S1",
         "900000000000000000-01-01",
         "999999999999999999-12-31",
     );
-}
-
-/// A hand-built exponential year: the parser refuses values past D30's
-/// 18-digit limit, but the model's fields are public, so the escapes for an
-/// uncomputable year are still reachable by construction.
-fn exponential(significand: i64, exponent: u32, significant_digits: Option<u32>) -> Date {
-    Date {
-        year: Year {
-            kind: YearKind::Exponential {
-                significand,
-                exponent,
-            },
-            significant_digits,
-            qualifier: Qualifier::default(),
-        },
-        month: None,
-        day: None,
-    }
 }
 
 #[test]
@@ -199,29 +169,6 @@ fn interval_ordering_enforced() {
 }
 
 #[test]
-fn unvaluable_set_elements_poison_set_bounds() {
-    // A hand-built 1E19 exceeds the computable year range (the parser
-    // refuses `Y1E19`, D30): its bounds are Unknown, and Unknown absorbs
-    // every neighbour in a set sweep — in either order.
-    let Edtf::Date(y1985) = Edtf::parse("1985").unwrap() else {
-        panic!("1985 parses as a date");
-    };
-    let huge = exponential(1, 19, None);
-    for (name, elements) in [
-        ("[1E19,1985]", [huge, y1985]),
-        ("[1985,1E19]", [y1985, huge]),
-    ] {
-        let set = Edtf::Set(Set {
-            kind: SetKind::OneMember,
-            elements: elements.into_iter().map(SetElement::Date).collect(),
-        });
-        let b = set.bounds();
-        assert_eq!(b.earliest, Bound::Unknown, "{name}");
-        assert_eq!(b.latest, Bound::Unknown, "{name}");
-    }
-}
-
-#[test]
 fn masked_leap_day_bounds_search_year_completions() {
     // XXXX-02-29 exists only in leap years: the extremum walk must find the
     // first and last leap completions (0000 and 9996).
@@ -229,25 +176,64 @@ fn masked_leap_day_bounds_search_year_completions() {
     let (Bound::Date(e), Bound::Date(l)) = (b.earliest, b.latest) else {
         panic!("expected date bounds");
     };
-    assert_eq!((e.year, e.month, e.day), (0, 2, 29));
-    assert_eq!((l.year, l.month, l.day), (9996, 2, 29));
+    assert_eq!((e.year(), e.month(), e.day()), (0, 2, 29));
+    assert_eq!((l.year(), l.month(), l.day()), (9996, 2, 29));
 }
 
 #[test]
-fn significant_digit_sweep_overflow_bounds_to_unknown() {
-    // A hand-built 9E18S1 sweeps 18 digits above a magnitude near i64::MAX:
-    // the top of the swept range does not exist, so the bounds are honestly
-    // Unknown. The parser refuses the string (D30).
+fn a_year_past_the_supported_range_does_not_exist() {
+    // 9E18 is past D30's 18-digit line, whichever way it is built: the
+    // parser refuses the string and the constructor the kind, so no value
+    // can reach bounds with a sweep that does not fit.
     assert_eq!(
         Edtf::parse("Y9E18S1").unwrap_err().message,
         "year out of supported range"
     );
-    let b = Edtf::Date(exponential(9, 18, Some(1))).bounds();
-    assert_eq!(b.earliest, Bound::Unknown);
-    assert_eq!(b.latest, Bound::Unknown);
-    // One significant digit more and the sweep fits again.
-    let b = Edtf::Date(exponential(9, 18, Some(2))).bounds();
-    assert!(matches!(b.earliest, Bound::Date(_)));
+    let past = Year::new(YearKind::Exponential {
+        significand: 9,
+        exponent: 18,
+    });
+    assert_eq!(past.unwrap_err().message(), "year out of supported range");
+}
+
+/// The bound-day constructor builds only real proleptic-Gregorian days, so
+/// the two orders a day has agree: by fields, and by Julian Day Number.
+#[test]
+fn bound_days_are_real_days_and_order_like_their_day_numbers() {
+    for (year, month, day) in [
+        (2000, 13, 1),
+        (2000, 0, 1),
+        (2000, 1, 0),
+        (2000, 2, 31),
+        (1900, 2, 29),
+    ] {
+        assert_eq!(
+            BoundDate::new(year, month, day).unwrap_err().message(),
+            "not a proleptic-Gregorian calendar day",
+            "{year}-{month}-{day}"
+        );
+    }
+    let days: Vec<BoundDate> = [
+        (-1, 12, 31),
+        (0, 2, 29),
+        (2000, 2, 28),
+        (2000, 2, 29),
+        (2000, 3, 1),
+        (2000, 12, 31),
+        (2001, 1, 1),
+    ]
+    .into_iter()
+    .map(|(y, m, d)| BoundDate::new(y, m, d).unwrap())
+    .collect();
+    for a in &days {
+        for b in &days {
+            assert_eq!(
+                a.cmp(b),
+                a.julian_day_number().cmp(&b.julian_day_number()),
+                "{a} vs {b}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -268,7 +254,7 @@ fn julian_day_numbers_match_known_days() {
         (-4713, 11, 23, -1),
         (5_874_897, 12, 31, 2_147_483_493),
     ] {
-        let date = BoundDate { year, month, day };
+        let date = BoundDate::new(year, month, day).unwrap();
         assert_eq!(date.julian_day_number(), jdn, "JDN of {date}");
     }
 }
@@ -277,11 +263,7 @@ fn julian_day_numbers_match_known_days() {
 fn bound_dates_print_every_year() {
     // i64::MIN has no negation: the negative branch prints the magnitude
     // as unsigned, so the most negative year prints with one minus sign.
-    let date = |year| BoundDate {
-        year,
-        month: 1,
-        day: 1,
-    };
+    let date = |year| BoundDate::new(year, 1, 1).unwrap();
     assert_eq!(date(i64::MIN).to_string(), "-9223372036854775808-01-01");
     assert_eq!(date(-5).to_string(), "-0005-01-01");
     assert_eq!(date(5).to_string(), "0005-01-01");

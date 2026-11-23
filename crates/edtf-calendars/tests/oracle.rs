@@ -142,20 +142,16 @@ fn attested_pairs_convert_both_ways() {
             month: jm,
             day: jd,
         };
-        let gregorian = BoundDate {
-            year: gy,
-            month: gm,
-            day: gd,
-        };
+        let gregorian = BoundDate::new(gy, gm, gd).ok();
         assert_eq!(
-            julian_to_gregorian(julian),
-            Ok(gregorian),
-            "{what}: {julian} O.S. must be {gregorian} N.S."
+            julian_to_gregorian(julian).ok(),
+            gregorian,
+            "{what}: {julian} O.S. must be {gy}-{gm}-{gd} N.S."
         );
         assert_eq!(
-            gregorian_to_julian(gregorian),
-            Ok(julian),
-            "{what}: {gregorian} N.S. must be {julian} O.S."
+            gregorian.map(gregorian_to_julian),
+            Some(Ok(julian)),
+            "{what}: {gy}-{gm}-{gd} N.S. must be {julian} O.S."
         );
     }
 }

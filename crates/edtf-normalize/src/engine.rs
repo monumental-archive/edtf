@@ -8,11 +8,11 @@
 //! Whole-input only — no substring extraction (N11); anything unmatched is
 //! `NoMatch`, never a guess.
 //!
-//! Values are built through the `edtf_core` model and rendered via its
-//! canonical `Display`, then re-parsed before being returned ([`render`]).
-//! Core has no validating constructors, so the re-parse is the calendar
-//! check (it rejects e.g. a constructed February 31) and the proof that
-//! every output is valid EDTF.
+//! Values are built through `edtf_core`'s validating constructors and
+//! rendered via its canonical `Display` ([`render`]). A constructor's
+//! refusal is the calendar check: it turns e.g. a February 31 into
+//! [`Expr::Impossible`], and the input fails closed (N14). A value core
+//! built is valid EDTF by construction (D31), so nothing is re-parsed.
 
 #![expect(
     clippy::min_ident_chars,
@@ -86,7 +86,7 @@ use alloc::{
 
 use edtf_core::{
     Bound, BoundDate, Date, DateField, Edtf, Interval, IntervalEndpoint, Qualifier, Set,
-    SetElement, SetKind, Year, YearKind,
+    SetElement, SetKind, SetRange, ValueError, Year, YearKind,
 };
 
 use crate::{
@@ -121,6 +121,10 @@ enum Expr {
     /// Any other EDTF value an EDTF token holds: a set or a datetime. It
     /// reads as a whole input and as an "or" alternative only (N18).
     Value(Edtf),
+    /// A reading the calendar refuses: core's constructors would not build
+    /// it (February 30, a reversed span). It is a reading all the same, so
+    /// the whole input fails closed as an impossible date (N14).
+    Impossible,
 }
 
 impl From<Edtf> for Expr {
@@ -158,7 +162,7 @@ fn one(expr: Expr, notes: Vec<Note>) -> Reading {
 }
 
 // ---------------------------------------------------------------------------
-// Construction helpers (core's fields are public; there are no constructors)
+// Construction helpers: every value is built through core's constructors
 
 /// Single decimal digit as `u8`.
 ///
@@ -168,12 +172,10 @@ const fn digit(v: u32) -> u8 {
     (v % 10) as u8
 }
 
-/// A `DateField` holding `v` with no qualifier.
-fn quiet(v: u8) -> DateField {
-    DateField {
-        digits: [Some(digit(u32::from(v) / 10)), Some(digit(u32::from(v)))],
-        qualifier: Qualifier::default(),
-    }
+/// The expression for a date core built, or the impossible reading for
+/// one it refused (N14).
+fn checked(date: Result<Date, ValueError>) -> Expr {
+    date.map_or(Expr::Impossible, Expr::Date)
 }
 
 /// A four-digit `Year` for `y`, or `None` outside the standard range.
@@ -181,115 +183,80 @@ fn year_of(y: i32) -> Option<Year> {
     if !(-9999..=9999).contains(&y) {
         return None;
     }
-    let a = y.unsigned_abs();
-    Some(Year {
-        kind: YearKind::Standard {
-            negative: y < 0,
-            digits: [
-                Some(digit(a / 1000)),
-                Some(digit(a / 100)),
-                Some(digit(a / 10)),
-                Some(digit(a)),
-            ],
-        },
-        significant_digits: None,
-        qualifier: Qualifier::default(),
-    })
+    Year::from_value(i64::from(y)).ok()
 }
 
 /// A `Year` for any value, in the one form core accepts for it: four
 /// digits within ±9999, `Y`-prefixed beyond (ISO 8601-2 4.7.2).
 fn year_any(y: i64) -> Option<Year> {
-    match i32::try_from(y) {
-        Ok(small) if (-9999..=9999).contains(&small) => year_of(small),
-        _ => Some(Year {
-            kind: YearKind::Big { value: y },
-            significant_digits: None,
-            qualifier: Qualifier::default(),
-        }),
-    }
+    Year::from_value(y).ok()
 }
 
 /// A year-precision `Date`.
 fn date_y(y: i32) -> Option<Date> {
-    Some(Date {
-        year: year_of(y)?,
-        month: None,
-        day: None,
-    })
+    Date::new(year_of(y)?, None, None).ok()
 }
 
-/// A month-precision `Date`, or `None` if the parts are out of range.
-fn date_ym(y: i32, m: u8) -> Option<Date> {
-    Some(Date {
-        month: Some(quiet(m)),
-        ..date_y(y)?
-    })
+/// A date of `year` with month `m` and, when given, day `d`: no reading
+/// when a part has more than two digits, the impossible reading when the
+/// calendar has no such month or day (N14).
+fn dated(year: Year, m: u8, d: Option<u8>) -> Option<Expr> {
+    let month = DateField::from_value(m).ok()?;
+    let day = match d {
+        Some(d) => Some(DateField::from_value(d).ok()?),
+        None => None,
+    };
+    Some(checked(Date::new(year, Some(month), day)))
 }
 
-/// A day-precision `Date`, or `None` if the parts are out of range.
-fn date_ymd(y: i32, m: u8, d: u8) -> Option<Date> {
-    Some(Date {
-        day: Some(quiet(d)),
-        ..date_ym(y, m)?
-    })
+/// A month-precision date, or `None` if the year is out of range.
+fn date_ym(y: i32, m: u8) -> Option<Expr> {
+    dated(year_of(y)?, m, None)
+}
+
+/// A day-precision date, or `None` if the year is out of range.
+fn date_ymd(y: i32, m: u8, d: u8) -> Option<Expr> {
+    dated(year_of(y)?, m, Some(d))
 }
 
 /// `XXXX` year for the missing-year forms (N9).
-fn masked_year() -> Year {
-    Year {
-        kind: YearKind::Standard {
-            negative: false,
-            digits: [None; 4],
-        },
-        significant_digits: None,
-        qualifier: Qualifier::default(),
-    }
+fn masked_year() -> Option<Year> {
+    Year::new(YearKind::Standard {
+        negative: false,
+        digits: [None; 4],
+    })
+    .ok()
 }
 
 /// `198X` from the three leading digits (198).
-fn decade_date(prefix3: u16) -> Date {
-    Date {
-        year: Year {
-            kind: YearKind::Standard {
-                negative: false,
-                digits: [
-                    Some(digit(u32::from(prefix3) / 100)),
-                    Some(digit(u32::from(prefix3) / 10)),
-                    Some(digit(u32::from(prefix3))),
-                    None,
-                ],
-            },
-            significant_digits: None,
-            qualifier: Qualifier::default(),
-        },
-        month: None,
-        day: None,
-    }
+fn decade_date(prefix3: u16) -> Expr {
+    let year = Year::new(YearKind::Standard {
+        negative: false,
+        digits: [
+            Some(digit(u32::from(prefix3) / 100)),
+            Some(digit(u32::from(prefix3) / 10)),
+            Some(digit(u32::from(prefix3))),
+            None,
+        ],
+    });
+    year.map_or(Expr::Impossible, |y| checked(Date::new(y, None, None)))
 }
 
-/// `18XX` (or `-01XX`) from the two leading digits.
-fn century_date(prefix2: u8, negative: bool) -> Date {
-    Date {
-        year: Year {
-            kind: YearKind::Standard {
-                negative,
-                digits: [Some(prefix2 / 10), Some(prefix2 % 10), None, None],
-            },
-            significant_digits: None,
-            qualifier: Qualifier::default(),
-        },
-        month: None,
-        day: None,
-    }
-}
-
-/// An interval expression between two dates.
-const fn interval(a: Date, b: Date) -> Expr {
-    Expr::Interval(Interval {
-        start: IntervalEndpoint::Date(a),
-        end: IntervalEndpoint::Date(b),
+/// `18XX` from the two leading digits. A BC century has no mask (D21).
+fn century_date(prefix2: u8) -> Option<Date> {
+    let year = Year::new(YearKind::Standard {
+        negative: false,
+        digits: [Some(prefix2 / 10), Some(prefix2 % 10), None, None],
     })
+    .ok()?;
+    Date::new(year, None, None).ok()
+}
+
+/// An interval expression between two dates, or the impossible reading
+/// when the end precedes the start (D18).
+fn interval(a: Date, b: Date) -> Expr {
+    Interval::new(IntervalEndpoint::Date(a), IntervalEndpoint::Date(b))
+        .map_or(Expr::Impossible, Expr::Interval)
 }
 
 // ---------------------------------------------------------------------------
@@ -639,15 +606,15 @@ pub(crate) const fn is_century_first_year(year: u16) -> bool {
 /// Turn a decade reading into a candidate set, honouring the options.
 fn decade_single(parse: DecadeParse, opts: Options) -> Reading {
     match parse {
-        DecadeParse::Exact(p3) => one(Expr::Date(decade_date(p3)), Vec::new()),
+        DecadeParse::Exact(p3) => one(decade_date(p3), Vec::new()),
         DecadeParse::CenturyAmbig(p3, p2) => vec![
             Candidate {
-                expr: Expr::Date(decade_date(p3)),
+                expr: decade_date(p3),
                 reading: format!("decade ({p3}X)"),
                 notes: vec![Note::DecadeAmbiguity],
             },
             Candidate {
-                expr: Expr::Date(century_date(p2, false)),
+                expr: century_date(p2).map_or(Expr::Impossible, Expr::Date),
                 reading: format!("century ({p2}XX)"),
                 notes: vec![Note::DecadeAmbiguity],
             },
@@ -655,7 +622,7 @@ fn decade_single(parse: DecadeParse, opts: Options) -> Reading {
         DecadeParse::Bare(tens) => opts.default_century.map_or_else(
             || {
                 let mk = |p3: u16| Candidate {
-                    expr: Expr::Date(decade_date(p3)),
+                    expr: decade_date(p3),
                     reading: format!("the {p3}0s"),
                     notes: vec![Note::DecadeAmbiguity],
                 };
@@ -663,10 +630,7 @@ fn decade_single(parse: DecadeParse, opts: Options) -> Reading {
             },
             |century| {
                 let p3 = century.first_year() / 10 + u16::from(tens);
-                one(
-                    Expr::Date(decade_date(p3)),
-                    vec![Note::DefaultCenturyApplied],
-                )
+                one(decade_date(p3), vec![Note::DefaultCenturyApplied])
             },
         ),
     }
@@ -740,10 +704,7 @@ fn century_expr(n: u32, bc: bool) -> Option<(Expr, Vec<Note>)> {
         ));
     }
     let prefix2 = u8::try_from(n - 1).ok()?;
-    Some((
-        Expr::Date(century_date(prefix2, bc)),
-        vec![Note::CenturyMask],
-    ))
+    Some((Expr::Date(century_date(prefix2)?), vec![Note::CenturyMask]))
 }
 
 /// Early/mid/late/half of a century as a decade-rounded one-of range (N1).
@@ -768,7 +729,7 @@ fn century_part_expr(span: Span, n: u32, bc: bool) -> Option<(Expr, Vec<Note>)> 
     let mask = if bc {
         None
     } else {
-        Some(century_date(u8::try_from(n - 1).ok()?, false))
+        Some(century_date(u8::try_from(n - 1).ok()?)?)
     };
     Some((
         Expr::Part {
@@ -803,7 +764,7 @@ fn dmy(d: u32, m: u32, y: i32) -> Option<Expr> {
         return None;
     }
     let (m, d) = (u8::try_from(m).ok()?, u8::try_from(d).ok()?);
-    Some(Expr::Date(date_ymd(y, m, d)?))
+    date_ymd(y, m, d)
 }
 
 #[expect(
@@ -866,13 +827,13 @@ fn numeric_token(t: &str, opts: Options, lang: &Lang) -> Option<Reading> {
         // Month and year: 7/2008, 04.1985.
         ([pa, py], &[m, y]) if pa.len() <= 2 && py.len() == 4 && (1..=12).contains(&m) => {
             let (y, m) = (i32::try_from(y).ok()?, u8::try_from(m).ok()?);
-            Some(one(Expr::Date(date_ym(y, m)?), Vec::new()))
+            Some(one(date_ym(y, m)?, Vec::new()))
         }
         // Year then small field: 1985/4, 1985-4 (a full "1985-04" is an EDTF
         // token, read before the prose arms).
         ([py, pb], &[y, m]) if py.len() == 4 && pb.len() <= 2 && (1..=12).contains(&m) => {
             let (y, m) = (i32::try_from(y).ok()?, u8::try_from(m).ok()?);
-            Some(one(Expr::Date(date_ym(y, m)?), Vec::new()))
+            Some(one(date_ym(y, m)?, Vec::new()))
         }
         _ => None,
     }
@@ -999,7 +960,7 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<R
                 if roman {
                     notes.push(Note::RomanCentury);
                 }
-                return Some(one(Expr::Date(decade_date(prefix3)), notes));
+                return Some(one(decade_date(prefix3), notes));
             }
         }
     }
@@ -1032,11 +993,7 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<R
             if let Some(m) = table_u8(t, lang.months) {
                 // "January" → XXXX-01 (N9).
                 return Some(one(
-                    Expr::Date(Date {
-                        year: masked_year(),
-                        month: Some(quiet(m)),
-                        day: None,
-                    }),
+                    dated(masked_year()?, m, None)?,
                     vec![Note::MissingYearMasked],
                 ));
             }
@@ -1046,30 +1003,20 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<R
             // "spring 2001" / "весной 2001" / "2001 spring" (N7).
             for (st, yt) in [(a, b), (b, a)] {
                 if let (Some(code), Some(y)) = (table_u8(st, lang.seasons), year_num(yt)) {
-                    return Some(one(
-                        Expr::Date(Date {
-                            month: Some(quiet(code)),
-                            ..date_y(y)?
-                        }),
-                        vec![Note::SeasonCode],
-                    ));
+                    return Some(one(dated(year_of(y)?, code, None)?, vec![Note::SeasonCode]));
                 }
             }
             // "June 1940" / "1940 June".
             for (mt, yt) in [(a, b), (b, a)] {
                 if let (Some(m), Some(y)) = (table_u8(mt, lang.months), year_num(yt)) {
-                    return Some(one(Expr::Date(date_ym(y, m)?), Vec::new()));
+                    return Some(one(date_ym(y, m)?, Vec::new()));
                 }
             }
             // "January 12" / "12 January" → XXXX-01-12 (N9).
             for (mt, dt) in [(a, b), (b, a)] {
                 if let (Some(m), Some(d)) = (table_u8(mt, lang.months), day_num(dt, lang)) {
                     return Some(one(
-                        Expr::Date(Date {
-                            year: masked_year(),
-                            month: Some(quiet(m)),
-                            day: Some(quiet(d)),
-                        }),
+                        dated(masked_year()?, m, Some(d))?,
                         vec![Note::MissingYearMasked],
                     ));
                 }
@@ -1082,7 +1029,7 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<R
                 if let (Some(d), Some(m), Some(y)) =
                     (day_num(dt, lang), table_u8(mt, lang.months), year_num(c))
                 {
-                    return Some(one(Expr::Date(date_ymd(y, m, d)?), Vec::new()));
+                    return Some(one(date_ymd(y, m, d)?, Vec::new()));
                 }
             }
             None
@@ -1185,21 +1132,12 @@ fn combine(
     let mut out = Vec::new();
     for mut combo in combos {
         // An interval or other EDTF value neither gives nor takes a year.
-        let mut dated: Vec<(&mut Date, &mut Vec<Note>)> = combo
+        let mut dates: Vec<(&mut Expr, &mut Vec<Note>)> = combo
             .iter_mut()
-            .filter_map(|c| match &mut c.expr {
-                Expr::Date(d) => Some((d, &mut c.notes)),
-                Expr::Interval(_)
-                | Expr::Part {
-                    lo: _,
-                    hi: _,
-                    mask: _,
-                }
-                | Expr::OneOf(_)
-                | Expr::Value(_) => None,
-            })
+            .filter(|c| matches!(c.expr, Expr::Date(_)))
+            .map(|c| (&mut c.expr, &mut c.notes))
             .collect();
-        distribute_year(&mut dated)?;
+        distribute_year(&mut dates)?;
         out.extend(build(combo)?);
     }
     Some(out)
@@ -1232,19 +1170,19 @@ fn parse_open(toks: &[&str], opts: Options, lang: &Lang) -> Option<Reading> {
 fn operand_ends(e: &Expr) -> Option<(Date, Date, bool)> {
     let only = |elements: &[SetElement]| match elements {
         [SetElement::Date(d)] => Some((*d, *d, true)),
-        [SetElement::Range(a, b)] => Some((*a, *b, false)),
+        [SetElement::Range(r)] => Some((r.start(), r.end(), false)),
         _ => None,
     };
     match e {
         Expr::Date(d) => Some((*d, *d, true)),
-        Expr::Interval(Interval {
-            start: IntervalEndpoint::Date(a),
-            end: IntervalEndpoint::Date(b),
-        }) => Some((*a, *b, false)),
+        Expr::Interval(iv) => match (iv.start(), iv.end()) {
+            (IntervalEndpoint::Date(a), IntervalEndpoint::Date(b)) => Some((a, b, false)),
+            _ => None,
+        },
         Expr::Part { lo, hi, mask: _ } => Some((*lo, *hi, false)),
         Expr::OneOf(elements) => only(elements),
-        Expr::Value(Edtf::Set(set)) => only(&set.elements),
-        Expr::Interval(_) | Expr::Value(_) => None,
+        Expr::Value(Edtf::Set(set)) => only(set.elements()),
+        Expr::Value(_) | Expr::Impossible => None,
     }
 }
 
@@ -1254,13 +1192,17 @@ fn operand_ends(e: &Expr) -> Option<(Date, Date, bool)> {
 /// precision of the date it comes from; a step moves one unit at that
 /// precision. Every unit carries the operand's qualifier and `q`.
 fn open_expr(open: Open, operand: &Expr, q: Qualifier) -> Option<Expr> {
+    // An impossible operand stays impossible under any opening (N14).
+    if matches!(operand, Expr::Impossible) {
+        return Some(Expr::Impossible);
+    }
     let (start, end, single) = operand_ends(operand)?;
     // A year-less operand ("June" is `XXXX-06`, N9) has no unit of its
     // own: one read off core's 0000–9999 bounds would state a year the
     // prose never gave. Only "until" and "since" take it, as written.
     let year_less = |d: &Date| {
         matches!(
-            d.year.kind,
+            d.year().kind(),
             YearKind::Standard {
                 negative: _,
                 digits: [None, None, None, None],
@@ -1277,20 +1219,20 @@ fn open_expr(open: Open, operand: &Expr, q: Qualifier) -> Option<Expr> {
         Open::OnOrAfter => SetElement::OnOrAfter(unit(&start, false, q)?),
         Open::Until | Open::Since => {
             let until = open == Open::Until;
-            let mut x = if single {
+            let x = if single {
                 start
             } else if until {
                 unit(&end, true, q)?
             } else {
                 unit(&start, false, q)?
             };
-            qualify_date(&mut x, q);
+            let x = x.qualified(q);
             let (start, end) = if until {
                 (IntervalEndpoint::Open, IntervalEndpoint::Date(x))
             } else {
                 (IntervalEndpoint::Date(x), IntervalEndpoint::Open)
             };
-            return Some(Expr::Interval(Interval { start, end }));
+            return Interval::new(start, end).ok().map(Expr::Interval);
         }
     };
     Some(Expr::OneOf(vec![element]))
@@ -1299,16 +1241,13 @@ fn open_expr(open: Open, operand: &Expr, q: Qualifier) -> Option<Expr> {
 /// Whether a date names a season, which has no predecessor or successor
 /// (ISO 8601-2 4.8.1 gives codes 21–24 no dates).
 fn is_season(d: &Date) -> bool {
-    d.month.and_then(DateField::value).is_some_and(|m| m > 12)
+    d.month().and_then(DateField::value).is_some_and(|m| m > 12)
 }
 
 /// Whether every digit of `d` is specified and its year carries no
 /// significant digits: a date that is its own `lo` and `hi` (N8).
 fn unmasked(d: &Date) -> bool {
-    d.year.significant_digits.is_none()
-        && d.year.value().is_some()
-        && d.month.is_none_or(|m| m.value().is_some())
-        && d.day.is_none_or(|day| day.value().is_some())
+    d.year().significant_digits().is_none() && !d.has_unspecified()
 }
 
 /// The first (or last) unit of `d` at its own precision, qualified. A
@@ -1316,9 +1255,7 @@ fn unmasked(d: &Date) -> bool {
 /// (`Y17E7` stays `Y17E7`).
 fn unit(d: &Date, last: bool, q: Qualifier) -> Option<Date> {
     if is_season(d) || unmasked(d) {
-        let mut own = *d;
-        qualify_date(&mut own, q);
-        return Some(own);
+        return Some(d.qualified(q));
     }
     cut(edge(d, last)?, d, q)
 }
@@ -1352,9 +1289,9 @@ fn edge(d: &Date, last: bool) -> Option<BoundDate> {
 fn carried(like: &Date, q: Qualifier) -> Qualifier {
     let mut carried = q;
     for field in [
-        Some(like.year.qualifier),
-        like.month.map(|m| m.qualifier),
-        like.day.map(|d| d.qualifier),
+        Some(like.year().qualifier()),
+        like.month().map(DateField::qualifier),
+        like.day().map(DateField::qualifier),
     ]
     .into_iter()
     .flatten()
@@ -1367,19 +1304,20 @@ fn carried(like: &Date, q: Qualifier) -> Qualifier {
 /// `day` cut to the precision of `like`, its year in the form its value
 /// takes (`year_any`), carrying `like`'s qualifier and `q`.
 fn cut(day: BoundDate, like: &Date, q: Qualifier) -> Option<Date> {
-    let mut out = Date {
-        year: year_any(day.year)?,
-        month: None,
-        day: None,
+    let year = year_any(day.year())?;
+    let (month, day) = match (like.month(), like.day()) {
+        (None, _) => (None, None),
+        (Some(_), None) => (Some(DateField::from_value(day.month()).ok()?), None),
+        (Some(_), Some(_)) => (
+            Some(DateField::from_value(day.month()).ok()?),
+            Some(DateField::from_value(day.day()).ok()?),
+        ),
     };
-    if like.month.is_some() {
-        out.month = Some(quiet(day.month));
-        if like.day.is_some() {
-            out.day = Some(quiet(day.day));
-        }
-    }
-    qualify_date(&mut out, carried(like, q));
-    Some(out)
+    Some(
+        Date::new(year, month, day)
+            .ok()?
+            .qualified(carried(like, q)),
+    )
 }
 
 /// "1863 or 1864 or 1865" → `[1863,1864,1865]`, ISO's one-of set (N14).
@@ -1449,12 +1387,16 @@ fn one_of(alternatives: &[Candidate]) -> Option<Expr> {
     for c in alternatives {
         let mine = match &c.expr {
             Expr::Date(d) => vec![SetElement::Date(*d)],
-            Expr::Part { lo, hi, mask: _ } => vec![SetElement::Range(*lo, *hi)],
-            Expr::OneOf(els)
-            | Expr::Value(Edtf::Set(Set {
-                kind: SetKind::OneMember,
-                elements: els,
-            })) => els.clone(),
+            Expr::Part { lo, hi, mask: _ } => match SetRange::new(*lo, *hi) {
+                Ok(r) => vec![SetElement::Range(r)],
+                Err(_) => return Some(Expr::Impossible),
+            },
+            Expr::OneOf(els) => els.clone(),
+            Expr::Value(Edtf::Set(set)) if set.kind() == SetKind::OneMember => {
+                set.elements().to_vec()
+            }
+            // One impossible alternative makes the set impossible (N14).
+            Expr::Impossible => return Some(Expr::Impossible),
             Expr::Interval(_) | Expr::Value(_) => return None,
         };
         for e in mine {
@@ -1552,7 +1494,7 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
             }
             let (n, roman) = century_ordinal(&ls, lang)?;
             let bc = matches!(
-                rd.year.kind,
+                rd.year().kind(),
                 YearKind::Standard {
                     negative: true,
                     digits: _
@@ -1576,7 +1518,7 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
             else {
                 return None;
             };
-            let y = i32::try_from(ld.year.value()?).ok()?;
+            let y = i32::try_from(ld.year().value()?).ok()?;
             // Elision needs an AD start. A BC start (year 0 is 1 BC, N3)
             // has no deterministic elided reading — truncating arithmetic
             // would fabricate one (N4).
@@ -1593,16 +1535,17 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
             }
             // No grammar arm builds a day without a month, so a month-less
             // left endpoint is a bare year — no day check needed.
-            if (21..=41).contains(&v) && ld.month.is_none() {
-                let mut season = *ld;
-                season.month = Some(quiet(v_u8));
-                qualify_date(&mut season, lq);
-                let (mut a, mut b) = (*ld, date_y(elided)?);
-                qualify_date(&mut a, lq);
-                qualify_date(&mut b, rq);
+            if (21..=41).contains(&v) && ld.month().is_none() {
+                let season = dated(ld.year(), v_u8, None)?;
+                let season = if let Expr::Date(d) = season {
+                    Expr::Date(d.qualified(lq))
+                } else {
+                    season
+                };
+                let (a, b) = (ld.qualified(lq), date_y(elided)?.qualified(rq));
                 return Some(vec![
                     Candidate {
-                        expr: Expr::Date(season),
+                        expr: season,
                         reading: format!("sub-year code {v} ({})", season_name(v_u8)),
                         notes: vec![Note::SeasonRangeCollision],
                     },
@@ -1620,10 +1563,8 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
     };
 
     let build = |ld: &Date, rd: &Date| -> Option<Expr> {
-        let (mut ld, mut rd) = (*ld, *rd);
-        qualify_date(&mut ld, lq);
-        qualify_date(&mut rd, rq);
-        if let (Some(a), Some(b)) = (ld.year.value(), rd.year.value()) {
+        let (ld, rd) = (ld.qualified(lq), rd.qualified(rq));
+        if let (Some(a), Some(b)) = (ld.year().value(), rd.year().value()) {
             if a > b {
                 return None; // reversed ranges are prose errors, not dates
             }
@@ -1637,8 +1578,14 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
         let [l, r] = <[Candidate; 2]>::try_from(parts).ok()?;
         // A range endpoint is a date: an interval, a set or a datetime
         // cannot stand as one (N1, N18).
-        let (Expr::Date(ld), Expr::Date(rd)) = (&l.expr, &r.expr) else {
-            return None;
+        let (ld, rd) = match (&l.expr, &r.expr) {
+            (Expr::Date(ld), Expr::Date(rd)) => (ld, rd),
+            // An impossible endpoint makes the range impossible (N14).
+            (Expr::Impossible, Expr::Date(_) | Expr::Impossible)
+            | (Expr::Date(_), Expr::Impossible) => {
+                return Some(one(Expr::Impossible, Vec::new()));
+            }
+            _ => return None,
         };
         // "winter 1941-42": one boundary-spanning winter, or winter 1941
         // through the whole of 1942? Both readings, honestly (N17).
@@ -1665,28 +1612,33 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
 /// takes it and swaps its note. Fails (→ `NoMatch`) when the stated years
 /// disagree or are not fully specified: pairing a masked month with a masked
 /// decade would compound the guessing.
-fn distribute_year(dates: &mut [(&mut Date, &mut Vec<Note>)]) -> Option<()> {
+fn distribute_year(dates: &mut [(&mut Expr, &mut Vec<Note>)]) -> Option<()> {
     let masked = |notes: &[Note]| notes.contains(&Note::MissingYearMasked);
     let n_masked = dates.iter().filter(|(_, n)| masked(n)).count();
     if n_masked == 0 || n_masked == dates.len() {
         return Some(());
     }
     let mut stated: Option<(i64, YearKind)> = None;
-    for (d, n) in &*dates {
+    for (e, n) in &*dates {
         if masked(n) {
             continue;
         }
-        let v = d.year.value()?;
+        let Expr::Date(d) = e else { continue };
+        let v = d.year().value()?;
         match stated {
-            None => stated = Some((v, d.year.kind)),
+            None => stated = Some((v, d.year().kind())),
             Some((s, _)) if s == v => {}
             Some(_) => return None,
         }
     }
     let (_, kind) = stated?;
-    for (d, n) in &mut *dates {
+    for (e, n) in &mut *dates {
+        let Expr::Date(d) = e else { continue };
         if masked(n) {
-            d.year.kind = kind;
+            // The stated year can make the date impossible: February 29
+            // in a common year (N14).
+            let year = Year::new(kind).ok()?.with_qualifier(d.year().qualifier());
+            **e = checked(Date::new(year, d.month(), d.day()));
             n.retain(|note| *note != Note::MissingYearMasked);
             n.push(Note::EndpointYearDistributed);
         }
@@ -1708,15 +1660,14 @@ fn cross_year_season(
     const WINTER: u8 = 24;
     // No grammar arm builds a day without a month, so a month-less right
     // endpoint is a bare year — no day check needed.
-    if ld.month.and_then(DateField::value) != Some(WINTER) || rd.month.is_some() {
+    if ld.month().and_then(DateField::value) != Some(WINTER) || rd.month().is_some() {
         return None;
     }
-    let (a, b) = (ld.year.value()?, rd.year.value()?);
+    let (a, b) = (ld.year().value()?, rd.year().value()?);
     if b != a + 1 {
         return None;
     }
-    let mut season = *ld;
-    qualify_date(&mut season, lq);
+    let season = ld.qualified(lq);
     let mut season_notes = ln.to_vec();
     season_notes.push(Note::CrossYearSeason);
     let range = build(ld, rd)?;
@@ -1750,16 +1701,7 @@ const fn merge(into: &mut Qualifier, q: Qualifier) {
 /// uniform qualification renders as the trailing form ("1940-06~") via
 /// core's canonical Display (N10).
 const fn qualify_date(d: &mut Date, q: Qualifier) {
-    if !q.uncertain && !q.approximate {
-        return;
-    }
-    merge(&mut d.year.qualifier, q);
-    if let Some(m) = &mut d.month {
-        merge(&mut m.qualifier, q);
-    }
-    if let Some(day) = &mut d.day {
-        merge(&mut day.qualifier, q);
-    }
+    *d = d.qualified(q);
 }
 
 /// Distribute a whole-expression qualifier over every date a reading
@@ -1776,7 +1718,8 @@ fn qualify_candidate(c: &mut Candidate, q: Qualifier) -> Option<()> {
     match &mut c.expr {
         Expr::Date(d) => qualify_date(d, q),
         Expr::Interval(iv) => {
-            for ep in [&mut iv.start, &mut iv.end] {
+            let [mut start, mut end] = [iv.start(), iv.end()];
+            for ep in [&mut start, &mut end] {
                 match ep {
                     IntervalEndpoint::Date(d)
                     | IntervalEndpoint::OnOrBefore(d)
@@ -1784,6 +1727,8 @@ fn qualify_candidate(c: &mut Candidate, q: Qualifier) -> Option<()> {
                     IntervalEndpoint::Open | IntervalEndpoint::Unknown => {}
                 }
             }
+            // Qualification never moves a bound, so the order still holds.
+            *iv = Interval::new(start, end).ok()?;
             c.notes.push(Note::QualifierDistributed);
         }
         Expr::Part { mask, lo: _, hi: _ } => {
@@ -1808,29 +1753,28 @@ fn qualify_candidate(c: &mut Candidate, q: Qualifier) -> Option<()> {
             }
         }
         Expr::Value(_) => return None,
+        Expr::Impossible => {}
     }
     Some(())
 }
 
-/// Render through core's canonical Display and re-parse: the calendar check
-/// and the "every output is valid EDTF" guarantee in one step.
+/// The value a reading denotes and its canonical text, or `None` for the
+/// impossible reading. Every value was built through core's constructors,
+/// so it is valid EDTF at a known level by construction.
 fn render(expr: Expr) -> Option<(Edtf, String)> {
-    let one_member = |elements| {
-        Edtf::Set(Set {
-            kind: SetKind::OneMember,
-            elements,
-        })
-    };
+    let one_member = |elements| Set::new(SetKind::OneMember, elements).ok().map(Edtf::Set);
     let value = match expr {
         Expr::Date(d) => Edtf::Date(d),
         Expr::Interval(iv) => Edtf::Interval(iv),
-        Expr::Part { lo, hi, mask: _ } => one_member(vec![SetElement::Range(lo, hi)]),
-        Expr::OneOf(elements) => one_member(elements),
+        Expr::Part { lo, hi, mask: _ } => {
+            one_member(vec![SetElement::Range(SetRange::new(lo, hi).ok()?)])?
+        }
+        Expr::OneOf(elements) => one_member(elements)?,
         Expr::Value(v) => v,
+        Expr::Impossible => return None,
     };
     let s = value.to_string();
-    let reparsed = Edtf::parse(&s).ok()?;
-    Some((reparsed, s))
+    Some((value, s))
 }
 
 /// An outcome that matched nothing, with the reason.

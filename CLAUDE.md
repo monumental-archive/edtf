@@ -91,7 +91,8 @@ writes any missing seed; a crash the fuzzer finds is committed beside them.
   enumeration), `display.rs` (canonical form). Every module is private and
   the crate exports named types only; downstream crates construct values
   through this model, so outputs are valid by construction.
-- `edtf-normalize` builds EDTF via `edtf-core` and re-parses its own output;
+- `edtf-normalize` builds EDTF through `edtf-core`'s validating constructors
+  (D31), so a refusal is its calendar check;
   ambiguous input (e.g. `12/04/1985`) returns every reading, never a guess.
 - `edtf-calendars` keeps the published Julian-Day-Number algorithms' own
   variable names and computes in `i128`, so any `i64` year is safe.

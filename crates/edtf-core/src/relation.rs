@@ -65,7 +65,6 @@ use crate::{
 /// `Equal`, proper containment (including a shared endpoint) is
 /// `Contains`/`Within`, and partial overlap is `Overlaps`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Relation {
     /// A ends before B starts (no shared day).
     Before,
@@ -134,7 +133,6 @@ impl Relation {
 
 /// How firmly a relation holds across the completions of two expressions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Modality {
     /// Holds for no pair of completions.
     Impossible,
@@ -159,7 +157,6 @@ impl Modality {
 /// The modality of every [`Relation`] between one pair of expressions, as
 /// computed by [`Edtf::relation`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Relations {
     /// One modality per Allen relation, in `Relation`'s own order.
     modalities: [Modality; 6],
@@ -275,15 +272,15 @@ const fn ext(b: Bound) -> Option<Ext> {
 
 /// The calendar day after `e`; year overflow saturates to `PosInf`, which
 /// only under-reports overlap feasibility at the edge of representable time.
-/// A parsed year is at most 18 digits (decision D30), so only a hand-built
-/// bound at `i64::MAX` overflows here.
+/// A value's year is at most 18 digits (decision D30), so only a
+/// `BoundDate` built directly at year `i64::MAX` overflows here.
 fn after(e: Ext) -> Ext {
     let Ext::Day(d) = e else { return e };
     d.next_day().map_or(Ext::PosInf, Ext::Day)
 }
 
 /// The calendar day before `e`; year underflow saturates to `NegInf`. As
-/// with `after`, only a hand-built bound at `i64::MIN` underflows (D30).
+/// with `after`, only a `BoundDate` built at year `i64::MIN` underflows.
 fn before(e: Ext) -> Ext {
     let Ext::Day(d) = e else { return e };
     d.previous_day().map_or(Ext::NegInf, Ext::Day)
@@ -350,7 +347,8 @@ mod tests {
     use super::{BoundDate, Ext, after, before};
 
     fn day(year: i64, month: u8, day: u8) -> Ext {
-        Ext::Day(BoundDate { year, month, day })
+        // Every fixture is a real day; one that is not fails the asserts.
+        BoundDate::new(year, month, day).map_or(Ext::NegInf, Ext::Day)
     }
 
     /// A step past the last representable day saturates to the infinity on

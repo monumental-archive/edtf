@@ -67,12 +67,9 @@ fn offset(y: i64, m: u8, d: u8) -> i128 {
     })
     .expect("valid by construction");
     g.julian_day_number()
-        - BoundDate {
-            year: y,
-            month: m,
-            day: d,
-        }
-        .julian_day_number()
+        - BoundDate::new(y, m, d)
+            .expect("a day both calendars have")
+            .julian_day_number()
 }
 
 /// A valid proleptic Julian date across a wide year range.
@@ -93,11 +90,8 @@ const fn is_gregorian_leap(y: i64) -> bool {
 /// A valid proleptic Gregorian date across a wide year range.
 fn gregorian_date() -> impl Strategy<Value = BoundDate> {
     (-1_000_000_i64..=1_000_000, 1_u8..=12).prop_flat_map(|(year, month)| {
-        (1_u8..=julian_last_day(month, is_gregorian_leap(year))).prop_map(move |day| BoundDate {
-            year,
-            month,
-            day,
-        })
+        (1_u8..=julian_last_day(month, is_gregorian_leap(year)))
+            .prop_map(move |day| BoundDate::new(year, month, day).expect("a real Gregorian day"))
     })
 }
 

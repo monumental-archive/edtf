@@ -14,7 +14,9 @@ Annex A** — covering conformance **levels 0, 1 and 2 in full**.
 - Three-valued temporal relations under uncertainty — is `1985~` before
   `199X`? Definitely. Is `198X` before `1985`? Possibly.
 - Canonical (spec-preferred) formatting.
-- Optional `serde` feature for the model types.
+- Optional `serde` feature: an `Edtf` serialises as its canonical string and
+  deserialises by parsing it. Every model value is built through a validating
+  constructor, so no value is ever invalid.
 
 ```rust
 use edtf_core::Edtf;

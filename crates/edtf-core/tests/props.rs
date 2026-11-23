@@ -69,14 +69,11 @@
     clippy::unreachable,
     reason = "an unreachable! naming the invariant the fixture guarantees"
 )]
-#![expect(
-    clippy::unnecessary_lazy_evaluations,
-    reason = "the closure form keeps the two arms parallel to read"
-)]
 
 use edtf_core::{
-    Bound, Date, DateField, DateTime, Edtf, Interval, IntervalEndpoint, Modality, Qualifier,
-    Relation, Set, SetElement, SetKind, Time, TimeShift, Unenumerable, Year, YearKind,
+    Bound, BoundDate, Date, DateField, DateTime, Edtf, Interval, IntervalEndpoint, Modality,
+    Qualifier, Relation, Set, SetElement, SetKind, SetRange, Time, TimeShift, Unenumerable, Year,
+    YearKind,
 };
 use proptest::prelude::*;
 
@@ -124,6 +121,43 @@ fn mask<const N: usize>(mut digits: [Option<u8>; N], bits: [bool; N]) -> [Option
     digits
 }
 
+/// A year the generator knows is valid, with its significant digits and
+/// qualifier.
+///
+/// # Panics
+///
+/// When the generator, not the code under test, is wrong: it only asks
+/// for values the constructors accept.
+fn year_of(kind: YearKind, significant_digits: Option<u32>, qualifier: Qualifier) -> Year {
+    let year = Year::new(kind).expect("the generator builds valid years");
+    significant_digits
+        .map_or(Ok(year), |count| year.with_significant_digits(count))
+        .expect("the generator builds valid significant digits")
+        .with_qualifier(qualifier)
+}
+
+/// A month or day field the generator knows is valid, qualified.
+///
+/// # Panics
+///
+/// When the generator, not the code under test, is wrong: it only asks
+/// for values the constructors accept.
+fn field_of(digits: [Option<u8>; 2], qualifier: Qualifier) -> DateField {
+    DateField::new(digits)
+        .expect("the generator builds valid digits")
+        .with_qualifier(qualifier)
+}
+
+/// A date the generator knows is valid.
+///
+/// # Panics
+///
+/// When the generator, not the code under test, is wrong: it only asks
+/// for values the constructors accept.
+fn date_of(year: Year, month: Option<DateField>, day: Option<DateField>) -> Date {
+    Date::new(year, month, day).expect("the generator builds valid dates")
+}
+
 /// The parser's interval/range ordering rule (decision D18): out of order
 /// only when `a`'s earliest possible day is later than `b`'s latest.
 fn dates_out_of_order(a: &Date, b: &Date) -> bool {
@@ -155,11 +189,7 @@ fn standard_year() -> impl Strategy<Value = Year> {
             } else {
                 mask(year_digits(y), bits)
             };
-            Year {
-                kind: YearKind::Standard { negative, digits },
-                significant_digits: None,
-                qualifier,
-            }
+            year_of(YearKind::Standard { negative, digits }, None, qualifier)
         },
     )
 }
@@ -167,14 +197,14 @@ fn standard_year() -> impl Strategy<Value = Year> {
 /// Standard year with an `S` suffix: unmasked, 1-4 significant digits.
 fn sig_standard_year() -> impl Strategy<Value = Year> {
     (any::<bool>(), 0_u16..=9999, 1_u32..=4, qualifier()).prop_map(|(negative, y, s, qualifier)| {
-        Year {
-            kind: YearKind::Standard {
+        year_of(
+            YearKind::Standard {
                 negative: negative && y != 0,
                 digits: year_digits(y),
             },
-            significant_digits: Some(s),
+            Some(s),
             qualifier,
-        }
+        )
     })
 }
 
@@ -189,13 +219,13 @@ fn big_year() -> impl Strategy<Value = Year> {
     )
         .prop_map(|(mag, negative, sig, qualifier)| {
             let digit_count = mag.ilog10() + 1;
-            Year {
-                kind: YearKind::Big {
+            year_of(
+                YearKind::Big {
                     value: if negative { -mag } else { mag },
                 },
-                significant_digits: sig.map(|s| s.min(digit_count)),
+                sig.map(|s| s.min(digit_count)),
                 qualifier,
-            }
+            )
         })
 }
 
@@ -214,14 +244,14 @@ fn exp_year() -> impl Strategy<Value = Year> {
         })
         .prop_map(|(mag, negative, exponent, sig, qualifier)| {
             let digit_count = mag.ilog10() + 1 + exponent;
-            Year {
-                kind: YearKind::Exponential {
+            year_of(
+                YearKind::Exponential {
                     significand: if negative { -mag } else { mag },
                     exponent,
                 },
-                significant_digits: sig.map(|s| s.min(digit_count)),
+                sig.map(|s| s.min(digit_count)),
                 qualifier,
-            }
+            )
         })
 }
 
@@ -240,23 +270,13 @@ fn year_only_date() -> impl Strategy<Value = Date> {
         1 => big_year(),
         1 => exp_year(),
     ]
-    .prop_map(|year| Date {
-        year,
-        month: None,
-        day: None,
-    })
+    .prop_map(|year| date_of(year, None, None))
 }
 
 /// Standard year plus an explicit sub-year grouping code 21-41 (no day).
 fn season_date() -> impl Strategy<Value = Date> {
-    (standard_year(), 21_u8..=41, qualifier()).prop_map(|(year, code, q)| Date {
-        year,
-        month: Some(DateField {
-            digits: field_digits(code),
-            qualifier: q,
-        }),
-        day: None,
-    })
+    (standard_year(), 21_u8..=41, qualifier())
+        .prop_map(|(year, code, q)| date_of(year, Some(field_of(field_digits(code), q)), None))
 }
 
 /// Year-month or year-month-day, starting from a concrete valid date and
@@ -279,21 +299,11 @@ fn month_day_date() -> impl Strategy<Value = Date> {
                 } else {
                     mask(year_digits(y), ybits)
                 };
-                Date {
-                    year: Year {
-                        kind: YearKind::Standard { negative, digits },
-                        significant_digits: None,
-                        qualifier: yq,
-                    },
-                    month: Some(DateField {
-                        digits: mask(field_digits(m), mbits),
-                        qualifier: mq,
-                    }),
-                    day: with_day.then_some(DateField {
-                        digits: mask(field_digits(d), dbits),
-                        qualifier: dq,
-                    }),
-                }
+                date_of(
+                    year_of(YearKind::Standard { negative, digits }, None, yq),
+                    Some(field_of(mask(field_digits(m), mbits), mq)),
+                    with_day.then(|| field_of(mask(field_digits(d), dbits), dq)),
+                )
             },
         )
 }
@@ -311,50 +321,46 @@ fn date() -> impl Strategy<Value = Date> {
 fn shift() -> impl Strategy<Value = Option<TimeShift>> {
     prop_oneof![
         1 => Just(None),
-        1 => Just(Some(TimeShift::Utc)),
-        1 => (-14_i16..=14).prop_map(|h| Some(TimeShift::Offset {
-            minutes: h * 60,
-            hours_only: true,
-        })),
-        1 => (-840_i16..=840).prop_map(|minutes| Some(TimeShift::Offset {
-            minutes,
-            hours_only: false,
-        })),
+        1 => Just(Some(TimeShift::UTC)),
+        1 => (-14_i16..=14).prop_map(|h| TimeShift::offset(h * 60, true).ok()),
+        1 => (-840_i16..=840).prop_map(|minutes| TimeShift::offset(minutes, false).ok()),
     ]
 }
 
 /// Date-times exist only at level 0: plain, complete, unqualified date.
+///
+/// # Panics
+///
+/// When the generator, not the code under test, is wrong: it only asks
+/// for values the constructors accept.
 fn datetime() -> impl Strategy<Value = DateTime> {
     (ymd(), (0_u8..=23, 0_u8..=59, 0_u8..=60, shift())).prop_map(
-        |((y, m, d), (hour, minute, second, shift))| DateTime {
-            date: Date {
-                year: Year {
-                    kind: YearKind::Standard {
+        |((y, m, d), (hour, minute, second, shift))| {
+            let plain = Qualifier::default();
+            let date = date_of(
+                year_of(
+                    YearKind::Standard {
                         negative: false,
                         digits: year_digits(y),
                     },
-                    significant_digits: None,
-                    qualifier: Qualifier::default(),
-                },
-                month: Some(DateField {
-                    digits: field_digits(m),
-                    qualifier: Qualifier::default(),
-                }),
-                day: Some(DateField {
-                    digits: field_digits(d),
-                    qualifier: Qualifier::default(),
-                }),
-            },
-            time: Time {
-                hour,
-                minute,
-                second,
-                shift,
-            },
+                    None,
+                    plain,
+                ),
+                Some(field_of(field_digits(m), plain)),
+                Some(field_of(field_digits(d), plain)),
+            );
+            let time = Time::new(hour, minute, second, shift).expect("a valid time");
+            DateTime::new(date, time).expect("a plain complete date")
         },
     )
 }
 
+/// A generated value the constructors accept.
+///
+/// # Panics
+///
+/// When the generator, not the code under test, is wrong: it only asks
+/// for values the constructors accept.
 fn interval() -> impl Strategy<Value = Interval> {
     let start = prop_oneof![
         5 => date().prop_map(IntervalEndpoint::Date),
@@ -378,42 +384,38 @@ fn interval() -> impl Strategy<Value = Interval> {
             // bounds are themselves ordered.
             if let (IntervalEndpoint::Date(a), IntervalEndpoint::Date(b)) = (&start, &end) {
                 if dates_out_of_order(a, b) {
-                    return Interval {
-                        start: IntervalEndpoint::Date(*b),
-                        end: IntervalEndpoint::Date(*a),
-                    };
+                    return Interval::new(IntervalEndpoint::Date(*b), IntervalEndpoint::Date(*a))
+                        .expect("swapped into order");
                 }
             }
-            Interval { start, end }
+            Interval::new(start, end).expect("a dated, ordered interval")
         })
 }
 
 /// A concrete, unqualified, unmasked date at the given precision
 /// (0 = year, 1 = month, 2 = day) — the only shape D27 admits as a `..`
 /// range endpoint. Years may be negative (never -0000).
+///
+/// # Panics
+///
+/// When the generator, not the code under test, is wrong: it only asks
+/// for values the constructors accept.
 fn plain_date(y: i64, m: u8, d: u8, precision: u8) -> Date {
-    Date {
-        year: Year {
-            kind: YearKind::Standard {
-                negative: y < 0,
-                digits: year_digits(y.unsigned_abs() as u16),
-            },
-            significant_digits: None,
-            qualifier: Qualifier::default(),
-        },
-        month: (precision >= 1).then_some(DateField {
-            digits: field_digits(m),
-            qualifier: Qualifier::default(),
-        }),
-        day: (precision >= 2).then_some(DateField {
-            digits: field_digits(d),
-            qualifier: Qualifier::default(),
-        }),
-    }
+    let plain = Qualifier::default();
+    date_of(
+        Year::from_value(y).expect("a four-digit year"),
+        (precision >= 1).then(|| field_of(field_digits(m), plain)),
+        (precision >= 2).then(|| field_of(field_digits(d), plain)),
+    )
 }
 
 /// D27 range elements: both endpoints concrete, unqualified, non-season,
 /// same-precision, compare-and-swapped into order at that precision.
+///
+/// # Panics
+///
+/// When the generator, not the code under test, is wrong: it only asks
+/// for values the constructors accept.
 fn range_element() -> impl Strategy<Value = SetElement> {
     (ymd(), ymd(), any::<[bool; 2]>(), 0_u8..=2).prop_map(
         |((y1, m1, d1), (y2, m2, d2), neg, precision)| {
@@ -438,8 +440,11 @@ fn range_element() -> impl Strategy<Value = SetElement> {
                 ((sy2, m2, d2), (sy1, m1, d1))
             };
             SetElement::Range(
-                plain_date(a.0, a.1, a.2, precision),
-                plain_date(b.0, b.1, b.2, precision),
+                SetRange::new(
+                    plain_date(a.0, a.1, a.2, precision),
+                    plain_date(b.0, b.1, b.2, precision),
+                )
+                .expect("a D27 range in order"),
             )
         },
     )
@@ -454,18 +459,24 @@ fn set_element() -> impl Strategy<Value = SetElement> {
     ]
 }
 
+/// A generated value the constructors accept.
+///
+/// # Panics
+///
+/// When the generator, not the code under test, is wrong: it only asks
+/// for values the constructors accept.
 fn set() -> impl Strategy<Value = Set> {
     (
         any::<bool>(),
         proptest::collection::vec(set_element(), 1..=4),
     )
-        .prop_map(|(all, elements)| Set {
-            kind: if all {
+        .prop_map(|(all, elements)| {
+            let kind = if all {
                 SetKind::AllMembers
             } else {
                 SetKind::OneMember
-            },
-            elements,
+            };
+            Set::new(kind, elements).expect("a set with members")
         })
 }
 
@@ -597,7 +608,7 @@ proptest! {
             return Err(TestCaseError::fail(format!("{s} did not reparse as interval")));
         };
         if let (IntervalEndpoint::Date(start), IntervalEndpoint::Date(end)) =
-            (parsed.start, parsed.end)
+            (parsed.start(), parsed.end())
         {
             let rel = Edtf::Date(start).relation(&Edtf::Date(end));
             prop_assert!(
@@ -623,68 +634,18 @@ proptest! {
 
 // ------------------------------------------------- values() (D24-D29)
 
-/// Independent restatement of when a significant-digit sweep overflows:
-/// the swept upper magnitude exceeds i64 (computed in i128, so the check
-/// does not share the implementation's checked arithmetic).
-fn sweep_overflows(value: i64, precision: u32, width: u32) -> bool {
-    let sweep = width.saturating_sub(precision).min(38);
-    let modulus = 10_i128.pow(sweep);
-    let mag = i128::from(value.unsigned_abs());
-    let lo = mag - mag.rem_euclid(modulus);
-    lo + (modulus - 1) > i128::from(i64::MAX)
-}
-
-/// The digit width of a year form, restated from public model fields.
-fn year_width(kind: &YearKind) -> u32 {
-    match kind {
-        YearKind::Standard {
-            negative: _,
-            digits: _,
-        } => 4,
-        YearKind::Big { value } => value.unsigned_abs().to_string().len() as u32,
-        YearKind::Exponential {
-            significand,
-            exponent,
-        } => significand.unsigned_abs().to_string().len() as u32 + exponent,
-    }
-}
-
-fn date_unenumerable(d: &Date) -> Option<Unenumerable> {
-    if let Some(p) = d.year.significant_digits {
-        let Some(value) = d.year.value() else {
-            return Some(Unenumerable::YearRangeOverflow);
-        };
-        if sweep_overflows(value, p, year_width(&d.year.kind)) {
-            return Some(Unenumerable::YearRangeOverflow);
-        }
-    }
-    None
-}
-
-/// The structural rule for when `values()` must fail, scanning set
-/// elements in written order exactly as construction does.
+/// The structural rule for when `values()` must fail (D24-D25): an
+/// interval, or a set holding an unbounded element. Every year sweep fits
+/// (D30), so nothing else fails.
 fn expected_unenumerable(v: &Edtf) -> Option<Unenumerable> {
     match v {
         Edtf::Interval(_) => Some(Unenumerable::Interval),
-        Edtf::DateTime(_) => None,
-        Edtf::Date(d) => date_unenumerable(d),
-        Edtf::Set(s) => {
-            for e in &s.elements {
-                let err = match e {
-                    SetElement::OnOrBefore(_) | SetElement::OnOrAfter(_) => {
-                        Some(Unenumerable::UnboundedSetElement)
-                    }
-                    SetElement::Date(d) => date_unenumerable(d),
-                    SetElement::Range(a, b) => (a.year.value().is_none()
-                        || b.year.value().is_none())
-                    .then(|| Unenumerable::YearRangeOverflow),
-                };
-                if err.is_some() {
-                    return err;
-                }
-            }
-            None
-        }
+        Edtf::Set(s) => s
+            .elements()
+            .iter()
+            .any(|e| matches!(e, SetElement::OnOrBefore(_) | SetElement::OnOrAfter(_)))
+            .then_some(Unenumerable::UnboundedSetElement),
+        Edtf::Date(_) | Edtf::DateTime(_) => None,
     }
 }
 
@@ -766,10 +727,11 @@ proptest! {
             .iter()
             .map(|((y, m, d), p)| plain_date(i64::from(*y), *m, *d, *p))
             .collect();
-        let set = Edtf::Set(Set {
-            kind: if all { SetKind::AllMembers } else { SetKind::OneMember },
-            elements: dates.iter().copied().map(SetElement::Date).collect(),
-        });
+        let kind = if all { SetKind::AllMembers } else { SetKind::OneMember };
+        let set = Edtf::Set(
+            Set::new(kind, dates.iter().copied().map(SetElement::Date).collect())
+                .expect("a set with members"),
+        );
         let got: Vec<Edtf> = set.values().unwrap().collect();
         let want: Vec<Edtf> = dates.into_iter().map(Edtf::Date).collect();
         prop_assert_eq!(got, want, "{}", set);
@@ -780,14 +742,15 @@ proptest! {
     /// small), including qualifier copy-through (D28).
     #[test]
     fn masked_date_values_equal_brute_force(d in month_day_date()) {
-        let YearKind::Standard { negative, digits } = d.year.kind else {
+        let YearKind::Standard { negative: _, digits } = d.year().kind() else {
             unreachable!("month_day_date generates standard years")
         };
         prop_assume!(digits.iter().filter(|x| x.is_none()).count() <= 2);
         let field_admits = |f: &DateField, v: u8| {
-            f.digits[0].is_none_or(|p| p == v / 10) && f.digits[1].is_none_or(|p| p == v % 10)
+            let [tens, ones] = f.digits();
+            tens.is_none_or(|p| p == v / 10) && ones.is_none_or(|p| p == v % 10)
         };
-        let years: Vec<i64> = d.year.value().map_or_else(
+        let years: Vec<i64> = d.year().value().map_or_else(
             || {
                 (0_i64..=9999)
                     .filter(|y| {
@@ -798,49 +761,22 @@ proptest! {
             },
             |v| vec![v],
         );
-        let month = d.month.expect("month_day_date always has a month");
+        let month = d.month().expect("month_day_date always has a month");
+        let yq = d.year().qualifier();
         let mut want: Vec<Edtf> = Vec::new();
         for y in years {
+            let year = Year::from_value(y).unwrap().with_qualifier(yq);
             for m in (1..=12_u8).filter(|m| field_admits(&month, *m)) {
-                match d.day {
-                    None => want.push(Edtf::Date(Date {
-                        year: Year {
-                            kind: YearKind::Standard {
-                                negative: negative && d.year.value().is_some(),
-                                digits: year_digits(y.unsigned_abs() as u16),
-                            },
-                            significant_digits: None,
-                            qualifier: d.year.qualifier,
-                        },
-                        month: Some(DateField {
-                            digits: field_digits(m),
-                            qualifier: month.qualifier,
-                        }),
-                        day: None,
-                    })),
+                let mf = Some(field_of(field_digits(m), month.qualifier()));
+                match d.day() {
+                    None => want.push(Edtf::Date(date_of(year, mf, None))),
                     Some(day) => {
                         for dd in (1..=31_u8).filter(|x| field_admits(&day, *x)) {
                             if dd > last_day(m, is_leap(y)) {
                                 continue;
                             }
-                            want.push(Edtf::Date(Date {
-                                year: Year {
-                                    kind: YearKind::Standard {
-                                        negative: negative && d.year.value().is_some(),
-                                        digits: year_digits(y.unsigned_abs() as u16),
-                                    },
-                                    significant_digits: None,
-                                    qualifier: d.year.qualifier,
-                                },
-                                month: Some(DateField {
-                                    digits: field_digits(m),
-                                    qualifier: month.qualifier,
-                                }),
-                                day: Some(DateField {
-                                    digits: field_digits(dd),
-                                    qualifier: day.qualifier,
-                                }),
-                            }));
+                            let df = Some(field_of(field_digits(dd), day.qualifier()));
+                            want.push(Edtf::Date(date_of(year, mf, df)));
                         }
                     }
                 }
@@ -848,5 +784,224 @@ proptest! {
         }
         let got: Vec<Edtf> = Edtf::Date(d).values().unwrap().collect();
         prop_assert_eq!(got, want, "input {}", Edtf::Date(d));
+    }
+}
+
+// ------------------------------------------- constructors (decision D31)
+
+/// A digit argument: usually 0-9 or an `X`, sometimes any byte at all.
+fn digit_arg() -> impl Strategy<Value = Option<u8>> {
+    proptest::option::weighted(0.85, prop_oneof![9 => 0_u8..=9, 1 => any::<u8>()])
+}
+
+/// A year's arguments: any form, any value, any significant-digit count,
+/// any qualifier, through either constructor.
+fn year_args() -> BoxedStrategy<(Result<Year, ()>, Option<u32>, Qualifier)> {
+    let kind = prop_oneof![
+        3 => (any::<bool>(), [digit_arg(), digit_arg(), digit_arg(), digit_arg()])
+            .prop_map(|(negative, digits)| YearKind::Standard { negative, digits }),
+        1 => prop_oneof![any::<i64>(), -10_000_000_i64..=10_000_000]
+            .prop_map(|value| YearKind::Big { value }),
+        1 => (prop_oneof![any::<i64>(), -999_i64..=999], prop_oneof![any::<u32>(), 0_u32..=20])
+            .prop_map(|(significand, exponent)| YearKind::Exponential {
+                significand,
+                exponent,
+            }),
+    ];
+    let value = prop_oneof![any::<i64>(), -20_000_i64..=20_000];
+    (
+        prop_oneof![
+            3 => kind.prop_map(|k| Year::new(k).map_err(drop)),
+            1 => value.prop_map(|v| Year::from_value(v).map_err(drop)),
+        ],
+        proptest::option::weighted(0.2, prop_oneof![0_u32..=20, any::<u32>()]),
+        qualifier(),
+    )
+        .boxed()
+}
+
+/// A month or day field's arguments, through either constructor.
+fn field_args() -> BoxedStrategy<Result<DateField, ()>> {
+    prop_oneof![
+        [digit_arg(), digit_arg()].prop_map(|d| DateField::new(d).map_err(drop)),
+        prop_oneof![0_u8..=42, any::<u8>()].prop_map(|v| DateField::from_value(v).map_err(drop)),
+    ]
+    .boxed()
+}
+
+/// A date's arguments: a year and, often, a month and a day.
+type DateArgs = (
+    (Result<Year, ()>, Option<u32>, Qualifier),
+    Option<(Result<DateField, ()>, Qualifier)>,
+    Option<(Result<DateField, ()>, Qualifier)>,
+);
+
+fn date_args() -> BoxedStrategy<DateArgs> {
+    (
+        year_args(),
+        proptest::option::weighted(0.6, (field_args(), qualifier())),
+        proptest::option::weighted(0.5, (field_args(), qualifier())),
+    )
+        .boxed()
+}
+
+/// Every constructor of the date, called on its arguments; `None` where one
+/// refuses them.
+fn build_date(((year, sig, yq), month, day): DateArgs) -> Option<Date> {
+    let mut year = year.ok()?;
+    if let Some(count) = sig {
+        year = year.with_significant_digits(count).ok()?;
+    }
+    let field = |f: Option<(Result<DateField, ()>, Qualifier)>| match f {
+        None => Ok(None),
+        Some((f, q)) => f.map(|f| Some(f.with_qualifier(q))),
+    };
+    Date::new(
+        year.with_qualifier(yq),
+        field(month).ok()?,
+        field(day).ok()?,
+    )
+    .ok()
+}
+
+/// A plain complete date's arguments, for a date-time: any year value, any
+/// month and day byte, rarely a qualifier.
+fn plain_date_args() -> impl Strategy<Value = (i64, u8, u8, Qualifier)> {
+    (
+        prop_oneof![9 => -10_i64..=10_000, 1 => any::<i64>()],
+        prop_oneof![9 => 0_u8..=13, 1 => any::<u8>()],
+        prop_oneof![9 => 0_u8..=32, 1 => any::<u8>()],
+        prop_oneof![9 => Just(Qualifier::default()), 1 => qualifier()],
+    )
+}
+
+/// A time's arguments: any bytes, and any shift.
+fn time_args() -> impl Strategy<Value = (u8, u8, u8, u8, i16, bool)> {
+    (
+        prop_oneof![0_u8..=25, any::<u8>()],
+        prop_oneof![0_u8..=61, any::<u8>()],
+        prop_oneof![0_u8..=61, any::<u8>()],
+        0_u8..=2,
+        prop_oneof![-900_i16..=900, any::<i16>()],
+        any::<bool>(),
+    )
+}
+
+/// Every value the constructors build from these arguments.
+fn build_values(
+    dates: &[DateArgs; 4],
+    (year, month, day, qualifier): (i64, u8, u8, Qualifier),
+    (hour, minute, second, shift_form, minutes, hours_only): (u8, u8, u8, u8, i16, bool),
+    (start_form, end_form, all, members): (u8, u8, bool, [bool; 4]),
+) -> Vec<Edtf> {
+    let [d0, d1, d2, d3] = dates.map(build_date);
+    let mut out: Vec<Edtf> = [d0, d1, d2, d3]
+        .iter()
+        .flatten()
+        .copied()
+        .map(Edtf::Date)
+        .collect();
+
+    let plain = Year::from_value(year).ok().and_then(|y| {
+        let field = |v: u8| {
+            DateField::from_value(v)
+                .map(|f| f.with_qualifier(qualifier))
+                .ok()
+        };
+        Date::new(y.with_qualifier(qualifier), field(month), field(day)).ok()
+    });
+    let shift = match shift_form {
+        0 => Ok(None),
+        1 => Ok(Some(TimeShift::UTC)),
+        _ => TimeShift::offset(minutes, hours_only).map(Some),
+    };
+    if let (Some(date), Ok(shift)) = (plain, shift) {
+        if let Ok(dt) = Time::new(hour, minute, second, shift).and_then(|t| DateTime::new(date, t))
+        {
+            out.push(Edtf::DateTime(dt));
+        }
+    }
+
+    let endpoint = |form: u8, date: Option<Date>| match (form, date) {
+        (0, Some(x)) => IntervalEndpoint::Date(x),
+        (1, Some(x)) => IntervalEndpoint::OnOrBefore(x),
+        (2, Some(x)) => IntervalEndpoint::OnOrAfter(x),
+        (3, _) => IntervalEndpoint::Unknown,
+        _ => IntervalEndpoint::Open,
+    };
+    if let Ok(iv) = Interval::new(endpoint(start_form, d0), endpoint(end_form, d1)) {
+        out.push(Edtf::Interval(iv));
+    }
+
+    let range = d2.zip(d3).and_then(|(a, b)| SetRange::new(a, b).ok());
+    let candidates = [
+        d0.map(SetElement::Date),
+        d1.map(SetElement::OnOrBefore),
+        d2.map(SetElement::OnOrAfter),
+        range.map(SetElement::Range),
+    ];
+    let elements: Vec<SetElement> = candidates
+        .into_iter()
+        .zip(members)
+        .filter_map(|(e, keep)| e.filter(|_| keep))
+        .collect();
+    let kind = if all {
+        SetKind::AllMembers
+    } else {
+        SetKind::OneMember
+    };
+    if let Ok(set) = Set::new(kind, elements) {
+        out.push(Edtf::Set(set));
+    }
+    out
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(2048))]
+
+    /// A value that exists is valid (decision D31).
+    ///
+    /// Every constructor is called on arbitrary arguments — any `i64`, any
+    /// `u8`, any digit mask — and returns; every value it builds prints,
+    /// classifies, bounds, enumerates and relates without panicking, and
+    /// parses back from its canonical text to itself. A bound day the
+    /// constructor accepts is a real day: it steps and orders like its
+    /// Julian Day Number.
+    #[test]
+    fn constructors_build_only_valid_values(
+        dates in [date_args(), date_args(), date_args(), date_args()],
+        plain in plain_date_args(),
+        time in time_args(),
+        shape in (0_u8..=4, 0_u8..=4, any::<bool>(), any::<[bool; 4]>()),
+        day in (prop_oneof![any::<i64>(), -10_000_i64..=10_000], any::<u8>(), any::<u8>()),
+    ) {
+        let fixed = Edtf::parse("1985-04").unwrap();
+        for value in build_values(&dates, plain, time, shape) {
+            let text = value.to_string();
+            prop_assert!(value.level() <= 2, "{}", text);
+            let bounds = value.bounds();
+            if let (Bound::Date(lo), Bound::Date(hi)) = (bounds.earliest, bounds.latest) {
+                prop_assert!(lo <= hi, "{}", text);
+            }
+            if let Ok(values) = value.values() {
+                for item in values.take(3) {
+                    let shown = item.to_string();
+                    prop_assert!(edtf_core::is_valid(&shown), "{} yielded {}", text, shown);
+                }
+            }
+            prop_assert!(value.relation(&value).is_possible(Relation::Equal), "{}", text);
+            prop_assert!(value.relation(&fixed).possible().next().is_some(), "{}", text);
+            prop_assert_eq!(Edtf::parse(&text), Ok(value), "canonical form {:?}", text);
+        }
+        let (year, month, day_of_month) = day;
+        if let Ok(bd) = BoundDate::new(year, month, day_of_month) {
+            let jdn = bd.julian_day_number();
+            if let Some(next) = bd.next_day() {
+                prop_assert!(bd < next && next.julian_day_number() == jdn + 1, "{}", bd);
+            }
+            if let Some(prev) = bd.previous_day() {
+                prop_assert!(prev < bd && prev.julian_day_number() == jdn - 1, "{}", bd);
+            }
+        }
     }
 }
