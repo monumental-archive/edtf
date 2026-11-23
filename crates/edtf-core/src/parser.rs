@@ -535,8 +535,10 @@ fn year_leap_possible(year: &YearKind) -> bool {
             if digits.iter().all(Option::is_some) {
                 let mut v: i64 = 0;
                 for d in digits.iter().flatten() {
+                    // mutants:equivalent replace + with -: `v * 10 - d` folds the digits to -v instead of v, and is_leap is rem_euclid-based, so is_leap(-v) == is_leap(v) for every year; no input can tell the two apart.
                     v = v * 10 + i64::from(*d);
                 }
+                // mutants:equivalent delete -: dropping the sign negation only flips the year's sign, and is_leap (rem_euclid-based) is symmetric under negation, so no input can tell the two apart.
                 is_leap(if *negative { -v } else { v })
             } else {
                 (0..=9999_i64).any(|y| year_matches(*digits, y) && is_leap(y))
