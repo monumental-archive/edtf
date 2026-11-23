@@ -10,3 +10,9 @@
 # both keep this file at the root for the same reason.
 [target.'cfg(target_os="macos")']
 rustflags = ["-Clink-arg=-undefined", "-Clink-arg=dynamic_lookup"]
+
+# MEASUREMENT ONLY, never merged (monumental-archive/.github#2022): cargo
+# prints why it calls a unit dirty, so the gate's warm run names the input
+# that rebuilds pgrx-pg-sys.
+[term]
+verbose = true
