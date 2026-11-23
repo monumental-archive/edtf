@@ -26,6 +26,8 @@
 SELECT set_config('plpgsql.check_asserts', 'on', false);
 
 DO $corpus$
+DECLARE
+    failures text;
 BEGIN
     -- edtf_valid ---------------------------------------------------------
     ASSERT edtf_valid('1985-04-12'), 'level 0 calendar date';
@@ -82,6 +84,88 @@ BEGIN
     ASSERT NOT (daterange(edtf_min('Y-17E7'), edtf_max('Y-17E7'), '[]') @> DATE '1965-06-15'),
         'a saturated deep-past range does not contain a real date';
     ASSERT edtf_max('1986-04/') IS NULL, 'unknown interval end is NULL, not infinity';
+
+    -- Sweeps against Postgres's own calendar, which shares no code with
+    -- edtf-core: #304 shifted every year at or below 0 by a day, and no
+    -- example above had caught it. The EDTF spelling is built from the
+    -- date's text, never to_char or extract, which fail outside the
+    -- timestamp range. A failure names its first five inputs.
+    --
+    -- Every 211th day from the Postgres floor to 9999-12-31 (25,467
+    -- days), spelled with its astronomical year, bounds to itself.
+    SELECT string_agg(
+        spelled || ' -> ' || coalesce(edtf_min(spelled)::text, 'NULL')
+        || ' .. ' || coalesce(edtf_max(spelled)::text, 'NULL'), '; '
+    )
+    INTO failures
+    FROM (
+        SELECT spelled
+        FROM (
+            SELECT
+                day,
+                CASE WHEN astro < 0
+                        THEN '-' || lpad((-astro)::text, 4, '0')
+                    ELSE lpad(astro::text, 4, '0')
+                END || substr(day::text, 5, 6) AS spelled
+            FROM (
+                SELECT
+                    day,
+                    CASE WHEN day::text LIKE '% BC'
+                            THEN 1 - split_part(day::text, '-', 1)::int
+                        ELSE split_part(day::text, '-', 1)::int
+                    END AS astro
+                FROM (
+                    SELECT DATE '4714-11-24 BC' + offs AS day
+                    FROM generate_series(
+                        0, DATE '9999-12-31' - DATE '4714-11-24 BC', 211
+                    ) AS offs
+                ) AS days
+            ) AS years
+        ) AS spellings
+        WHERE
+            edtf_min(spelled) IS DISTINCT FROM day
+            OR edtf_max(spelled) IS DISTINCT FROM day
+        ORDER BY day
+        LIMIT 5
+    ) AS first_failures;
+    ASSERT failures IS NULL, 'day sweep, day does not bound to itself: ' || failures;
+
+    -- Every 7th year from -4712 to 9999, every 1009th from 10000 to the
+    -- Postgres ceiling, and the ceiling itself (7,916 years), bounds to
+    -- its 1 January and 31 December. make_date numbers BC years
+    -- negatively, so astronomical year y <= 0 is make_date(y - 1, ...).
+    SELECT string_agg(
+        spelled || ' -> ' || coalesce(edtf_min(spelled)::text, 'NULL')
+        || ' .. ' || coalesce(edtf_max(spelled)::text, 'NULL'), '; '
+    )
+    INTO failures
+    FROM (
+        SELECT spelled
+        FROM (
+            SELECT
+                yr,
+                CASE
+                    WHEN yr > 9999 THEN 'Y' || yr
+                    WHEN yr < 0 THEN '-' || lpad((-yr)::text, 4, '0')
+                    ELSE lpad(yr::text, 4, '0')
+                END AS spelled,
+                CASE WHEN yr <= 0 THEN yr - 1 ELSE yr END AS pg_year
+            FROM (
+                SELECT generate_series(-4712, 9999, 7) AS yr
+                UNION ALL
+                SELECT generate_series(10000, 5874897, 1009)
+                UNION ALL
+                SELECT 5874897
+            ) AS years
+        ) AS spellings
+        WHERE
+            edtf_min(spelled) IS DISTINCT FROM make_date(pg_year, 1, 1)
+            OR edtf_max(spelled) IS DISTINCT FROM make_date(pg_year, 12, 31)
+        ORDER BY yr
+        LIMIT 5
+    ) AS first_failures;
+    ASSERT failures IS NULL, 'year sweep, year does not bound to its first and last day: '
+        || failures;
 
     -- edtf_relation ------------------------------------------------------
     ASSERT edtf_relation('1985~', '199X') = ARRAY['definitely_before'],
