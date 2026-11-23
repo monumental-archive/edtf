@@ -257,9 +257,34 @@ fn before_after_take_iso_forms() {
     ok("after early 19th century", "[1830..]", 2);
     ok("before 1914-1918", "[..1913]", 2);
     ok("after 1914-1918", "[1919..]", 2);
-    // An unmasked date is its own lo and hi, in its own year form.
+    // An unmasked date is its own lo and hi, as written; a stepped or cut
+    // unit takes the year form its value takes (ISO 8601-2 4.7.2).
     ok("no later than y17e7", "[..Y17E7]", 2);
     ok("before y17e7", "[..Y169999999]", 2);
+    ok("before Y10000", "[..9999]", 2);
+    ok("after Y-10000", "[-9999..]", 2);
+    ok("after 9999", "[Y10000..]", 2);
+    ok("before -9999", "[..Y-10000]", 2);
+    // Y17E7S3 is some year in 170000000..170999999.
+    ok("before y17e7s3", "[..Y169999999]", 2);
+    ok("no later than y17e7s3", "[..Y170999999]", 2);
+    // A year-less operand has no unit of its own (N8, N9): only "until"
+    // and "since" take it, as written.
+    for input in [
+        "before June",
+        "after June",
+        "no later than June",
+        "no earlier than June",
+        "before xxxx",
+        "no later than xxxx",
+    ] {
+        no_match(input);
+    }
+    ok("until June", "../XXXX-06", 2);
+    ok("since June", "XXXX-06/..", 2);
+    // A partly masked year still reads.
+    ok("before 19XX", "[..1899]", 2);
+    ok("before 1985-XX", "[..1984-12]", 2);
     // The unit carries the operand's qualifier.
     ok("before circa 1917", "[..1916~]", 2);
     // A season has no predecessor or successor (4.8.1).

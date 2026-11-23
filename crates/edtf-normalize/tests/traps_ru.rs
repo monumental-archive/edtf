@@ -108,9 +108,9 @@ fn edtf_letters_read_in_either_case() {
     ok("xxxx век", "39XX", 1);
     ok("xix", "18XX", 1);
     // Inside a phrase a one-token atom is tried as EDTF first too (N18).
-    // "до" is strictly before (N8): before every year XXXX admits, and
-    // before the 40th century.
-    ok("до xxxx", "[..-0001]", 2);
+    // "до" is strictly before (N8). The year-less XXXX has no unit of its
+    // own, so it is refused; the 40th century reads.
+    no_match("до xxxx");
     ok("до xxxx века", "[..3899]", 2);
     // An EDTF token keeps its letter case; a Roman numeral reads in either.
     ok("до XXXX века", "[..3899]", 2);

@@ -145,8 +145,13 @@ against the N-number.
   `pred` and `succ` step one unit at that precision, through core's
   `BoundDate::previous_day` and `next_day`, so the leap rule lives in one
   place: "before 1 March 1900" → `[..1900-02-28]`, "before the 1980s" →
-  `[..1979]`, "no later than the 1980s" → `[..1989]`. The unit carries the
-  operand's qualifier ("before circa 1917" → `[..1916~]`). A span — a
+  `[..1979]`, "no later than the 1980s" → `[..1989]`. An unmasked date is
+  its own `lo` and `hi`, as written ("no later than Y17E7" → `[..Y17E7]`);
+  a stepped or cut unit takes the one year form core accepts for its
+  value, four digits within ±9999 and `Y`-prefixed beyond (4.7.2):
+  "before Y10000" → `[..9999]`, "after 9999" → `[Y10000..]`. The unit
+  carries the operand's qualifier ("before circa 1917" → `[..1916~]`). A
+  span — a
   one-of range, or an interval with two dated ends — gives the `lo` of its
   start and the `hi` of its end: "before 1914-1918" → `[..1913]`, "after
   early 19th century" → `[1830..]`. For the two period rows `X` is the
@@ -154,8 +159,14 @@ against the N-number.
   its `hi` or `lo` when it is a span. A season has no predecessor or
   successor (N7), so strictly before or after one is refused; the other
   rows use the season date itself ("no later than spring 1920" →
-  `[..1920-21]`). A set of several elements, a datetime and an interval
-  with an open or unknown end are refused as operands. An operand with
+  `[..1920-21]`). A **year-less operand** — a year with no specified
+  digit, as a standalone month reads under N9 ("June" is `XXXX-06`) or
+  `xxxx` — is refused for the four set rows: its units would be read off
+  core's 0000–9999 bounds (`[..0000-05]` for "before June"), stating a
+  year the prose never gave. "until" and "since" take it as written
+  ("until June" → `../XXXX-06`). A partly masked year still reads
+  ("before 19XX" → `[..1899]`). A set of several elements, a datetime and
+  an interval with an open or unknown end are refused as operands. An operand with
   several readings gives one output per reading, and a reading with no
   form refuses the input (N14). Recorded so it is not re-proposed: the
   open interval `../1917` was chosen first for every row, as "a single
@@ -167,8 +178,10 @@ against the N-number.
   `XXXX-01-12`. Never an assumed current year — the normalizer has no clock
   on purpose (determinism: same input, same output, forever). Inside a range
   the year is elided, not missing — N16 governs there, and `XXXX` never
-  leaks into a range that states its year. python-edtf's broader
-  masked-precision prose ("day in Spring 1849" → `1849-21-XX`) is not
+  leaks into a range that states its year. A year-less date is no
+  operand for before, after, on or before, or on or after (N8): only
+  "until" and "since" take it. python-edtf's broader masked-precision
+  prose ("day in Spring 1849" → `1849-21-XX`) is not
   adopted: "a day in" is annotation, not a date.
 - **N10 — whole-expression qualifiers distribute:** a qualifier scoping the
   whole input applies to every component ("circa June 1940" → `1940-06~`,
@@ -264,13 +277,13 @@ against the N-number.
   `198X`; "until 198X" → `../198X`; "198X or 1990" → `[198X,1990]`).
   A whole input and a one-token part of a phrase alike are tried as EDTF
   before they are read as prose, so Russian "xxxx" is the masked year
-  `XXXX`, not a century, and "до xxxx" is before every year it admits,
-  `[..-0001]`; forty as a Roman numeral is XL ("до xxxx века", before the
-  40th century, is `[..3899]`). The one exception is a colliding sub-year
-  token, which stays N13's question. Any EDTF value may be an alternative
-  ("1914 or 1985/1990", "1914 or [1667,1668]"); an interval with two dated
-  ends is a span, so it is a before/after operand by its start or its end
-  (N8); a set of several elements, a datetime or an interval with an open
+  `XXXX`, not a century, and "до xxxx" is refused, as any year-less
+  operand of "before" is (N8); forty as a Roman numeral is XL ("до xxxx
+  века", before the 40th century, is `[..3899]`). The one exception is a
+  colliding sub-year token, which stays N13's question. Any EDTF value
+  may be an alternative ("1914 or 1985/1990", "1914 or [1667,1668]"); an
+  interval with two dated ends is a span, so it is a before/after operand
+  by its start or its end (N8); a set of several elements, a datetime or an interval with an open
   or unknown end is no operand, and none of these is a range end. The note
   `EdtfCaseNormalized` is attached exactly when the fold changed the
   text, and `AlreadyValidEdtf` only when the EDTF token is the whole

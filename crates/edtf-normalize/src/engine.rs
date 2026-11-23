@@ -197,6 +197,19 @@ fn year_of(y: i32) -> Option<Year> {
     })
 }
 
+/// A `Year` for any value, in the one form core accepts for it: four
+/// digits within ±9999, `Y`-prefixed beyond (ISO 8601-2 4.7.2).
+fn year_any(y: i64) -> Option<Year> {
+    match i32::try_from(y) {
+        Ok(small) if (-9999..=9999).contains(&small) => year_of(small),
+        _ => Some(Year {
+            kind: YearKind::Big { value: y },
+            significant_digits: None,
+            qualifier: Qualifier::default(),
+        }),
+    }
+}
+
 /// A year-precision `Date`.
 fn date_y(y: i32) -> Option<Date> {
     Some(Date {
@@ -1222,6 +1235,21 @@ fn operand_ends(e: &Expr) -> Option<(Date, Date, bool)> {
 /// precision. Every unit carries the operand's qualifier and `q`.
 fn open_expr(open: Open, operand: &Expr, q: Qualifier) -> Option<Expr> {
     let (start, end, single) = operand_ends(operand)?;
+    // A year-less operand ("June" is `XXXX-06`, N9) has no unit of its
+    // own: one read off core's 0000–9999 bounds would state a year the
+    // prose never gave. Only "until" and "since" take it, as written.
+    let year_less = |d: &Date| {
+        matches!(
+            d.year.kind,
+            YearKind::Standard {
+                negative: _,
+                digits: [None, None, None, None],
+            }
+        )
+    };
+    if !matches!(open, Open::Until | Open::Since) && (year_less(&start) || year_less(&end)) {
+        return None;
+    }
     let element = match open {
         Open::Before => SetElement::OnOrBefore(step(&start, false, q)?),
         Open::OnOrBefore => SetElement::OnOrBefore(unit(&end, true, q)?),
@@ -1275,39 +1303,12 @@ fn unit(d: &Date, last: bool, q: Qualifier) -> Option<Date> {
     cut(edge(d, last)?, d, q)
 }
 
-/// The unit just before `d`'s first (or just after its last), qualified.
-/// A season has none. A `Y`-prefixed or exponential year steps as a
-/// `Y`-prefixed year (`Y17E7` → `Y169999999`).
+/// The unit just before `d`'s first (or just after its last), qualified,
+/// its year in the form its value takes (`Y17E7` → `Y169999999`,
+/// `Y10000` → `9999`). A season has none.
 fn step(d: &Date, forward: bool, q: Qualifier) -> Option<Date> {
     if is_season(d) {
         return None;
-    }
-    if unmasked(d)
-        && !matches!(
-            d.year.kind,
-            YearKind::Standard {
-                negative: _,
-                digits: _
-            }
-        )
-    {
-        let y = d.year.value()?;
-        let value = if forward {
-            y.checked_add(1)
-        } else {
-            y.checked_sub(1)
-        }?;
-        let mut out = Date {
-            year: Year {
-                kind: YearKind::Big { value },
-                significant_digits: None,
-                qualifier: Qualifier::default(),
-            },
-            month: None,
-            day: None,
-        };
-        qualify_date(&mut out, carried(d, q));
-        return Some(out);
     }
     let day = edge(d, forward)?;
     let next = if forward {
@@ -1343,15 +1344,20 @@ fn carried(like: &Date, q: Qualifier) -> Qualifier {
     carried
 }
 
-/// `day` cut to the precision of `like`, carrying `like`'s qualifier and
-/// `q`.
+/// `day` cut to the precision of `like`, its year in the form its value
+/// takes (`year_any`), carrying `like`'s qualifier and `q`.
 fn cut(day: BoundDate, like: &Date, q: Qualifier) -> Option<Date> {
-    let y = i32::try_from(day.year).ok()?;
-    let mut out = match (like.month, like.day) {
-        (None, _) => date_y(y)?,
-        (Some(_), None) => date_ym(y, day.month)?,
-        (Some(_), Some(_)) => date_ymd(y, day.month, day.day)?,
+    let mut out = Date {
+        year: year_any(day.year)?,
+        month: None,
+        day: None,
     };
+    if like.month.is_some() {
+        out.month = Some(quiet(day.month));
+        if like.day.is_some() {
+            out.day = Some(quiet(day.day));
+        }
+    }
     qualify_date(&mut out, carried(like, q));
     Some(out)
 }
