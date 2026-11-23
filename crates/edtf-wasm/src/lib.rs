@@ -32,82 +32,16 @@
     clippy::exhaustive_enums,
     reason = "these enums enumerate what ISO 8601-2 defines; the spec fixes the variants, so non_exhaustive would promise additions the format cannot make"
 )]
-#![expect(
-    clippy::pattern_type_mismatch,
-    reason = "matching through a reference without restating & at every level is the idiomatic form the rest of this crate uses"
-)]
 
-use edtf_core::{Bound, Edtf, Relation};
+use edtf_core::{Edtf, Relation, Summary};
 use edtf_normalize::{Language, NoMatchReason, NumericOrder, Options, Outcome, normalize_with};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 
-/// The JSON shape `parse` returns; one object per valid expression.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Summary {
-    /// The canonical (spec-preferred) rendering of the input.
-    pub canonical: String,
-    /// Minimum EDTF conformance level (0, 1 or 2).
-    pub level: u8,
-    /// `"date" | "datetime" | "interval" | "set"`.
-    pub kind: &'static str,
-    /// `"year" | "month" | "season" | "day" | null` (dates/datetimes only).
-    pub precision: Option<&'static str>,
-    /// Earliest calendar day: `"YYYY-MM-DD"`, `"-infinity"`, or null (unknown).
-    pub earliest: Option<String>,
-    /// Latest calendar day: `"YYYY-MM-DD"`, `"infinity"`, or null (unknown).
-    pub latest: Option<String>,
-    /// Any component marked uncertain (`?` or `%`).
-    pub uncertain: bool,
-    /// Any component marked approximate (`~` or `%`).
-    pub approximate: bool,
-    /// Any component with unspecified digits (`X`).
-    pub unspecified: bool,
-}
-
-/// Render a bound as its date string, or `None` for an unknown bound.
-fn bound_json(b: Bound) -> Option<String> {
-    match b {
-        Bound::Date(d) => Some(d.to_string()),
-        Bound::NegativeInfinity => Some("-infinity".into()),
-        Bound::PositiveInfinity => Some("infinity".into()),
-        Bound::Unknown => None,
-    }
-}
-
 /// Build the [`Summary`] for an input, if it is valid EDTF.
 #[must_use]
 pub fn summarize(input: &str) -> Option<Summary> {
-    let parsed = Edtf::parse(input).ok()?;
-    let bounds = parsed.bounds();
-    let (kind, precision) = match &parsed {
-        Edtf::Date(d) => ("date", Some(precision_str(d))),
-        Edtf::DateTime(dt) => ("datetime", Some(precision_str(&dt.date))),
-        Edtf::Interval(_) => ("interval", None),
-        Edtf::Set(_) => ("set", None),
-    };
-    Some(Summary {
-        canonical: parsed.to_string(),
-        level: parsed.level(),
-        kind,
-        precision,
-        earliest: bound_json(bounds.earliest),
-        latest: bound_json(bounds.latest),
-        uncertain: parsed.is_uncertain(),
-        approximate: parsed.is_approximate(),
-        unspecified: parsed.has_unspecified(),
-    })
-}
-
-/// The precision of a date as the lowercase word the JSON surface uses.
-fn precision_str(d: &edtf_core::Date) -> &'static str {
-    match d.precision() {
-        edtf_core::Precision::Year => "year",
-        edtf_core::Precision::Month => "month",
-        edtf_core::Precision::Season => "season",
-        edtf_core::Precision::Day => "day",
-    }
+    Some(Edtf::parse(input).ok()?.summary())
 }
 
 /// The JSON shape `relation` returns.

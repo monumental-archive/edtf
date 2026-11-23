@@ -82,11 +82,13 @@ mod display;
 mod enumerate;
 mod parser;
 mod relation;
+mod summary;
 mod types;
 
 pub use bounds::{Bound, BoundDate, Bounds};
 pub use enumerate::{Unenumerable, Values};
 pub use relation::{Modality, Relation, Relations};
+pub use summary::Summary;
 pub use types::{
     Date, DateField, DateTime, Edtf, Interval, IntervalEndpoint, ParseError, Precision, Qualifier,
     Set, SetElement, SetKind, Time, TimeShift, Year, YearKind,

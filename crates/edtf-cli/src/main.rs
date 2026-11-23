@@ -62,7 +62,7 @@ use std::{
     process::ExitCode,
 };
 
-use edtf_core::{Bound, Edtf};
+use edtf_core::Edtf;
 
 /// The `--help` text, and the usage line every argument error prints.
 const USAGE: &str = "\
@@ -246,48 +246,14 @@ fn parse_julian_parts(input: &str) -> Option<(i64, Option<u8>, Option<u8>)> {
     Some((year, month, day))
 }
 
-/// Render a bound as JSON: a date string, or `null` for an unknown bound.
-fn bound_value(b: Bound) -> serde_json::Value {
-    match b {
-        Bound::Date(d) => serde_json::Value::String(d.to_string()),
-        Bound::NegativeInfinity => serde_json::Value::String("-infinity".into()),
-        Bound::PositiveInfinity => serde_json::Value::String("infinity".into()),
-        Bound::Unknown => serde_json::Value::Null,
-    }
-}
-
-/// The `info` command's JSON object for one parsed expression.
+/// The `info` command's JSON object for one parsed expression: core's
+/// [`edtf_core::Summary`] with the input added.
 fn info_json(input: &str, parsed: &Edtf) -> String {
-    let bounds = parsed.bounds();
-    let (kind, precision) = match parsed {
-        Edtf::Date(d) => ("date", Some(precision_str(d))),
-        Edtf::DateTime(dt) => ("datetime", Some(precision_str(&dt.date))),
-        Edtf::Interval(_) => ("interval", None),
-        Edtf::Set(_) => ("set", None),
-    };
-    serde_json::json!({
-        "input": input,
-        "canonical": parsed.to_string(),
-        "level": parsed.level(),
-        "kind": kind,
-        "precision": precision,
-        "earliest": bound_value(bounds.earliest),
-        "latest": bound_value(bounds.latest),
-        "uncertain": parsed.is_uncertain(),
-        "approximate": parsed.is_approximate(),
-        "unspecified": parsed.has_unspecified(),
-    })
-    .to_string()
-}
-
-/// The precision of a date as the lowercase word the JSON surface uses.
-fn precision_str(d: &edtf_core::Date) -> &'static str {
-    match d.precision() {
-        edtf_core::Precision::Year => "year",
-        edtf_core::Precision::Month => "month",
-        edtf_core::Precision::Season => "season",
-        edtf_core::Precision::Day => "day",
+    let mut json = serde_json::json!(parsed.summary());
+    if let Some(object) = json.as_object_mut() {
+        object.insert("input".into(), input.into());
     }
+    json.to_string()
 }
 
 #[cfg(test)]
