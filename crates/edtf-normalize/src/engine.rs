@@ -1214,26 +1214,25 @@ fn open_expr(open: Open, operand: &Expr, q: Qualifier) -> Option<Expr> {
         return Some(Expr::Impossible);
     }
     let (start, end, single) = operand_ends(operand)?;
-    // A year-less operand ("June" is `XXXX-06`, N9) has no unit of its
-    // own: one read off core's 0000–9999 bounds would state a year the
-    // prose never gave. Only "until" and "since" take it, as written.
-    let year_less = |d: &Date| {
-        matches!(
+    // A year-less end ("June" is `XXXX-06`, N9) has no unit of its own:
+    // one read off core's 0000–9999 bounds would state a year the prose
+    // never gave. Each set row reads one end and refuses only when that
+    // end is year-less; "until" and "since" take it as written.
+    let known = |d: Date| {
+        let year_less = matches!(
             d.year().kind(),
             YearKind::Standard {
                 negative: _,
                 digits: [None, None, None, None],
             }
-        )
+        );
+        (!year_less).then_some(d)
     };
-    if !matches!(open, Open::Until | Open::Since) && (year_less(&start) || year_less(&end)) {
-        return None;
-    }
     let element = match open {
-        Open::Before => SetElement::OnOrBefore(step(&start, false, q)?),
-        Open::OnOrBefore => SetElement::OnOrBefore(unit(&end, true, q)?),
-        Open::After => SetElement::OnOrAfter(step(&end, true, q)?),
-        Open::OnOrAfter => SetElement::OnOrAfter(unit(&start, false, q)?),
+        Open::Before => SetElement::OnOrBefore(step(&known(start)?, false, q)?),
+        Open::OnOrBefore => SetElement::OnOrBefore(unit(&known(end)?, true, q)?),
+        Open::After => SetElement::OnOrAfter(step(&known(end)?, true, q)?),
+        Open::OnOrAfter => SetElement::OnOrAfter(unit(&known(start)?, false, q)?),
         Open::Until | Open::Since => {
             let until = open == Open::Until;
             let x = if single {
@@ -1476,7 +1475,8 @@ fn parse_range(s: &str, toks: &[&str], opts: Options, lang: &Lang) -> Option<Rea
 /// components, never a range (ISO 8601-1 §3.2.6). A bare year has no
 /// component hyphen, so it is not a unit and a minus before it stays a
 /// candidate ("1985 -1990"). A colliding sub-year token is not a unit;
-/// it is the range grammar's question (N13).
+/// it is the range grammar's question (N13). Nor does a unit end at a
+/// hyphen that opens a number suffix (`opens_number_suffix`).
 fn range_hyphens(s: &str, opts: Options, lang: &Lang) -> Vec<usize> {
     let mut hyphens = Vec::new();
     let mut i = 0;
@@ -1506,8 +1506,26 @@ fn date_unit(s: &str, opts: Options, lang: &Lang) -> Option<usize> {
         .chain(iter::once(s.len()))
         .rfind(|&end| {
             let t = &s[..end];
-            !sub_year_collides(t, opts, lang)
+            !opens_number_suffix(&s[end..], lang)
+                && !sub_year_collides(t, opts, lang)
                 && matches!(edtf_token(t, lang), Some((Edtf::Date(d), _)) if d.month().is_some())
+        })
+}
+
+/// Whether `rest` opens one of the language's hyphen number suffixes.
+///
+/// The suffix ("-й" in "11-й", "-е" in "1980-е") must end at a space, a
+/// hyphen or the end. Such a hyphen binds the number before it, so a
+/// date unit never ends there (N4).
+fn opens_number_suffix(rest: &str, lang: &Lang) -> bool {
+    let rest = rest.to_lowercase();
+    lang.ordinal_suffixes
+        .iter()
+        .chain(lang.decade_suffixes)
+        .filter(|suffix| suffix.starts_with('-'))
+        .any(|suffix| {
+            rest.strip_prefix(suffix)
+                .is_some_and(|after| after.is_empty() || after.starts_with([' ', '-']))
         })
 }
 

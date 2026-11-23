@@ -107,7 +107,11 @@ against the N-number.
   at a hyphen, a space or the end; core is the authority on what one
   date is, so the normaliser keeps no copy of the date grammar. A bare
   year is not a unit, and a colliding sub-year token (N13) is not one
-  either, since its hyphen is the very question N13 answers. Every other
+  either, since its hyphen is the very question N13 answers. Nor does a
+  unit end at a hyphen that opens one of the language's number suffixes
+  (any `ordinal_suffixes` or `decade_suffixes` entry starting with `-`,
+  read from the tables): that hyphen binds the number before it, so
+  "1000-11-й век" is `1000/10XX`, not the month `1000-11`. Every other
   hyphen is a candidate; one that reads is the answer, and several that
   read give every split's readings, left to right (N14). The same scan
   runs before lower-casing, so a piece between candidates that is EDTF
@@ -189,7 +193,13 @@ against the N-number.
   `xxxx` — is refused for the four set rows: its units would be read off
   core's 0000–9999 bounds (`[..0000-05]` for "before June"), stating a
   year the prose never gave. "until" and "since" take it as written
-  ("until June" → `../XXXX-06`). A partly masked year still reads
+  ("until June" → `../XXXX-06`). A span is read by one end per set
+  row, so a row refuses it only when the end the row reads is year-less
+  ("xxxx to 1900" is `XXXX/1900`): "before" and "on or after" read the
+  start, so "before xxxx to 1900" and "on or after xxxx to 1900" are
+  refused; "on or before" and "after" read the end, so "after xxxx to
+  1900" is `[1901..]` and "on or before 1900 to xxxx" is refused, while
+  "before 1900 to xxxx" is `[..1899]`. A partly masked year still reads
   ("before 19XX" → `[..1899]`). A set of several elements, a datetime and
   an interval with an open or unknown end are refused as operands. An operand with
   several readings gives one output per reading, and a reading with no

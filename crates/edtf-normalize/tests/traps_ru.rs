@@ -365,3 +365,14 @@ fn no_substring_extraction() {
     no_match("это не дата");
     no_match("1863, напечатано в 1870");
 }
+
+#[test]
+fn a_hyphen_number_suffix_is_not_the_end_of_a_date_unit() {
+    // "-й" binds 11 as an ordinal, so "1000-11" is not a month here (N4).
+    ok("1000-11-й век", "1000/10XX", 2);
+    assert_eq!(
+        normalize_with("январь 1000-11-й век", ru()),
+        normalize_with("январь 1000 - 11-й век", ru())
+    );
+    ok("1000-1980-е", "1000/198X", 2);
+}
