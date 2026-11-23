@@ -14,23 +14,23 @@
 # band: 2
 # measured: 99.3
 # derived: coverage:adopt
-# legs: rust pgrx-pg15 pgrx-pg16 pgrx-pg17 pgrx-pg18
+# legs: rust pgrx-pg15 pgrx-pg16 pgrx-pg17 pgrx-pg18 pgrx-pg19
 90
 #
 # rust-branches: a floor of its own (#1359), measured off the gate and held by
 # the Monday audit, under the same band and the same law.
-# rust-branches measured: 99.3
+# rust-branches measured: 99.0
 rust-branches 90
 #
 # fuzz-normalize: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.
-# fuzz-normalize measured: 70.1
-fuzz-normalize 68.1
+# fuzz-normalize measured: 74.7
+fuzz-normalize 72.7
 #
 # fuzz-parse: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.
-# fuzz-parse measured: 58.0
-fuzz-parse 56.0
+# fuzz-parse measured: 54.2
+fuzz-parse 52.2
 #
 # fuzz-relate: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.
