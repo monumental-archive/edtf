@@ -738,18 +738,14 @@ mod tests {
     /// messages, at the month and the day of the `YYYY-MM-DD` it requires.
     #[test]
     fn datetime_month_and_day_follow_the_date_rules() {
-        let month = "month must be 01-12 or a sub-year code 21-41";
+        let month = ValueError::MONTH_RANGE;
         assert_err("2020-13-01T00:00:00", month, 5);
         assert_err(
             "2020-21-01T00:00:00",
             "sub-year groupings cannot carry a day",
             8,
         );
-        assert_err(
-            "2019-02-29T00:00:00",
-            "day is out of range for the month",
-            8,
-        );
+        assert_err("2019-02-29T00:00:00", ValueError::DAY_RANGE, 8);
     }
 
     /// Assert `input` fails with exactly this message at exactly this offset.
@@ -786,8 +782,8 @@ mod tests {
     /// is never leap while one ending in 4 can be.
     #[test]
     fn masked_digits_admit_only_matching_completions() {
-        assert_err("1985-X4-31", "day is out of range for the month", 8);
-        assert_err("XXX1-02-29", "day is out of range for the month", 8);
+        assert_err("1985-X4-31", ValueError::DAY_RANGE, 8);
+        assert_err("XXX1-02-29", ValueError::DAY_RANGE, 8);
         parse("XXX4-02-29").unwrap();
     }
 
@@ -843,11 +839,7 @@ mod tests {
     #[test]
     fn interval_errors_are_positioned_at_the_offending_part() {
         assert_err("1985/1986/1987", "interval must contain exactly one '/'", 9);
-        assert_err(
-            "..1985-13/1990",
-            "month must be 01-12 or a sub-year code 21-41",
-            7,
-        );
+        assert_err("..1985-13/1990", ValueError::MONTH_RANGE, 7);
         assert_err(
             "1985../1990",
             "'..'-suffixed date is only allowed as interval end",
@@ -874,7 +866,7 @@ mod tests {
     #[test]
     fn set_errors_are_positioned_at_the_offending_element() {
         assert_err("{1985,{1986}}", "sets cannot nest", 6);
-        let month = "month must be 01-12 or a sub-year code 21-41";
+        let month = ValueError::MONTH_RANGE;
         assert_err("{..1985-13}", month, 8);
         assert_err("{1980,1985..1986-13}", month, 17);
         assert_err(
