@@ -9,8 +9,8 @@
 //! every `i64` year, edges weighted in, crossed with every `u8` month and
 //! day. There the oracles are test-local: the Julian leap rule, month
 //! lengths and a Julian day count are re-derived below, independently of
-//! the crate (same spirit as `edtf-core/tests/props.rs` re-deriving the
-//! leap rule), and the Gregorian side is `edtf-core`'s own
+//! the crate (same spirit as `edtf-core/src/properties/proptests.rs`
+//! re-deriving the leap rule), and the Gregorian side is `edtf-core`'s own
 //! `BoundDate::julian_day_number`, so a bug in the crate's Julian
 //! arithmetic cannot cancel itself out.
 
