@@ -61,13 +61,6 @@ edtf-core = { path = "../crates/edtf-core" }
 edtf-normalize = { path = "../crates/edtf-normalize" }
 
 [[bin]]
-name = "parse"
-path = "fuzz_targets/parse.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
 name = "roundtrip"
 path = "fuzz_targets/roundtrip.rs"
 test = false
