@@ -171,6 +171,39 @@ fn from_julian_month_and_negative_year() {
     assert_eq!(lines[1], "-0044-03-13");
 }
 
+/// `from-julian` prints EDTF or nothing (#365).
+///
+/// A Gregorian day outside the years -9999 to 9999 needs the `Y` form,
+/// which carries no month or day, so the conversion is refused. Before #365 the first four printed
+/// `10000-03-14`, `10000-03-13`, `9999-03-15/10000-03-13` and
+/// `10000-03-14/10001-03-14` and exited 0; the last reported a shape
+/// error for a year of the right shape.
+#[test]
+fn from_julian_refuses_results_without_an_edtf_spelling() {
+    for input in [
+        "10000-01-01",
+        "9999-12-31",
+        "9999",
+        "10000",
+        "-9223372036854775808",
+    ] {
+        let (stdout, stderr, ok) = edtf(&["from-julian", input]);
+        assert!(!ok, "{input} must be refused");
+        assert!(stdout.is_empty(), "{input} printed {stdout:?}");
+        assert_eq!(
+            stderr.trim(),
+            format!("{input}: converted year out of range")
+        );
+    }
+    // A year too large for `i64` is out of range too, not a shape error.
+    let (_, stderr, ok) = edtf(&["from-julian", "99999999999999999999"]);
+    assert!(!ok);
+    assert!(
+        stderr.contains("converted year out of range"),
+        "got {stderr:?}"
+    );
+}
+
 #[test]
 fn from_julian_rejects_garbage() {
     for bad in [
