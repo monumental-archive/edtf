@@ -84,10 +84,6 @@
     reason = "inlining is the compiler's call across a crate boundary, and the release profile enables fat LTO — annotating every public item would assert a decision this crate has not measured"
 )]
 #![expect(
-    clippy::single_call_fn,
-    reason = "a named helper used once is extraction for readability, which is the opposite of a defect; several are also the named steps the module docs describe"
-)]
-#![expect(
     clippy::as_conversions,
     reason = "the operands are proven in range by the guard or type immediately above each cast, and try_from at these sites would add an unreachable error path"
 )]

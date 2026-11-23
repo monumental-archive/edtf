@@ -33,30 +33,18 @@ use pgrx::{datetime::Date, pg_extern, pg_sys};
 
 /// True if the input is valid EDTF (ISO 8601-2:2019 Annex A, levels 0-2).
 #[pg_extern(immutable, parallel_safe, strict)]
-#[expect(
-    clippy::single_call_fn,
-    reason = "pgrx generates the `_wrapper` Postgres calls, and it is this function's only caller"
-)]
 fn edtf_valid(input: &str) -> bool {
     edtf_core::is_valid(input)
 }
 
 /// Minimum EDTF conformance level (0, 1 or 2); NULL if invalid.
 #[pg_extern(immutable, parallel_safe, strict)]
-#[expect(
-    clippy::single_call_fn,
-    reason = "pgrx generates the `_wrapper` Postgres calls, and it is this function's only caller"
-)]
 fn edtf_level(input: &str) -> Option<i32> {
     edtf_core::level(input).map(i32::from)
 }
 
 /// Canonical (spec-preferred) rendering; NULL if invalid.
 #[pg_extern(immutable, parallel_safe, strict)]
-#[expect(
-    clippy::single_call_fn,
-    reason = "pgrx generates the `_wrapper` Postgres calls, and it is this function's only caller"
-)]
 fn edtf_canonical(input: &str) -> Option<String> {
     Some(Edtf::parse(input).ok()?.to_string())
 }
@@ -97,10 +85,6 @@ fn to_pg_date(bound: Bound) -> Option<Date> {
 /// starts and for a day before the Postgres date range (4714-11-24 BC);
 /// NULL when invalid or unknown.
 #[pg_extern(immutable, parallel_safe, strict)]
-#[expect(
-    clippy::single_call_fn,
-    reason = "pgrx generates the `_wrapper` Postgres calls, and it is this function's only caller"
-)]
 fn edtf_min(input: &str) -> Option<Date> {
     to_pg_date(Edtf::parse(input).ok()?.bounds().earliest)
 }
@@ -109,10 +93,6 @@ fn edtf_min(input: &str) -> Option<Date> {
 /// and for a day past the Postgres date range (5874897-12-31); NULL when
 /// invalid or unknown.
 #[pg_extern(immutable, parallel_safe, strict)]
-#[expect(
-    clippy::single_call_fn,
-    reason = "pgrx generates the `_wrapper` Postgres calls, and it is this function's only caller"
-)]
 fn edtf_max(input: &str) -> Option<Date> {
     to_pg_date(Edtf::parse(input).ok()?.bounds().latest)
 }
@@ -126,10 +106,6 @@ fn edtf_max(input: &str) -> Option<Date> {
 /// `possibly_`. NULL if either input is invalid. A consistency rule reads:
 /// `NOT ('definitely_after' = ANY(edtf_relation(born, died)))`.
 #[pg_extern(immutable, parallel_safe, strict)]
-#[expect(
-    clippy::single_call_fn,
-    reason = "pgrx generates the `_wrapper` Postgres calls, and it is this function's only caller"
-)]
 #[expect(
     clippy::min_ident_chars,
     reason = "pgrx derives the SQL argument names from these idents: `edtf_relation(\"a\" TEXT, \"b\" TEXT)` is the published surface (schema.snapshot.sql), so renaming them breaks named-notation callers"
@@ -171,8 +147,7 @@ mod tests {
     #[pg_test]
     #[expect(
         clippy::missing_panics_doc,
-        clippy::single_call_fn,
-        reason = "a pgrx test: it asserts by panicking, so there is no caller to warn, and pgrx generates the harness entry point that is its only caller"
+        reason = "a pgrx test: it asserts by panicking, so there is no caller to warn"
     )]
     #[expect(
         clippy::expect_used,

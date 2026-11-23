@@ -29,10 +29,6 @@
     reason = "the test bodies use the same y/m/d date-component names as the code they exercise"
 )]
 #![expect(
-    clippy::single_call_fn,
-    reason = "a named helper used once is extraction for readability, which is the opposite of a defect; several are also the named steps the module docs describe"
-)]
-#![expect(
     clippy::shadow_reuse,
     reason = "the algorithms shadow deliberately — the JDN forms rebind y and m as the published derivation does, step by step, and renaming each step would break the correspondence to the source"
 )]

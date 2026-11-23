@@ -16,10 +16,6 @@
     clippy::redundant_pub_crate,
     reason = "pub(crate) states the intended visibility even where the module tree makes it redundant today"
 )]
-#![expect(
-    clippy::single_call_fn,
-    reason = "a named helper used once is extraction for readability, which is the opposite of a defect; several are also the named steps the module docs describe"
-)]
 
 use crate::NumericOrder;
 

@@ -6,10 +6,6 @@
 //! datetimes. Property-level invariants live in `tests/props.rs`.
 
 #![expect(
-    clippy::tests_outside_test_module,
-    reason = "an integration test under tests/ is compiled as its own crate whose every item is test support, so there is no non-test code for a mod tests to separate it from"
-)]
-#![expect(
     clippy::min_ident_chars,
     reason = "a and b are the two operands of the interval relation algebra and ab/ba its two directions; that is the notation the invariants are written in"
 )]

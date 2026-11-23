@@ -10,18 +10,10 @@
 //! touching the harness contract.
 
 /// No per-test setup needed.
-#[expect(
-    clippy::single_call_fn,
-    reason = "pgrx's harness calls it once per test, and the crate has one test: `shared_corpus` (edtf#328)"
-)]
 #[inline]
 pub fn setup(_options: Vec<&str>) {}
 
 /// No extra postgresql.conf settings needed.
-#[expect(
-    clippy::single_call_fn,
-    reason = "pgrx's harness calls it once per test, and the crate has one test: `shared_corpus` (edtf#328)"
-)]
 #[inline]
 #[must_use]
 pub fn postgresql_conf_options() -> Vec<&'static str> {

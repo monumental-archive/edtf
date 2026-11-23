@@ -24,10 +24,6 @@
     reason = "each index is preceded by the bounds check that justifies it, or indexes a fixed-size array whose length is in its type"
 )]
 #![expect(
-    clippy::single_call_fn,
-    reason = "a named helper used once is extraction for readability, which is the opposite of a defect; several are also the named steps the module docs describe"
-)]
-#![expect(
     clippy::integer_division_remainder_used,
     reason = "calendar arithmetic is integer division by definition — the leap rules are /4, /100 and /400, and a float would be wrong"
 )]

@@ -36,10 +36,6 @@
     clippy::pattern_type_mismatch,
     reason = "matching through a reference without restating & at every level is the idiomatic form the rest of this crate uses"
 )]
-#![expect(
-    clippy::single_call_fn,
-    reason = "a named helper used once is extraction for readability, which is the opposite of a defect; several are also the named steps the module docs describe"
-)]
 
 use edtf_core::{Bound, Edtf, Relation};
 use edtf_normalize::{Language, NoMatchReason, NumericOrder, Options, Outcome, normalize_with};

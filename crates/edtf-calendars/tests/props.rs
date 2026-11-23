@@ -28,16 +28,8 @@
     reason = "test arithmetic is over literal fixtures and generator-bounded values; an overflow here would fail the test, which is the signal"
 )]
 #![expect(
-    clippy::single_call_fn,
-    reason = "one named helper per assertion group is what makes the test readable"
-)]
-#![expect(
     clippy::unreachable,
     reason = "an unreachable! naming the invariant the fixture guarantees"
-)]
-#![expect(
-    clippy::tests_outside_test_module,
-    reason = "an integration test under tests/ is compiled as its own crate whose every item is test support, so there is no non-test code for a mod tests to separate it from"
 )]
 #![expect(
     clippy::missing_panics_doc,

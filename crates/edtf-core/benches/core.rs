@@ -23,10 +23,6 @@
     reason = "test helpers are named for what they assert"
 )]
 #![expect(
-    clippy::single_call_fn,
-    reason = "one named helper per assertion group is what makes the test readable"
-)]
-#![expect(
     clippy::shadow_unrelated,
     reason = "short-lived rebinding inside one assertion chain"
 )]
