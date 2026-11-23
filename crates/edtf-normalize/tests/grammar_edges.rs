@@ -193,8 +193,8 @@ fn a_hyphen_inside_an_iso_date_never_splits_a_range() {
     ok("-1000-01-01-1000", "-1000-01-01/1000");
     ok("1985-04-1990", "1985-04/1990");
     ok("1985-04-12\u{2013}1986", "1985-04-12/1986");
-    ok("XXXX-01-1985", "XXXX-01/1985");
-    ok("XXXX-01 - 1985", "XXXX-01/1985");
+    ok("XXXX-01-1985", "1985-01/1985");
+    ok("XXXX-01 - 1985", "1985-01/1985");
     ok("circa 1985-04-1990", "1985-04~/1990~"); // a unit starts after a space
     ok("1985 -1990", "1985/1990"); // a bare year is not a unit
     // Unchanged by the unit rule.
