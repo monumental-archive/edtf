@@ -36,11 +36,11 @@ use alloc::{
     vec::Vec,
 };
 
-use edtf_core::{Date, Edtf, IntervalEndpoint, Set, SetElement, SetKind, YearKind};
+use edtf_core::{Date, DateField, Edtf, IntervalEndpoint, Set, SetElement, SetKind, YearKind};
 
 use crate::{
-    normalize_with, tables::lang_for, Century, Language, NoMatchReason, Note, NumericOrder,
-    Options, Outcome,
+    Century, Language, NoMatchReason, Note, NumericOrder, Options, Outcome, normalize_with,
+    tables::lang_for,
 };
 
 #[cfg(test)]
@@ -72,11 +72,15 @@ impl Answer {
     /// The answer an outcome gives.
     #[must_use]
     pub fn of(outcome: &Outcome) -> Self {
-        match *outcome {
-            Outcome::Normalized(ref n) => Self::Read(vec![n.edtf.clone()]),
-            Outcome::Ambiguous(ref amb) => {
-                Self::Read(amb.interpretations.iter().map(|i| i.edtf.clone()).collect())
-            }
+        match outcome.clone() {
+            Outcome::Normalized(normalized) => Self::Read(vec![normalized.edtf]),
+            Outcome::Ambiguous(ambiguous) => Self::Read(
+                ambiguous
+                    .interpretations
+                    .into_iter()
+                    .map(|interpretation| interpretation.edtf)
+                    .collect(),
+            ),
             Outcome::NoMatch { reason } => Self::Refused(reason),
         }
     }
@@ -126,15 +130,15 @@ pub fn every_options() -> Vec<Options> {
 }
 
 /// Each reading of an outcome: its value and its notes.
-fn readings(outcome: &Outcome) -> Vec<(&Edtf, &[Note])> {
-    match *outcome {
-        Outcome::Normalized(ref n) => vec![(&n.value, n.notes.as_slice())],
-        Outcome::Ambiguous(ref amb) => amb
+fn readings(outcome: &Outcome) -> Vec<(Edtf, Vec<Note>)> {
+    match outcome.clone() {
+        Outcome::Normalized(normalized) => vec![(normalized.value, normalized.notes)],
+        Outcome::Ambiguous(ambiguous) => ambiguous
             .interpretations
-            .iter()
-            .map(|i| (&i.value, i.notes.as_slice()))
+            .into_iter()
+            .map(|interpretation| (interpretation.value, interpretation.notes))
             .collect(),
-        Outcome::NoMatch { .. } => Vec::new(),
+        Outcome::NoMatch { reason: _ } => Vec::new(),
     }
 }
 
@@ -155,9 +159,9 @@ fn unqualified(edtf: &str) -> bool {
 }
 
 /// Whether a date's year is `XXXX` (N9).
-fn year_less(d: &Date) -> bool {
+const fn year_less(date: &Date) -> bool {
     matches!(
-        d.year().kind(),
+        date.year().kind(),
         YearKind::Standard {
             negative: _,
             digits: [None, None, None, None],
@@ -165,19 +169,24 @@ fn year_less(d: &Date) -> bool {
     )
 }
 
+/// Whether a date is N9's year-less date: a month under an `XXXX` year.
+const fn month_without_year(date: &Date) -> bool {
+    year_less(date) && date.month().is_some()
+}
+
 /// Whether a date names a season (ISO 8601-2 4.8.1: codes 21-24 and up).
-fn is_season(d: &Date) -> bool {
-    d.month()
-        .and_then(edtf_core::DateField::value)
-        .is_some_and(|m| m > 12)
+fn is_season(date: &Date) -> bool {
+    date.month()
+        .and_then(DateField::value)
+        .is_some_and(|month| month > 12)
 }
 
 /// The date an interval endpoint carries, if any.
-const fn endpoint_date(ep: IntervalEndpoint) -> Option<Date> {
-    match ep {
-        IntervalEndpoint::Date(d)
-        | IntervalEndpoint::OnOrBefore(d)
-        | IntervalEndpoint::OnOrAfter(d) => Some(d),
+const fn endpoint_date(endpoint: IntervalEndpoint) -> Option<Date> {
+    match endpoint {
+        IntervalEndpoint::Date(date)
+        | IntervalEndpoint::OnOrBefore(date)
+        | IntervalEndpoint::OnOrAfter(date) => Some(date),
         IntervalEndpoint::Open | IntervalEndpoint::Unknown => None,
     }
 }
@@ -192,9 +201,11 @@ pub fn range_forms(left: &str, right: &str, language: Language) -> Vec<String> {
     let mut forms: Vec<String> = lang_for(language)
         .range_pairs
         .iter()
-        .map(|&(lead, sep)| match lead {
-            Some(lead) => format!("{lead} {left} {sep} {right}"),
-            None => format!("{left} {sep} {right}"),
+        .map(|&(lead, sep)| {
+            lead.map_or_else(
+                || format!("{left} {sep} {right}"),
+                |word| format!("{word} {left} {sep} {right}"),
+            )
         })
         .collect();
     for dash in ['-', '\u{2013}', '\u{2014}'] {
@@ -225,12 +236,17 @@ pub fn open_forms(operand: &str, language: Language) -> Vec<String> {
 }
 
 /// Assert every form gave the first form's answer.
+///
+/// # Panics
+///
+/// When two forms disagree.
 fn check_agree(rule: &str, forms: &[(String, Answer)]) {
-    if let Some((first_input, first)) = forms.first() {
-        for (input, answer) in forms {
+    if let Some(first) = forms.first() {
+        for form in forms {
             assert_eq!(
-                answer, first,
-                "{rule}: {input:?} gives {answer:?}, {first_input:?} gives {first:?}"
+                form.1, first.1,
+                "{rule}: {:?} gives {:?}, {:?} gives {:?}",
+                form.0, form.1, first.0, first.1
             );
         }
     }
@@ -242,8 +258,10 @@ fn check_agree(rule: &str, forms: &[(String, Answer)]) {
 /// Whether `input` reads alone as one unqualified date.
 fn one_date(input: &str, language: Language) -> bool {
     match normalize_with(input, options(language)) {
-        Outcome::Normalized(n) => matches!(n.value, Edtf::Date(_)) && unqualified(&n.edtf),
-        Outcome::Ambiguous(_) | Outcome::NoMatch { .. } => false,
+        Outcome::Normalized(normalized) => {
+            matches!(normalized.value, Edtf::Date(_)) && unqualified(&normalized.edtf)
+        }
+        Outcome::Ambiguous(_) | Outcome::NoMatch { reason: _ } => false,
     }
 }
 
@@ -280,14 +298,14 @@ pub struct OrObservation {
 /// The elements a one-of set holding `input`'s one reading would take,
 /// when it reads alone as one unqualified reading that states its year.
 fn or_elements(input: &str, language: Language) -> Option<Vec<SetElement>> {
-    let Outcome::Normalized(n) = normalize_with(input, options(language)) else {
+    let Outcome::Normalized(normalized) = normalize_with(input, options(language)) else {
         return None;
     };
-    if !unqualified(&n.edtf) || n.notes.contains(&Note::MissingYearMasked) {
+    if !unqualified(&normalized.edtf) || normalized.notes.contains(&Note::MissingYearMasked) {
         return None;
     }
-    match n.value {
-        Edtf::Date(d) => Some(vec![SetElement::Date(d)]),
+    match normalized.value {
+        Edtf::Date(date) => Some(vec![SetElement::Date(date)]),
         Edtf::Set(set) if set.kind() == SetKind::OneMember => Some(set.elements().to_vec()),
         Edtf::Set(_) | Edtf::Interval(_) | Edtf::DateTime(_) => None,
     }
@@ -307,7 +325,7 @@ pub fn observe_or(left: &str, right: &str, language: Language) -> Option<OrObser
         }
     }
     let expected = match *elements.as_slice() {
-        [SetElement::Date(d)] => Edtf::Date(d),
+        [SetElement::Date(date)] => Edtf::Date(date),
         _ => Edtf::Set(Set::new(SetKind::OneMember, elements).ok()?),
     };
     Some(OrObservation {
@@ -323,10 +341,11 @@ pub fn observe_or(left: &str, right: &str, language: Language) -> Option<OrObser
 /// When a form gives anything else.
 pub fn check_or_composes(observation: &OrObservation) {
     let expected = Answer::Read(vec![observation.expected.clone()]);
-    for (input, answer) in &observation.forms {
+    for form in &observation.forms {
         assert_eq!(
-            answer, &expected,
-            "\"or\" does not compose: {input:?} gives {answer:?}"
+            form.1, expected,
+            "\"or\" does not compose: {:?} gives {:?}",
+            form.0, form.1
         );
     }
 }
@@ -357,27 +376,29 @@ pub struct OpenObservation {
 
 /// Whether a date can be a before/after operand's edge: it states a year
 /// and is not a season, which has no predecessor (N8, N9).
-fn dated_edge(d: &Date) -> bool {
-    !year_less(d) && !is_season(d)
+fn dated_edge(date: &Date) -> bool {
+    !year_less(date) && !is_season(date)
 }
 
 /// Whether a reading is a before/after operand: a dated date that is not a
 /// season, or a span (an interval with two dated ends, or a one-element
 /// one-of set).
 fn is_operand(value: &Edtf) -> bool {
-    match *value {
-        Edtf::Date(ref d) => dated_edge(d),
-        Edtf::Interval(ref iv) => match (iv.start(), iv.end()) {
-            (IntervalEndpoint::Date(a), IntervalEndpoint::Date(b)) => {
-                dated_edge(&a) && dated_edge(&b)
+    match value.clone() {
+        Edtf::Date(date) => dated_edge(&date),
+        Edtf::Interval(interval) => match (interval.start(), interval.end()) {
+            (IntervalEndpoint::Date(start), IntervalEndpoint::Date(end)) => {
+                dated_edge(&start) && dated_edge(&end)
             }
             _ => false,
         },
-        Edtf::Set(ref set) => {
+        Edtf::Set(set) => {
             set.kind() == SetKind::OneMember
                 && match *set.elements() {
-                    [SetElement::Date(ref d)] => dated_edge(d),
-                    [SetElement::Range(ref r)] => dated_edge(&r.start()) && dated_edge(&r.end()),
+                    [SetElement::Date(date)] => dated_edge(&date),
+                    [SetElement::Range(range)] => {
+                        dated_edge(&range.start()) && dated_edge(&range.end())
+                    }
                     _ => false,
                 }
         }
@@ -385,15 +406,19 @@ fn is_operand(value: &Edtf) -> bool {
     }
 }
 
-/// Every before/after form of `operand`, read, with the distinct answers
-/// its phrase gives over the operand's readings, when every reading of the
-/// operand alone is a date that is not a season, or a span; `None`
-/// otherwise.
+/// Every before/after form of `operand`, read.
+///
+/// Each form carries the distinct answers its phrase gives over the
+/// operand's readings. `None` unless every reading of the operand alone is
+/// a date that is not a season, or a span.
 #[must_use]
 pub fn observe_open(operand: &str, language: Language) -> Option<OpenObservation> {
     let opts = options(language);
     let outcome = normalize_with(operand, opts);
-    if !readings(&outcome).iter().all(|&(value, _)| is_operand(value)) {
+    if !readings(&outcome)
+        .into_iter()
+        .all(|(value, _)| is_operand(&value))
+    {
         return None;
     }
     let alone = Answer::of(&outcome).strings();
@@ -403,8 +428,8 @@ pub fn observe_open(operand: &str, language: Language) -> Option<OpenObservation
     let forms = lang_for(language)
         .open_phrases
         .iter()
-        .map(|&(phrase, _)| {
-            let phrase = phrase.join(" ");
+        .map(|&(words, _)| {
+            let phrase = words.join(" ");
             let mut answers: Vec<Answer> = Vec::new();
             for reading in &alone {
                 let answer = Answer::of(&normalize_with(&format!("{phrase} {reading}"), opts));
@@ -413,9 +438,10 @@ pub fn observe_open(operand: &str, language: Language) -> Option<OpenObservation
                 }
             }
             let input = format!("{phrase} {operand}");
+            let answer = Answer::of(&normalize_with(&input, opts));
             OpenForm {
-                answer: Answer::of(&normalize_with(&input, opts)),
                 input,
+                answer,
                 distinct: answers.len(),
             }
         })
@@ -432,7 +458,7 @@ pub fn observe_open(operand: &str, language: Language) -> Option<OpenObservation
 pub fn check_open_composes(observation: &OpenObservation) {
     for form in &observation.forms {
         assert!(
-            matches!(form.answer, Answer::Read(ref r) if r.len() == form.distinct),
+            form.answer.clone().strings().len() == form.distinct,
             "before/after does not compose: {:?} gives {:?}, not {} readings",
             form.input,
             form.answer,
@@ -492,8 +518,8 @@ pub fn observe_reread(input: &str, options: Options) -> Vec<Reread> {
             let outcome = normalize_with(&emitted, self::options(language));
             let collision = matches!(outcome, Outcome::Ambiguous(_))
                 && readings(&outcome)
-                    .iter()
-                    .any(|&(_, notes)| notes.contains(&Note::SeasonRangeCollision));
+                    .into_iter()
+                    .any(|(_, notes)| notes.contains(&Note::SeasonRangeCollision));
             rereads.push(Reread {
                 emitted: emitted.clone(),
                 language,
@@ -514,8 +540,7 @@ pub fn observe_reread(input: &str, options: Options) -> Vec<Reread> {
 pub fn check_idempotent(rereads: &[Reread]) {
     for reread in rereads {
         let itself = reread.answer == Answer::Read(vec![reread.emitted.clone()]);
-        let among = reread.collision
-            && matches!(reread.answer, Answer::Read(ref r) if r.contains(&reread.emitted));
+        let among = reread.collision && reread.answer.clone().strings().contains(&reread.emitted);
         assert!(
             itself || among,
             "emitted {:?} re-reads in {:?} as {:?}",
@@ -611,8 +636,8 @@ pub struct OptionsObservation {
 pub fn observe_options(input: &str, language: Language, century: Century) -> OptionsObservation {
     let default = normalize_with(input, options(language));
     let notes = readings(&default)
-        .iter()
-        .flat_map(|&(_, notes)| notes.iter().copied())
+        .into_iter()
+        .flat_map(|(_, notes)| notes)
         .collect();
     let chosen = [
         Choice::NumericOrder(NumericOrder::DayFirst),
@@ -633,7 +658,9 @@ pub fn observe_options(input: &str, language: Language, century: Century) -> Opt
     }
 }
 
-/// Rule 7: an option changes an outcome only when the default is `NoMatch
+/// Rule 7: an option changes only what it resolves (N5, N6).
+///
+/// An option may change an outcome only when the default is `NoMatch
 /// ImpossibleDate` (the readings that failed are not visible), or when the
 /// default carries the note that option resolves and the option's outcome
 /// is not `NoMatch OutOfGrammar`.
@@ -642,7 +669,8 @@ pub fn observe_options(input: &str, language: Language, century: Century) -> Opt
 ///
 /// When an option changes any other outcome.
 pub fn check_options(observation: &OptionsObservation) {
-    for &(choice, ref answer) in &observation.chosen {
+    for chosen in &observation.chosen {
+        let (choice, answer) = (chosen.0, &chosen.1);
         assert!(
             *answer == observation.default
                 || observation.default == Answer::Refused(NoMatchReason::ImpossibleDate)
@@ -667,23 +695,30 @@ pub fn check_options(observation: &OptionsObservation) {
 pub fn observe_values(input: &str, options: Options) -> Vec<Edtf> {
     readings(&normalize_with(input, options))
         .into_iter()
-        .map(|(value, _)| value.clone())
+        .map(|(value, _)| value)
         .collect()
 }
 
-/// Rule 8: no reading is an interval with `XXXX` at one end and a stated
-/// year at the other.
+/// Rule 8: no reading is an interval with a year-less date at one end and a
+/// stated year at the other.
+///
+/// A year-less date is N9's: a month under an `XXXX` year. A bare `XXXX`
+/// says "year unknown", so `XXXX/1985` is honest.
 ///
 /// # Panics
 ///
 /// When one is.
 pub fn check_no_masked_year(values: &[Edtf]) {
     for value in values {
-        if let Edtf::Interval(ref iv) = *value {
-            if let (Some(start), Some(end)) = (endpoint_date(iv.start()), endpoint_date(iv.end())) {
+        if let Edtf::Interval(interval) = value.clone() {
+            if let (Some(start), Some(end)) = (
+                endpoint_date(interval.start()),
+                endpoint_date(interval.end()),
+            ) {
                 assert!(
-                    year_less(&start) == year_less(&end),
-                    "{value} has XXXX at one end and a stated year at the other"
+                    (!month_without_year(&start) || year_less(&end))
+                        && (!month_without_year(&end) || year_less(&start)),
+                    "{value} has a month under XXXX at one end and a stated year at the other"
                 );
             }
         }
@@ -730,18 +765,22 @@ pub fn observe_honest(input: &str, options: Options) -> Honesty {
     let readings = strings
         .into_iter()
         .zip(readings(&outcome))
-        .map(|(edtf, (value, _))| Emitted {
-            reparsed: Edtf::parse(&edtf).ok(),
-            canonical: value.to_string(),
-            value: value.clone(),
-            edtf,
+        .map(|(edtf, (value, _))| {
+            let reparsed = Edtf::parse(&edtf).ok();
+            let canonical = value.to_string();
+            Emitted {
+                edtf,
+                value,
+                reparsed,
+                canonical,
+            }
         })
         .collect();
     Honesty {
         input: String::from(input),
         valid: Edtf::parse(input).ok(),
         ambiguous: matches!(outcome, Outcome::Ambiguous(_)),
-        refused: matches!(outcome, Outcome::NoMatch { .. }),
+        refused: matches!(outcome, Outcome::NoMatch { reason: _ }),
         readings,
     }
 }
@@ -781,7 +820,7 @@ pub fn check_honest(observation: &Honesty) {
         !observation.ambiguous || observation.readings.len() >= 2,
         "{input:?}: ambiguous with fewer than two readings"
     );
-    if let Some(ref valid) = observation.valid {
+    if let Some(valid) = observation.valid.as_ref() {
         assert!(
             !observation.refused,
             "{input:?}: valid EDTF was not matched"
@@ -809,6 +848,12 @@ mod planted {
     //! Each check's assertions, pinned: one fabricated bad observation per
     //! assertion, and a test that each observation observes.
 
+    #![expect(
+        clippy::missing_panics_doc,
+        reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
+    )]
+    #![expect(clippy::panic, reason = "a panic in a test IS the failure signal")]
+
     extern crate std;
 
     use alloc::{string::String, vec, vec::Vec};
@@ -818,16 +863,16 @@ mod planted {
     use super::*;
     use crate::normalize;
 
-    pub(super) fn en() -> Options {
+    fn en() -> Options {
         options(Language::English)
     }
 
-    pub(super) fn ru() -> Options {
+    fn ru() -> Options {
         options(Language::Russian)
     }
 
-    pub(super) fn read(strings: &[&str]) -> Answer {
-        Answer::Read(strings.iter().map(|s| String::from(*s)).collect())
+    fn read(strings: &[&str]) -> Answer {
+        Answer::Read(strings.iter().copied().map(String::from).collect())
     }
 
     // -----------------------------------------------------------------------
@@ -844,9 +889,9 @@ mod planted {
     fn every_option_combination_is_listed() {
         let all = every_options();
         assert_eq!(all.len(), 12, "two languages, three orders, two centuries");
-        assert!(all.iter().any(|o| o.language == Language::Russian
-            && o.numeric_order == Some(NumericOrder::MonthFirst)
-            && o.default_century == Century::new(1900)));
+        assert!(all.iter().any(|opts| opts.language == Language::Russian
+            && opts.numeric_order == Some(NumericOrder::MonthFirst)
+            && opts.default_century == Century::new(1900)));
     }
 
     #[test]
@@ -907,11 +952,13 @@ mod planted {
     fn range_forms_are_observed_between_two_dates_only() {
         let forms = observe_range_forms("1914", "1920", Language::English);
         assert_eq!(forms.as_ref().map(Vec::len), Some(10), "every form is read");
-        assert!(forms
-            .iter()
-            .flatten()
-            .all(|(_, answer)| *answer == read(&["1914/1920"])));
-        for (a, b) in [
+        assert!(
+            forms
+                .iter()
+                .flatten()
+                .all(|form| form.1 == read(&["1914/1920"]))
+        );
+        for (left, right) in [
             ("12/04/1985", "1990"),
             ("1990", "the 80s"),
             ("circa 1914", "1920"),
@@ -919,9 +966,9 @@ mod planted {
             ("1914", "nonsense"),
         ] {
             assert_eq!(
-                observe_range_forms(a, b, Language::English),
+                observe_range_forms(left, right, Language::English),
                 None,
-                "{a:?} {b:?}"
+                "{left:?} {right:?}"
             );
         }
     }
@@ -930,21 +977,23 @@ mod planted {
     fn or_is_observed_with_the_set_it_should_give() {
         let observation = observe_or("1914", "[..1916]", Language::English);
         assert_eq!(
-            observation.as_ref().map(|o| o.expected.as_str()),
+            observation
+                .as_ref()
+                .map(|observed| observed.expected.as_str()),
             Some("[1914,..1916]")
         );
         assert_eq!(
-            observation.map(|o| o.forms),
+            observation.map(|observed| observed.forms),
             Some(vec![(
                 String::from("1914 or [..1916]"),
                 read(&["[1914,..1916]"])
             )])
         );
         assert_eq!(
-            observe_or("1914", "1914", Language::English).map(|o| o.expected),
+            observe_or("1914", "1914", Language::English).map(|observed| observed.expected),
             Some(String::from("1914"))
         );
-        for (a, b) in [
+        for (left, right) in [
             ("June", "1914"),
             ("1914~", "1920"),
             ("1985/1990", "1914"),
@@ -952,7 +1001,11 @@ mod planted {
             ("1914", "nonsense"),
             ("12/04/1985", "1920"),
         ] {
-            assert_eq!(observe_or(a, b, Language::English), None, "{a:?} {b:?}");
+            assert_eq!(
+                observe_or(left, right, Language::English),
+                None,
+                "{left:?} {right:?}"
+            );
         }
     }
 
@@ -960,19 +1013,21 @@ mod planted {
     fn before_and_after_are_observed_for_operands_only() {
         let observation = observe_open("12/04/1985", Language::English);
         assert_eq!(
-            observation.as_ref().and_then(|o| o.forms.get(4)),
+            observation
+                .as_ref()
+                .and_then(|observed| observed.forms.get(4)),
             Some(&OpenForm {
                 input: String::from("before 12/04/1985"),
                 answer: read(&["[..1985-04-11]", "[..1985-12-03]"]),
                 distinct: 2,
             })
         );
-        assert_eq!(observation.map(|o| o.forms.len()), Some(9));
+        assert_eq!(observation.map(|observed| observed.forms.len()), Some(9));
         // Two readings of the operand, one answer: the phrase over each
         // reading gives `[0000..]` both times.
         let merged = observe_open("from 1st century to 10's", Language::English);
         assert_eq!(
-            merged.as_ref().and_then(|o| o.forms.get(1)),
+            merged.as_ref().and_then(|observed| observed.forms.get(1)),
             Some(&OpenForm {
                 input: String::from("no earlier than from 1st century to 10's"),
                 answer: read(&["[0000..]"]),
@@ -1048,7 +1103,10 @@ mod planted {
     fn rereads_are_observed_in_every_language() {
         let rereads = observe_reread("1914-21", en());
         assert_eq!(
-            rereads.iter().map(|r| r.collision).collect::<Vec<_>>(),
+            rereads
+                .iter()
+                .map(|reread| reread.collision)
+                .collect::<Vec<_>>(),
             [true, true, false, false],
             "two readings, two languages; only the sub-year code collides"
         );
@@ -1073,7 +1131,7 @@ mod planted {
         assert!(
             observe_reread("12/04/1985", en())
                 .iter()
-                .all(|r| !r.collision),
+                .all(|reread| !reread.collision),
             "an ambiguity that is not a collision"
         );
     }
@@ -1124,17 +1182,20 @@ mod planted {
     fn values_and_honesty_are_observed() {
         let values = observe_values("12/04/1985", en());
         assert_eq!(values.len(), 2);
-        assert!(observe_values("unknown", en()).is_empty());
+        assert_eq!(observe_values("unknown", en()), Vec::new());
         let honesty = observe_honest("1985-04-12", en());
         assert_eq!(honesty.input, "1985-04-12");
         assert!(honesty.valid.is_some() && !honesty.ambiguous && !honesty.refused);
         assert_eq!(honesty.readings.len(), 1);
         let ambiguous = observe_honest("12/04/1985", en());
         assert!(ambiguous.ambiguous && ambiguous.valid.is_none());
-        assert!(ambiguous
-            .readings
-            .iter()
-            .all(|r| r.reparsed.as_ref() == Some(&r.value) && r.canonical == r.edtf));
+        assert!(
+            ambiguous
+                .readings
+                .iter()
+                .all(|reading| reading.reparsed.as_ref() == Some(&reading.value)
+                    && reading.canonical == reading.edtf)
+        );
         assert!(observe_honest("unknown", en()).refused);
     }
 
@@ -1147,7 +1208,7 @@ mod planted {
     }
 
     fn parsed(edtf: &str) -> Edtf {
-        Edtf::parse(edtf).unwrap_or_else(|e| panic!("{edtf:?}: {e:?}"))
+        Edtf::parse(edtf).unwrap_or_else(|error| panic!("{edtf:?}: {error:?}"))
     }
 
     #[test]
@@ -1304,6 +1365,8 @@ mod planted {
         check_no_masked_year(&[
             parsed("1985-06/1985-12"),
             parsed("XXXX-06/XXXX-07"),
+            parsed("XXXX/1985"),
+            parsed("1985/XXXX"),
             parsed("../1985"),
             parsed("1985"),
         ]);
@@ -1311,7 +1374,7 @@ mod planted {
 
     #[test]
     #[should_panic(
-        expected = "XXXX-06/1985-04-12 has XXXX at one end and a stated year at the other"
+        expected = "XXXX-06/1985-04-12 has a month under XXXX at one end and a stated year at the other"
     )]
     fn a_masked_year_beside_a_stated_one_fails() {
         check_no_masked_year(&[parsed("XXXX-06/1985-04-12")]);
@@ -1321,9 +1384,9 @@ mod planted {
         let value = parsed(edtf);
         Emitted {
             edtf: String::from(edtf),
-            reparsed: Some(value.clone()),
+            value: value.clone(),
+            reparsed: Some(value),
             canonical: String::from(edtf),
-            value,
         }
     }
 
@@ -1342,12 +1405,12 @@ mod planted {
         check_honest(&honesty(vec![emitted("1914")]));
         check_honest(&honesty(vec![emitted("1985-04-12"), emitted("1985-12-04")]));
         check_honest(&honesty(Vec::new()));
-        let mut valid = honesty(vec![emitted("1914-21"), emitted("1914/1921")]);
-        valid.valid = Some(parsed("1914-21"));
-        check_honest(&valid);
-        let mut valid = honesty(vec![emitted("1914")]);
-        valid.valid = Some(parsed("1914"));
-        check_honest(&valid);
+        let mut collision = honesty(vec![emitted("1914-21"), emitted("1914/1921")]);
+        collision.valid = Some(parsed("1914-21"));
+        check_honest(&collision);
+        let mut itself = honesty(vec![emitted("1914")]);
+        itself.valid = Some(parsed("1914"));
+        check_honest(&itself);
     }
 
     #[test]
@@ -1408,5 +1471,4 @@ mod planted {
         observation.valid = Some(parsed("1914"));
         check_honest(&observation);
     }
-
 }

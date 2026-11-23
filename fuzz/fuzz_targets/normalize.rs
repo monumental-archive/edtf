@@ -15,6 +15,11 @@
 
 #![no_main]
 
+// Outside `cfg(fuzzing)` the target is empty, and this is the crate's only
+// use of the normaliser: keep the dependency used there.
+#[cfg(not(fuzzing))]
+use edtf_normalize as _;
+
 #[cfg(fuzzing)]
 libfuzzer_sys::fuzz_target!(|data: &[u8]| {
     use edtf_normalize::properties::{

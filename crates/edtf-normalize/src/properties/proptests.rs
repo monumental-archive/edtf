@@ -1,16 +1,46 @@
 // SPDX-FileCopyrightText: Copyright (c) the edtf contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The proptest engine: atoms from every row of every language's tables,
-//! composed by the table's range pairs, "or" words and before/after
-//! phrases, and the constructive properties moved from `tests/props.rs`.
+//! The proptest engine over the language tables.
+//!
+//! Atoms come from every row of every language's tables, composed by the
+//! tables' range pairs, "or" words and before/after phrases; the
+//! constructive properties moved here from `tests/props.rs`.
+
+#![expect(
+    clippy::min_ident_chars,
+    reason = "the test bodies use the same y/m/d date-component names as the code they exercise"
+)]
+#![expect(
+    clippy::default_numeric_fallback,
+    reason = "literal fixtures whose type the assertion already fixes"
+)]
+#![expect(
+    clippy::arithmetic_side_effects,
+    reason = "test arithmetic is over literal fixtures and generator-bounded values; an overflow here would fail the test, which is the signal"
+)]
+#![expect(clippy::panic, reason = "a panic in a test IS the failure signal")]
+#![expect(
+    clippy::wildcard_enum_match_arm,
+    reason = "the wildcard covers variants the assertion has already excluded"
+)]
+#![expect(
+    clippy::integer_division_remainder_used,
+    reason = "same integer calendar arithmetic as the code under test"
+)]
+#![expect(
+    clippy::missing_panics_doc,
+    reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
+)]
 
 extern crate std;
+
+use core::ops::RangeInclusive;
 
 use alloc::{format, string::String, vec, vec::Vec};
 
 use edtf_core::{Edtf, SetElement, SetKind};
-use proptest::{prelude::*, sample::select};
+use proptest::{prelude::*, sample::select, strategy::Union};
 
 use super::*;
 use crate::{normalize, tables::Lang};
@@ -31,7 +61,7 @@ fn read(strings: &[&str]) -> Answer {
 // Generators: atoms from every row of a language's tables
 
 /// Years an atom states.
-const YEARS: core::ops::RangeInclusive<u32> = 1000..=2100;
+const YEARS: RangeInclusive<u32> = 1000..=2100;
 
 /// `n` (1-39) as a Roman numeral.
 fn roman(mut n: u32) -> String {
@@ -105,7 +135,7 @@ fn atom(language: Language) -> BoxedStrategy<String> {
                 .boxed(),
         );
     }
-    proptest::strategy::Union::new(kinds).boxed()
+    Union::new(kinds).boxed()
 }
 
 /// An atom, or the EDTF an atom or a before/after form of it emits,
@@ -424,4 +454,3 @@ fn roman_numerals_are_written() {
     assert_eq!(roman(4), "IV");
     assert_eq!(roman(21), "XXI");
 }
-
