@@ -107,6 +107,20 @@ fn edtf_letters_read_in_either_case() {
     ok("xxxx", "XXXX", 2);
     ok("xxxx век", "39XX", 1);
     ok("xix", "18XX", 1);
+    // Inside a phrase a one-token atom is tried as EDTF first too (N18).
+    ok("до xxxx", "../XXXX", 2);
+    ok("до xxxx века", "../39XX", 2);
+    // An EDTF token keeps its letter case; a Roman numeral reads in either.
+    ok("до XXXX века", "../39XX", 2);
+}
+
+#[test]
+fn a_range_word_inside_an_era_phrase_is_not_the_split() {
+    // "до" is both the range word and the start of "до н. э.": every
+    // position is tried, left to right, and the first whose two sides
+    // read wins (N3, N4).
+    ok("от 44 г. до н. э. до 1914", "-0043/1914", 1);
+    ok("от 100 г. до н. э. до 44 г. до н. э.", "-0099/-0043", 1);
 }
 
 #[test]

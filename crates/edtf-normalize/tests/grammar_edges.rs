@@ -33,7 +33,9 @@
 )]
 
 use edtf_core::Edtf;
-use edtf_normalize::{Language, NoMatchReason, Note, Options, Outcome, normalize, normalize_with};
+use edtf_normalize::{
+    Language, NoMatchReason, Note, NumericOrder, Options, Outcome, normalize, normalize_with,
+};
 
 fn ru() -> Options {
     Options {
@@ -233,13 +235,14 @@ fn edtf_letters_read_in_either_case() {
     ok("[198x,1990]", "[198X,1990]");
     ok("198X", "198X");
     assert_eq!(notes_of("198X"), [Note::AlreadyValidEdtf]);
-    for input in ["before 198x", "before 198X"] {
-        ok(input, "../198X");
-        assert_eq!(
-            notes_of(input),
-            [Note::EdtfCaseNormalized, Note::OpenInterval]
-        );
-    }
+    // The case note is there exactly when the fold changed the text.
+    ok("before 198x", "../198X");
+    assert_eq!(
+        notes_of("before 198x"),
+        [Note::EdtfCaseNormalized, Note::OpenInterval]
+    );
+    ok("before 198X", "../198X");
+    assert_eq!(notes_of("before 198X"), [Note::OpenInterval]);
     ok("before y17e7", "../Y17E7");
     ok("before 1985-xx", "../1985-XX");
     ok("before -0500", "../-0500");
@@ -351,7 +354,8 @@ fn ambiguous_endpoint_with_one_reversed_reading_fails_closed() {
 
 #[test]
 fn doubly_ambiguous_ranges_fail_closed() {
-    // Two ambiguous endpoints would be a 4-way product — refuse (N14).
+    // Every combination of two ambiguous endpoints is read; one of them
+    // (198X to 189X) is reversed, which refuses the whole input (N14).
     no_match("the 80s to the 90s");
 }
 
@@ -681,4 +685,80 @@ fn year_ranges_read_the_same_on_every_path() {
     ok("0000-21", "0000-21");
     assert_eq!(notes_of("0000-21"), [Note::AlreadyValidEdtf]);
     ambiguous("0010-25", &["0010-25", "0010/0025"]);
+}
+
+// ---------------------------------------------------------------------------
+// One reader for every part of a phrase (#360)
+
+#[test]
+fn trailing_qualifier_symbols_scope_the_whole_expression() {
+    // `?`, `~` and `%` scope alike: a trailing symbol on a range or an "or"
+    // list qualifies all of it (N10).
+    ok("1868-1871?", "1868?/1871?");
+    ok("1868-1871~", "1868~/1871~");
+    ok("1868-1871%", "1868%/1871%");
+    ambiguous("1914 or 1985~", &["1914~", "1985~"]);
+    // Valid EDTF carries its own qualifiers and passes through untouched.
+    ok("1984?/2004~", "1984?/2004~");
+    assert_eq!(notes_of("1984?/2004~"), [Note::AlreadyValidEdtf]);
+}
+
+#[test]
+fn a_range_end_reads_as_it_reads_alone() {
+    // Year inheritance (N16) runs on every combination, so XXXX never
+    // leaks into a range that states its year (N9); a combination that
+    // fails refuses the whole input (N14).
+    no_match_because(
+        "June - 12/04/1985",
+        Options::default(),
+        NoMatchReason::ImpossibleDate,
+    );
+    ok_with(
+        "June - 12/04/1985",
+        Options {
+            numeric_order: Some(NumericOrder::MonthFirst),
+            ..Options::default()
+        },
+        "1985-06/1985-12-04",
+    );
+    no_match("June - the 80s");
+    no_match_with(
+        "June - the 80s",
+        Options {
+            default_century: Some(1900),
+            ..Options::default()
+        },
+    );
+    // A range ambiguous on both sides reports every combination.
+    ambiguous(
+        "12/04/1985 - 11/05/1986",
+        &[
+            "1985-04-12/1986-05-11",
+            "1985-04-12/1986-11-05",
+            "1985-12-04/1986-05-11",
+            "1985-12-04/1986-11-05",
+        ],
+    );
+    ok("early 1930s to late 1940s", "193X/194X");
+    no_match("5th century BC to 3rd century BC");
+}
+
+#[test]
+fn any_edtf_value_is_an_alternative_and_a_span_an_operand() {
+    // An EDTF token holds any value: an alternative may be one (N18); a span
+    // is an operand by its near edge (N8).
+    ambiguous("1914 or 1985/1990", &["1914", "1985/1990"]);
+    ambiguous("1914 or [1667,1668]", &["1914", "[1667,1668]"]);
+    ok("before 1985/1990", "../1985");
+    ok("after 1985/1990", "1990/..");
+    // A set, an open interval or a datetime is no before/after operand, and
+    // an interval is no range end.
+    for input in [
+        "before [1667,1668]",
+        "before ../1985",
+        "before 1985-04-12T23:20:30",
+        "1985/1990 - 1995",
+    ] {
+        no_match(input);
+    }
 }
