@@ -33,11 +33,16 @@
 //! - **Precision honesty**: a Julian year or month does not convert to a single
 //!   Gregorian year or month (Julian 1917 spans Gregorian
 //!   1917-01-14..1918-01-13). [`convert`] returns sub-day-precision inputs as
-//!   an explicit earliest/latest [`Converted::Span`] — never a silently
-//!   "converted" year.
+//!   an EDTF interval from the first to the last Gregorian day — never a
+//!   silently "converted" year.
+//! - **Every value is EDTF**: [`convert`] builds its result through
+//!   `edtf-core`'s constructors and refuses one EDTF cannot spell (a
+//!   Gregorian day outside the years −9999 to 9999) with
+//!   [`CalendarError::OutOfRange`]. [`parse_julian`] reads the text forms
+//!   `Y`, `Y-MM` and `Y-MM-DD`.
 //!
 //! ```
-//! use edtf_calendars::{Converted, JulianDate, convert, julian_to_gregorian};
+//! use edtf_calendars::{JulianDate, convert, julian_to_gregorian, parse_julian};
 //!
 //! // The October Revolution: 25 October 1917 O.S. = 7 November 1917 N.S.
 //! let g = julian_to_gregorian(JulianDate {
@@ -48,12 +53,10 @@
 //! .unwrap();
 //! assert_eq!(g.to_string(), "1917-11-07");
 //!
-//! // A Julian *year* is honestly a Gregorian range, EDTF `1917-01-14/1918-01-13`:
-//! let Converted::Span { earliest, latest } = convert(1917, None, None).unwrap() else {
-//!     unreachable!()
-//! };
-//! assert_eq!(earliest.to_string(), "1917-01-14");
-//! assert_eq!(latest.to_string(), "1918-01-13");
+//! // A Julian *year* is honestly a Gregorian range:
+//! let (year, month, day) = parse_julian("1917").unwrap();
+//! let value = convert(year, month, day).unwrap();
+//! assert_eq!(value.to_string(), "1917-01-14/1918-01-13");
 //! ```
 //!
 //! **Non-goals** (recorded in issue #21): other calendars (Islamic, Hebrew,
@@ -112,24 +115,33 @@
     reason = "an unreachable! whose comment names the caller-side check that makes it unreachable — a deliberate assertion of an invariant, not an unhandled case"
 )]
 
-use edtf_core::BoundDate;
+use edtf_core::{BoundDate, Date, DateField, Edtf, Interval, IntervalEndpoint, ValueError, Year};
 
-/// Error returned for invalid calendar dates or unrepresentable results.
+/// Error returned for malformed text, invalid calendar dates or
+/// unrepresentable results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CalendarError {
+    /// The text is not a Julian date in one of the three forms
+    /// [`parse_julian`] reads: `Y`, `Y-MM` or `Y-MM-DD`.
+    Malformed,
     /// The input is not a real calendar day (month outside 1–12, day
     /// beyond the month's length under the calendar's own leap rule, or a
     /// day given without a month).
     InvalidDate,
-    /// The converted year does not fit the numeric range this library
-    /// computes with.
+    /// The result has no EDTF spelling, or does not fit the numeric range
+    /// this library computes with: [`convert`] refuses a Gregorian day
+    /// outside the years −9999 to 9999, because a year past them needs
+    /// EDTF's `Y` form, which carries no month or day (ISO 8601-2
+    /// §4.7.2); [`parse_julian`] refuses a year too large for `i64`; and
+    /// the day arithmetic refuses a converted year past `i64`.
     OutOfRange,
 }
 
 impl core::fmt::Display for CalendarError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(match self {
+            Self::Malformed => "expected a Julian date as Y, Y-MM or Y-MM-DD",
             Self::InvalidDate => "not a valid calendar date",
             Self::OutOfRange => "converted year out of range",
         })
@@ -167,25 +179,6 @@ impl core::fmt::Display for JulianDate {
             write!(f, "{:04}-{:02}-{:02}", self.year, self.month, self.day)
         }
     }
-}
-
-/// A precision-honest conversion result: day-precision input converts to a
-/// single day; year- or month-precision input converts to the earliest and
-/// latest Gregorian days the Julian span covers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-pub enum Converted {
-    /// A complete Julian date: exactly one proleptic-Gregorian day.
-    Day(BoundDate),
-    /// A Julian year or month: the Gregorian days it spans, inclusive.
-    /// Feed these to an EDTF interval (`earliest/latest`) — the span is
-    /// never a single Gregorian year or month.
-    Span {
-        /// Gregorian day of the Julian span's first day.
-        earliest: BoundDate,
-        /// Gregorian day of the Julian span's last day.
-        latest: BoundDate,
-    },
 }
 
 /// Proleptic Julian leap rule: every fourth year, no century exception,
@@ -321,62 +314,168 @@ pub fn gregorian_to_julian(date: BoundDate) -> Result<JulianDate, CalendarError>
     })
 }
 
-/// Precision-honest conversion of a possibly partial Julian date.
+/// Read a Julian date written `Y`, `Y-MM` or `Y-MM-DD` into the parts
+/// [`convert`] takes.
 ///
-/// - year + month + day → [`Converted::Day`], the exact Gregorian day;
-/// - year + month → [`Converted::Span`] over the Julian month;
-/// - year only → [`Converted::Span`] over the Julian year;
-/// - a day without a month is [`CalendarError::InvalidDate`].
+/// The year is astronomical: ASCII digits, any number of them, after an
+/// optional `-` (no `+`). The month and day are two ASCII digits each.
+/// Only the shape is read here; whether the parts name a real Julian day
+/// is [`convert`]'s question.
 ///
-/// The span is the whole point: Julian 1917 covers Gregorian
-/// 1917-01-14..1918-01-13, and Julian February 1900 covers Gregorian
-/// 1900-02-13..1900-03-13 (the offset changes *inside* the month). This
-/// function never pretends a Julian year or month is a Gregorian one.
+/// ```
+/// use edtf_calendars::{CalendarError, parse_julian};
+///
+/// assert_eq!(parse_julian("-0044-03-15"), Ok((-44, Some(3), Some(15))));
+/// assert_eq!(parse_julian("1917-2"), Err(CalendarError::Malformed));
+/// ```
 ///
 /// # Errors
 ///
-/// [`CalendarError::InvalidDate`] when the parts are not a real Julian
-/// calendar day; [`CalendarError::OutOfRange`] when the converted year
-/// exceeds the numeric range this library computes with.
-pub fn convert(year: i64, month: Option<u8>, day: Option<u8>) -> Result<Converted, CalendarError> {
-    let leap = is_julian_leap(year);
-    match (month, day) {
-        (Some(month), Some(day)) => Ok(Converted::Day(julian_to_gregorian(JulianDate {
-            year,
-            month,
-            day,
-        })?)),
+/// [`CalendarError::Malformed`] for any other text;
+/// [`CalendarError::OutOfRange`] for a year of the right shape too large
+/// for `i64`.
+pub fn parse_julian(input: &str) -> Result<(i64, Option<u8>, Option<u8>), CalendarError> {
+    let (negative, rest) = input
+        .strip_prefix('-')
+        .map_or((false, input), |rest| (true, rest));
+    let mut parts = rest.split('-');
+    let year_digits = parts.next().unwrap_or_default();
+    if year_digits.is_empty() || !year_digits.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(CalendarError::Malformed);
+    }
+    let two_digit = |part: Option<&str>| match part.map(str::as_bytes) {
+        None => Ok(None),
+        Some(&[tens @ b'0'..=b'9', units @ b'0'..=b'9']) => {
+            Ok(Some((tens - b'0') * 10 + (units - b'0')))
+        }
+        Some(_) => Err(CalendarError::Malformed),
+    };
+    let month = two_digit(parts.next())?;
+    let day = two_digit(parts.next())?;
+    if parts.next().is_some() {
+        return Err(CalendarError::Malformed);
+    }
+    // The shape is right, so a year that will not fit is a range error.
+    let year = year_digits
+        .bytes()
+        .try_fold(0_i128, |v, b| {
+            v.checked_mul(10)?.checked_add(i128::from(b - b'0'))
+        })
+        .and_then(|magnitude| i64::try_from(if negative { -magnitude } else { magnitude }).ok())
+        .ok_or(CalendarError::OutOfRange)?;
+    Ok((year, month, day))
+}
+
+/// The first and last Gregorian days of a possibly partial Julian date.
+///
+/// # Errors
+///
+/// As [`convert`], less the EDTF spelling.
+fn gregorian_span(
+    year: i64,
+    month: Option<u8>,
+    day: Option<u8>,
+) -> Result<(BoundDate, BoundDate), CalendarError> {
+    let (first, last) = match (month, day) {
+        (Some(month), Some(day)) => {
+            let only = JulianDate { year, month, day };
+            (only, only)
+        }
         (Some(month), None) => {
             if !(1..=12).contains(&month) {
                 return Err(CalendarError::InvalidDate);
             }
-            Ok(Converted::Span {
-                earliest: julian_to_gregorian(JulianDate {
+            (
+                JulianDate {
                     year,
                     month,
                     day: 1,
-                })?,
-                latest: julian_to_gregorian(JulianDate {
+                },
+                JulianDate {
                     year,
                     month,
-                    day: last_day(month, leap),
-                })?,
-            })
+                    day: last_day(month, is_julian_leap(year)),
+                },
+            )
         }
-        (None, None) => Ok(Converted::Span {
-            earliest: julian_to_gregorian(JulianDate {
+        (None, None) => (
+            JulianDate {
                 year,
                 month: 1,
                 day: 1,
-            })?,
-            latest: julian_to_gregorian(JulianDate {
+            },
+            JulianDate {
                 year,
                 month: 12,
                 day: 31,
-            })?,
-        }),
-        (None, Some(_)) => Err(CalendarError::InvalidDate),
-    }
+            },
+        ),
+        (None, Some(_)) => return Err(CalendarError::InvalidDate),
+    };
+    Ok((julian_to_gregorian(first)?, julian_to_gregorian(last)?))
+}
+
+/// The EDTF date naming the Gregorian day `day`.
+///
+/// Built through `edtf-core`'s constructors.
+///
+/// # Errors
+///
+/// [`ValueError`] when the year is past ±9999: it takes the `Y` form, and
+/// [`Date::new`] refuses it a month. That refusal (or the year range,
+/// D30) is the only one a real Gregorian day can meet.
+fn edtf_date(day: BoundDate) -> Result<Date, ValueError> {
+    Date::new(
+        Year::from_value(day.year())?,
+        Some(DateField::from_value(day.month())?),
+        Some(DateField::from_value(day.day())?),
+    )
+}
+
+/// Convert a possibly partial Julian date to the EDTF value it is.
+///
+/// - year + month + day → an [`Edtf::Date`], the exact Gregorian day;
+/// - year + month → an [`Edtf::Interval`] over the Julian month;
+/// - year only → an [`Edtf::Interval`] over the Julian year;
+/// - a day without a month is [`CalendarError::InvalidDate`].
+///
+/// The interval is the whole point: Julian 1917 covers Gregorian
+/// `1917-01-14/1918-01-13`, and Julian February 1900 covers Gregorian
+/// `1900-02-13/1900-03-13` (the offset changes *inside* the month). This
+/// function never pretends a Julian year or month is a Gregorian one.
+///
+/// The value is built through `edtf-core`'s constructors, so it is valid
+/// EDTF by construction. [`julian_to_gregorian`] is the day arithmetic
+/// alone, for any `i64` year.
+///
+/// ```
+/// use edtf_calendars::{CalendarError, convert};
+///
+/// assert_eq!(convert(1917, Some(10), Some(25)).unwrap().to_string(), "1917-11-07");
+/// // Julian 31 December 9999 is Gregorian 13 March 10000: no EDTF spelling.
+/// assert_eq!(convert(9999, Some(12), Some(31)), Err(CalendarError::OutOfRange));
+/// ```
+///
+/// # Errors
+///
+/// [`CalendarError::InvalidDate`] when the parts are not a real Julian
+/// calendar day, month or year; [`CalendarError::OutOfRange`] when a
+/// Gregorian day of the result falls outside the years −9999 to 9999,
+/// which EDTF cannot spell with a month and day.
+pub fn convert(year: i64, month: Option<u8>, day: Option<u8>) -> Result<Edtf, CalendarError> {
+    let (first, last) = gregorian_span(year, month, day)?;
+    let value = if day.is_some() {
+        edtf_date(first).map(Edtf::Date)
+    } else {
+        edtf_date(first).and_then(|start| {
+            Interval::new(
+                IntervalEndpoint::Date(start),
+                IntervalEndpoint::Date(edtf_date(last)?),
+            )
+            .map(Edtf::Interval)
+        })
+    };
+    value.map_err(|_| CalendarError::OutOfRange)
 }
 
 #[cfg(test)]
