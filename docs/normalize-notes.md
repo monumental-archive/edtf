@@ -96,6 +96,22 @@ against the N-number.
   through the same endpoint pairing, so they cannot disagree. A range may
   start and end in the same year (`1914-1914` → `1914/1914`); only a
   reversed range is refused. Year 0 is 1 BC, so it refuses elision too.
+  The months rule is one case of a wider one: **a date is one unit**. In
+  ISO 8601 extended format the hyphen separates a date's own components
+  (ISO 8601-1 §3.2.6), so a hyphen inside a run that core reads as one
+  date with a month, season or sub-year code — masked digits and a
+  leading minus included — is never a range separator: "1985-04-1990" →
+  `1985-04/1990`, "1000-01-01-1000" → `1000-01-01/1000`,
+  "1985-04-12–1986" → `1985-04-12/1986`. The unit is the longest such
+  run from a token start or from just after a candidate hyphen, ending
+  at a hyphen, a space or the end; core is the authority on what one
+  date is, so the normaliser keeps no copy of the date grammar. A bare
+  year is not a unit, and a colliding sub-year token (N13) is not one
+  either, since its hyphen is the very question N13 answers. Every other
+  hyphen is a candidate; one that reads is the answer, and several that
+  read give every split's readings, left to right (N14). ISO's `--`
+  interval separator is not adopted ("by mutual agreement" only, and
+  EDTF does not use it): "1985-04-12--1986" is refused.
 - **N5 — all-numeric dates:** "12/04/1985" is DD/MM or MM/DD; without context
   the order is *unknowable* and the result is `Ambiguous` with both readings
   — never python-edtf's silent `dayfirst=False` guess. Resolution, in

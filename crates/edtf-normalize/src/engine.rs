@@ -1413,10 +1413,12 @@ fn one_of(alternatives: &[Candidate]) -> Option<Expr> {
 
 /// Two-sided ranges: "from X to Y", "с X по Y", "X to Y", "X-Y".
 ///
-/// One splitter: the range word and the hyphen are each tried at every
-/// position, left to right, and the first position whose two sides read
-/// wins ("от 44 г. до н. э. до 1914", where the era phrase holds the
-/// separator word).
+/// The range word is tried at every whitespace token, left to right, and
+/// the first position whose two sides read wins ("от 44 г. до н. э. до
+/// 1914", where the era phrase holds the separator word). Failing that,
+/// the hyphen is tried at every candidate (`range_hyphens`): a hyphen
+/// inside a date unit is never one (N4). One split that reads gives its
+/// readings; several give every split's readings, left to right (N14).
 fn parse_range(s: &str, toks: &[&str], opts: Options, lang: &Lang) -> Option<Reading> {
     for (lead, sep) in lang.range_pairs {
         let inner = match lead {
@@ -1440,11 +1442,56 @@ fn parse_range(s: &str, toks: &[&str], opts: Options, lang: &Lang) -> Option<Rea
             return found;
         }
     }
-    s.char_indices().find_map(|(i, c)| {
-        (c == '-')
-            .then(|| endpoint_pair(s[..i].trim(), s[i + 1..].trim(), opts, lang))
-            .flatten()
-    })
+    let splits: Reading = range_hyphens(s, opts, lang)
+        .into_iter()
+        .filter_map(|i| endpoint_pair(s[..i].trim(), s[i + 1..].trim(), opts, lang))
+        .flatten()
+        .collect();
+    (!splits.is_empty()).then_some(splits)
+}
+
+/// The hyphens that may separate a range: every `-` outside a date unit.
+///
+/// A date unit is the longest run, starting at a token start or just
+/// after a candidate hyphen and ending at a hyphen, a space or the end,
+/// that core reads as one date with a month, season or sub-year code
+/// (N4): a hyphen inside an ISO 8601 extended-format date separates its
+/// components, never a range (ISO 8601-1 §3.2.6). A bare year has no
+/// component hyphen, so it is not a unit and a minus before it stays a
+/// candidate ("1985 -1990"). A colliding sub-year token is not a unit;
+/// it is the range grammar's question (N13).
+fn range_hyphens(s: &str, opts: Options, lang: &Lang) -> Vec<usize> {
+    let mut hyphens = Vec::new();
+    let mut i = 0;
+    let mut unit_may_start = true;
+    while let Some(c) = s[i..].chars().next() {
+        if unit_may_start {
+            if let Some(end) = date_unit(&s[i..], opts, lang) {
+                i += end;
+                unit_may_start = false;
+                continue;
+            }
+        }
+        unit_may_start = matches!(c, '-' | ' ');
+        if c == '-' {
+            hyphens.push(i);
+        }
+        i += c.len_utf8();
+    }
+    hyphens
+}
+
+/// The length of the longest date unit `s` starts with (`range_hyphens`).
+fn date_unit(s: &str, opts: Options, lang: &Lang) -> Option<usize> {
+    s.char_indices()
+        .filter(|&(_, c)| matches!(c, '-' | ' '))
+        .map(|(i, _)| i)
+        .chain(iter::once(s.len()))
+        .rfind(|&end| {
+            let t = &s[..end];
+            !sub_year_collides(t, opts, lang)
+                && matches!(edtf_token(t, lang), Some((Edtf::Date(d), _)) if d.month().is_some())
+        })
 }
 
 /// Two readings' descriptions, joined for a range built from them.
