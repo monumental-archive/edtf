@@ -80,11 +80,38 @@ pub struct Options {
     /// Resolves the DD/MM vs MM/DD ambiguity (N5). Overrides any
     /// locale-implied order. `None` (default) reports both readings.
     pub numeric_order: Option<NumericOrder>,
-    /// Century base year for bare decades: `Some(1900)` reads "the 80s" as
-    /// `198X` (N6). `None` (default) reports the plausible readings.
-    /// Domain is `0..=9999` (the value's century is used); values above 9999
-    /// are ignored as if unset.
-    pub default_century: Option<u16>,
+    /// Century that resolves a bare decade (N6): with
+    /// `Century::new(1900)`, "the 80s" reads as `198X`. `None` (default)
+    /// reports the plausible readings.
+    pub default_century: Option<Century>,
+}
+
+/// A century named by its first year: a multiple of 100 from 0 to 9900.
+///
+/// `1900` is the century 1900–1999. Only a first year constructs, so one
+/// century has one spelling: `1950` is refused rather than read as `1900`
+/// (N6). The two-digit ISO 8601-1 century (`19` for the 1900s) is not
+/// used: it reads as "the 19th century", which is the 1800s.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Century(u16);
+
+impl Century {
+    /// The century whose first year is `first_year`, or `None` unless
+    /// `first_year` is a multiple of 100 in `0..=9900`.
+    #[must_use]
+    pub const fn new(first_year: u16) -> Option<Self> {
+        if engine::is_century_first_year(first_year) {
+            Some(Self(first_year))
+        } else {
+            None
+        }
+    }
+
+    /// The century's first year: `1900` for the 1900s.
+    #[must_use]
+    pub const fn first_year(self) -> u16 {
+        self.0
+    }
 }
 
 /// Why an output looks the way it does. Each variant cites the N-decision in
@@ -153,9 +180,9 @@ pub enum Note {
     /// "winter 1941-42" may be one boundary-spanning winter or a
     /// season-to-year range; both readings reported (N17).
     CrossYearSeason,
-    /// EDTF letters are read in either case and written in upper case
-    /// (N18).
-    EdtfCaseNormalized,
+    /// EDTF letters are read in either case or script and written as
+    /// upper-case Latin ("198х" → `198X`) (N18).
+    EdtfLettersNormalized,
 }
 
 impl Note {
@@ -185,7 +212,7 @@ impl Note {
             Self::RomanCentury => Some("N15"),
             Self::EndpointYearDistributed => Some("N16"),
             Self::CrossYearSeason => Some("N17"),
-            Self::EdtfCaseNormalized => Some("N18"),
+            Self::EdtfLettersNormalized => Some("N18"),
         }
     }
 
@@ -235,7 +262,9 @@ impl Note {
             Self::CrossYearSeason => {
                 "season-year-pair prose may name one boundary-spanning season or a range"
             }
-            Self::EdtfCaseNormalized => "EDTF letters read in either case; written in upper case",
+            Self::EdtfLettersNormalized => {
+                "EDTF letters read in either case or script; written as upper-case Latin"
+            }
         }
     }
 }

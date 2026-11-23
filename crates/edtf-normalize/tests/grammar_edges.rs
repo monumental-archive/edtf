@@ -34,7 +34,8 @@
 
 use edtf_core::Edtf;
 use edtf_normalize::{
-    Language, NoMatchReason, Note, NumericOrder, Options, Outcome, normalize, normalize_with,
+    Century, Language, NoMatchReason, Note, NumericOrder, Options, Outcome, normalize,
+    normalize_with,
 };
 
 fn ru() -> Options {
@@ -240,7 +241,7 @@ fn edtf_letters_read_in_either_case() {
     // EDTF notation is read in either letter case, as a whole input and as
     // a token inside a phrase (N18).
     ok("198x", "198X");
-    assert_eq!(notes_of("198x"), [Note::EdtfCaseNormalized]);
+    assert_eq!(notes_of("198x"), [Note::EdtfLettersNormalized]);
     ok("y17e7", "Y17E7");
     ok("1985-04-12t10:00:00z", "1985-04-12T10:00:00Z");
     ok("198x/199x", "198X/199X");
@@ -251,7 +252,7 @@ fn edtf_letters_read_in_either_case() {
     ok("before 198x", "[..1979]");
     assert_eq!(
         notes_of("before 198x"),
-        [Note::EdtfCaseNormalized, Note::BeforeAfter]
+        [Note::EdtfLettersNormalized, Note::BeforeAfter]
     );
     ok("before 198X", "[..1979]");
     assert_eq!(notes_of("before 198X"), [Note::BeforeAfter]);
@@ -748,7 +749,7 @@ fn a_range_end_reads_as_it_reads_alone() {
     no_match_with(
         "June - the 80s",
         Options {
-            default_century: Some(1900),
+            default_century: Century::new(1900),
             ..Options::default()
         },
     );
