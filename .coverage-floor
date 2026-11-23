@@ -12,10 +12,9 @@
 # leg leaves it only through a line `dropped: <leg> <why>`.
 #
 # band: 2
-# measured: 99.3
-# derived: coverage:adopt
+# measured: 99.2
+# derived: v2.0.0
 # legs: rust pgrx-pg15 pgrx-pg16 pgrx-pg17 pgrx-pg18 pgrx-pg19
-# dropped: fuzz-parse the parse target retired into roundtrip (#398)
 90
 #
 # rust-branches: a floor of its own (#1359), measured off the gate and held by
@@ -25,16 +24,13 @@ rust-branches 90
 #
 # fuzz-normalize: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.
-# Reset 2026-11-23 (#367, owner's ruling): properties.rs compiles into
-# every fuzz target under cfg(fuzzing); covered library lines unchanged,
-# main fbf3923 2300/2972 vs branch 2300/2972 (3348 with properties.rs).
-# fuzz-normalize measured: 68.6
-fuzz-normalize 66.6
+# fuzz-normalize measured: 69.9
+fuzz-normalize 67.9
 #
 # fuzz-relate: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.
-# fuzz-relate measured: 63.0
-fuzz-relate 61.0
+# fuzz-relate measured: 66.5
+fuzz-relate 64.5
 #
 # fuzz-roundtrip: a fuzz target's committed corpus, replayed once (#1896), a
 # floor of its own held by coverage:check, under the same band and law.

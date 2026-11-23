@@ -6,6 +6,131 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 over the public APIs of the crates this repository publishes.
 
+## [2.0.0](https://github.com/monumental-archive/edtf/compare/v1.3.5...v2.0.0) - 2026-11-23
+
+### Breaking
+
+- the `pg14` feature of `edtf-postgres` is removed;
+1.3.5 is the last release that has it.
+🤖 Generated with [Claude Code](https://claude.com/claude-code) ([#316](https://github.com/monumental-archive/edtf/pull/316))
+- Y-prefixed years of 19 or more digits (Y1E18 and
+larger, in either spelling) no longer parse, and an oversized
+exponent reports "year out of supported range" instead of "exponent
+out of supported range".
+--------- ([#332](https://github.com/monumental-archive/edtf/pull/332))
+- `edtf_min` / `edtf_max` return `-infinity` / `infinity`
+instead of NULL for a day outside the Postgres date range (before
+4714-11-24 BC or after 5874897-12-31). Bounds in years ≤ 0 also change,
+which is the fix.
+--------- ([#334](https://github.com/monumental-archive/edtf/pull/334))
+- `Note` gains the variant `EdtfCaseNormalized`, so an
+exhaustive match on `Note` must handle it. Russian "xxxx" now reads as
+the masked year `XXXX`, not `39XX`.
+--------- ([#340](https://github.com/monumental-archive/edtf/pull/340))
+- edtf-wasm's Rust API no longer has its own
+`edtf_wasm::Summary`; `summarize` returns `edtf_core::Summary`, with
+the same fields and the same JSON. The JS surface is unchanged. ([#373](https://github.com/monumental-archive/edtf/pull/373))
+- `1868-1871~` reads as `1868~/1871~` (was
+`1868/1871~`); `1914 or 1985~` reads as `1914~ | 1985~` (was
+`1914 | 1985~`); a range ambiguous on both sides reports every
+combination instead of refusing. ([#374](https://github.com/monumental-archive/edtf/pull/374))
+- before/after, century parts, BC centuries and "or"
+lists now emit ISO's one-of sets (`[..1916]`, `[1800..1829]`,
+`[-0199..-0100]`, `[1863,1864]`), and centuries count from the year
+divisible by 100. `Note::OpenInterval` is now `Note::BeforeAfter`,
+`Note::CenturyPartInterval` is `Note::CenturyPart` and
+`Note::BcCenturyInterval` is `Note::BcCentury`.
+--------- ([#378](https://github.com/monumental-archive/edtf/pull/378))
+- `Options::default_century` is `Option<Century>`,
+built with `Century::new(first_year)`; a value that is not a
+century's first year no longer constructs, and the JS
+`defaultCentury` option rejects it. ([#382](https://github.com/monumental-archive/edtf/pull/382))
+- `Note::EdtfCaseNormalized` is renamed
+`Note::EdtfLettersNormalized`, with the message "EDTF letters read in
+either case or script; written as upper-case Latin". ([#381](https://github.com/monumental-archive/edtf/pull/381))
+- every public type of edtf-core with a rule has private
+fields and validating constructors; `SetElement::Range` holds a
+`SetRange`; `TimeShift` is a struct; `Unenumerable::YearRangeOverflow`
+is removed; under `serde`, `Edtf` is its canonical string and no other
+model type deserialises; edtf-calendars' `Converted` no longer
+deserialises and `gregorian_to_julian` no longer returns `InvalidDate`.
+--------- ([#385](https://github.com/monumental-archive/edtf/pull/385))
+- `convert` returns `edtf_core::Edtf` and `Converted`
+is removed; `CalendarError` gains `Malformed`; `convert` refuses a
+result EDTF cannot spell with `OutOfRange`. ([#391](https://github.com/monumental-archive/edtf/pull/391))
+
+### Added
+
+- drop Postgres 14 at its end of life ([#289](https://github.com/monumental-archive/edtf/pull/289))
+- build for Postgres 19 ([#353](https://github.com/monumental-archive/edtf/pull/353))
+
+### Changed
+
+- convert inner lint allows to expects ([#295](https://github.com/monumental-archive/edtf/pull/295))
+- drop date display's uniform-qualifier shortcut ([#337](https://github.com/monumental-archive/edtf/pull/337))
+
+### Fixed
+
+- move edtf-postgres to pgrx 0.20.0 at rust 1.99.1 ([#293](https://github.com/monumental-archive/edtf/pull/293))
+- print the year i64::MIN without overflow ([#333](https://github.com/monumental-archive/edtf/pull/333))
+- skip a leading -- end-of-options marker ([#336](https://github.com/monumental-archive/edtf/pull/336))
+- read ranges and "or" sides through one grammar ([#335](https://github.com/monumental-archive/edtf/pull/335))
+- let before/after take a span, read sub-year codes ([#339](https://github.com/monumental-archive/edtf/pull/339))
+- update pgrx to 0.20.1 ([#344](https://github.com/monumental-archive/edtf/pull/344))
+- refuse century 0 as a bare left range endpoint ([#346](https://github.com/monumental-archive/edtf/pull/346))
+- hold the fuzz crate to msrv, clippy and deny policy ([#354](https://github.com/monumental-archive/edtf/pull/354))
+- lock file maintenance ([#352](https://github.com/monumental-archive/edtf/pull/352))
+- distribute a stated year to a typed xxxx year ([#399](https://github.com/monumental-archive/edtf/pull/399))
+- never split a range inside an iso date ([#403](https://github.com/monumental-archive/edtf/pull/403))
+- refuse a span by the end its row reads ([#406](https://github.com/monumental-archive/edtf/pull/406))
+- end no date unit at a hyphen number suffix ([#409](https://github.com/monumental-archive/edtf/pull/409))
+
+### Documentation
+
+- record the concept doi in the citation file ([#264](https://github.com/monumental-archive/edtf/pull/264))
+- re-point carlallenn/edtf links to monumental-archive/edtf ([#287](https://github.com/monumental-archive/edtf/pull/287))
+- correct the postgres matrix and three wrong doc comments ([#375](https://github.com/monumental-archive/edtf/pull/375))
+
+### Testing
+
+- adopt the canon's rust mutation leg ([#275](https://github.com/monumental-archive/edtf/pull/275))
+- pin the to_pg_date range guard's edges ([#306](https://github.com/monumental-archive/edtf/pull/306))
+- kill the parse_julian_parts sign-check mutant ([#307](https://github.com/monumental-archive/edtf/pull/307))
+- assert year 0 displays unsigned ([#305](https://github.com/monumental-archive/edtf/pull/305))
+- kill the 3 edtf-wasm mutation survivors ([#308](https://github.com/monumental-archive/edtf/pull/308))
+- kill or explain the edtf-core mutation survivors ([#309](https://github.com/monumental-archive/edtf/pull/309))
+- kill or explain the edtf-normalize mutation survivors ([#311](https://github.com/monumental-archive/edtf/pull/311))
+- commit the seed corpus and hold it to the fixtures ([#314](https://github.com/monumental-archive/edtf/pull/314))
+- add inputs that reach new code ([#322](https://github.com/monumental-archive/edtf/pull/322))
+- hold sql assertions in the corpus alone ([#338](https://github.com/monumental-archive/edtf/pull/338))
+- assert a february julian day number ([#343](https://github.com/monumental-archive/edtf/pull/343))
+- fuzz the normaliser and the relation algebra ([#347](https://github.com/monumental-archive/edtf/pull/347))
+- seed every reachable line and branch, measured per target ([#350](https://github.com/monumental-archive/edtf/pull/350))
+- record equivalent mutants at their sites ([#359](https://github.com/monumental-archive/edtf/pull/359))
+- sweep the bound conversion over the date range ([#376](https://github.com/monumental-archive/edtf/pull/376))
+- add inputs that reach new code ([#377](https://github.com/monumental-archive/edtf/pull/377))
+- search the arithmetic over every i64 year ([#390](https://github.com/monumental-archive/edtf/pull/390))
+- make the cli one function held by properties ([#394](https://github.com/monumental-archive/edtf/pull/394))
+- assert each general rule once, in every engine ([#392](https://github.com/monumental-archive/edtf/pull/392))
+- retire the parse target into roundtrip ([#405](https://github.com/monumental-archive/edtf/pull/405))
+- assert the composition rules once ([#393](https://github.com/monumental-archive/edtf/pull/393))
+
+### CI
+
+- adopt the canon's rust branch-coverage floor ([#273](https://github.com/monumental-archive/edtf/pull/273))
+- remove codecov.yml for the org's global yaml ([#277](https://github.com/monumental-archive/edtf/pull/277))
+- update canon to v1.72.0 and swap in the subject stubs ([#317](https://github.com/monumental-archive/edtf/pull/317))
+- update canon to v1.73.0 and adopt its fuzz floor lines ([#320](https://github.com/monumental-archive/edtf/pull/320))
+- update canon to v1.75.0 and drop the advisory ignore ([#321](https://github.com/monumental-archive/edtf/pull/321))
+
+### Dependencies
+
+- update node to 26.13.1 ([#267](https://github.com/monumental-archive/edtf/pull/267))
+- pin cargo-auditable in its prebuilt github: form ([#268](https://github.com/monumental-archive/edtf/pull/268))
+- update postgresql-binaries to 18.7.0 ([#279](https://github.com/monumental-archive/edtf/pull/279))
+- update postgresql-binaries ([#283](https://github.com/monumental-archive/edtf/pull/283))
+- update rust to 1.100.0 ([#290](https://github.com/monumental-archive/edtf/pull/290))
+
 ## [1.3.5](https://github.com/monumental-archive/edtf/compare/v1.3.4...v1.3.5) - 2026-11-16
 
 ### Fixed

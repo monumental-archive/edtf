@@ -34,9 +34,9 @@ default-members = [
 exclude = ["fuzz"]
 
 [workspace.dependencies]
-edtf-core = { path = "crates/edtf-core", version = "1.3.5" }
-edtf-calendars = { path = "crates/edtf-calendars", version = "1.3.5" }
-edtf-normalize = { path = "crates/edtf-normalize", version = "1.3.5" }
+edtf-core = { path = "crates/edtf-core", version = "2.0.0" }
+edtf-calendars = { path = "crates/edtf-calendars", version = "2.0.0" }
+edtf-normalize = { path = "crates/edtf-normalize", version = "2.0.0" }
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = "1"
 # Model-side property tests; std-only subset (no fork/timeout machinery).
@@ -48,7 +48,7 @@ proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
 # it here, so every member inherits it rather than carrying its own.
 # lint:version-mirrors refuses a workspace that declares neither
 # workspace.package.version nor package.version.
-version = "1.3.5"
+version = "2.0.0"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
