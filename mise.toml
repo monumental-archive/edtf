@@ -97,10 +97,6 @@ run = '"${ORG_BELT_DIR}/measured" cargo test --workspace --locked --all-features
 description = "The criterion benchmarks whose numbers the README publishes"
 run = "cargo bench -p edtf-core --bench core"
 
-[tasks.wasm]
-description = "Build the WebAssembly artifact"
-run = "cargo build -p edtf-wasm --target wasm32-unknown-unknown --release"
-
 [tasks."wasm:pack"]
 description = "Build the npm-ready package (JS glue + .d.ts) via wasm-pack"
 run = "wasm-pack build crates/edtf-wasm --target web --out-dir pkg"
