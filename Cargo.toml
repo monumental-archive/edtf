@@ -13,7 +13,7 @@ members = [
 # at v1.0.0 precisely because it sat outside and nothing owned it (#54).
 #
 # It is NOT a default member: building it needs a locally-initialized pgrx
-# toolchain ($PGRX_HOME, via `cargo pgrx init`), and its pg15-pg18 features
+# toolchain ($PGRX_HOME, via `cargo pgrx init`), and its pg15-pg19 features
 # are mutually exclusive, so `--all-features` across it is a hard error.
 # Bare `cargo build`/`test`/`clippy` therefore cover the five pure-Rust
 # crates and skip it; reach it with `-p edtf-postgres` or `mise run test:pgrx`.
