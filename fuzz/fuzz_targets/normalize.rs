@@ -9,21 +9,21 @@
 //! B, and in every language the composition rules run on them: range forms
 //! agree (1), "A or B" composes (2), before and after compose (3), and every
 //! emitted string re-reads as itself (5). The rules live in the crate; this
-//! target only feeds them.
+//! target only feeds them. The module exists only under the `fuzzing` cfg
+//! cargo-fuzz builds with, so an ordinary build of this crate (as
+//! `lint:rust` runs it) compiles the target empty.
 
 #![no_main]
 
-use core::str::from_utf8;
+#[cfg(fuzzing)]
+libfuzzer_sys::fuzz_target!(|data: &[u8]| {
+    use edtf_normalize::properties::{
+        LANGUAGES, check_honest, check_idempotent, check_open_composes, check_or_composes,
+        check_range_forms_agree, every_options, observe_honest, observe_open, observe_or,
+        observe_range_forms, observe_reread, options,
+    };
 
-use edtf_normalize::properties::{
-    LANGUAGES, check_honest, check_idempotent, check_open_composes, check_or_composes,
-    check_range_forms_agree, every_options, observe_honest, observe_open, observe_or,
-    observe_range_forms, observe_reread, options,
-};
-use libfuzzer_sys::fuzz_target;
-
-fuzz_target!(|data: &[u8]| {
-    let Ok(input) = from_utf8(data) else {
+    let Ok(input) = core::str::from_utf8(data) else {
         return;
     };
     for opts in every_options() {
