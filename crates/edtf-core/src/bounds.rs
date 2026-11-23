@@ -163,8 +163,9 @@ pub enum Bound {
     Date(BoundDate),
     /// Unbounded in the future (open interval end, `date..` endpoints).
     PositiveInfinity,
-    /// Not determinable: unknown interval endpoints, or year values beyond
-    /// the numeric range this library computes with.
+    /// Not determinable: an unknown interval end (an empty endpoint). A
+    /// parsed value reaches it only that way (decision D30); a hand-built
+    /// year the library cannot compute with also bounds here.
     Unknown,
 }
 
