@@ -107,7 +107,11 @@ against the N-number.
   at a hyphen, a space or the end; core is the authority on what one
   date is, so the normaliser keeps no copy of the date grammar. A bare
   year is not a unit, and a colliding sub-year token (N13) is not one
-  either, since its hyphen is the very question N13 answers. Every other
+  either, since its hyphen is the very question N13 answers. Nor does a
+  unit end at a hyphen that opens one of the language's number suffixes
+  (any `ordinal_suffixes` or `decade_suffixes` entry starting with `-`,
+  read from the tables): that hyphen binds the number before it, so
+  "1000-11-й век" is `1000/10XX`, not the month `1000-11`. Every other
   hyphen is a candidate; one that reads is the answer, and several that
   read give every split's readings, left to right (N14). The same scan
   runs before lower-casing, so a piece between candidates that is EDTF
