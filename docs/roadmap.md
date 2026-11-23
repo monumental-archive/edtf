@@ -19,7 +19,7 @@ not a promise; when it changes, this file changes with it.
   every reading, never a guess, and every judgement call lands as a
   numbered N-decision in [normalize-notes.md](normalize-notes.md).
 - **Keep the deployment shapes first-class.** The Postgres extension
-  (pg15–18, amd64+arm64 tarballs and the OCI image), the npm WebAssembly
+  (pg15–19, amd64+arm64 tarballs and the OCI image), the npm WebAssembly
   package, and the prebuilt CLI binaries all publish from the same
   attested release pipeline; new Postgres majors are picked up as pgrx
   supports them, and Debian base bumps ride the release cadence.
