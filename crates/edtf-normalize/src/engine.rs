@@ -1476,7 +1476,8 @@ fn parse_range(s: &str, toks: &[&str], opts: Options, lang: &Lang) -> Option<Rea
 /// components, never a range (ISO 8601-1 §3.2.6). A bare year has no
 /// component hyphen, so it is not a unit and a minus before it stays a
 /// candidate ("1985 -1990"). A colliding sub-year token is not a unit;
-/// it is the range grammar's question (N13).
+/// it is the range grammar's question (N13). Nor does a unit end at a
+/// hyphen that opens a number suffix (`opens_number_suffix`).
 fn range_hyphens(s: &str, opts: Options, lang: &Lang) -> Vec<usize> {
     let mut hyphens = Vec::new();
     let mut i = 0;
