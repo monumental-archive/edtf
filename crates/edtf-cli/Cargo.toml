@@ -21,3 +21,6 @@ path = "src/main.rs"
 edtf-core = { workspace = true, features = ["serde"] }
 edtf-calendars = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

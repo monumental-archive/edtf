@@ -305,6 +305,7 @@ version = "1.3.5"
 dependencies = [
  "edtf-calendars",
  "edtf-core",
+ "proptest",
  "serde_json",
 ]
 
