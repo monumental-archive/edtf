@@ -296,18 +296,34 @@ pub struct OrObservation {
 }
 
 /// The elements a one-of set holding `input`'s one reading would take,
-/// when it reads alone as one unqualified reading that states its year.
+/// when it reads alone as one unqualified reading that states its year: no
+/// date in it is N9's year-less date, a month under `XXXX`.
 fn or_elements(input: &str, language: Language) -> Option<Vec<SetElement>> {
     let Outcome::Normalized(normalized) = normalize_with(input, options(language)) else {
         return None;
     };
-    if !unqualified(&normalized.edtf) || normalized.notes.contains(&Note::MissingYearMasked) {
+    if !unqualified(&normalized.edtf) {
         return None;
     }
-    match normalized.value {
-        Edtf::Date(date) => Some(vec![SetElement::Date(date)]),
-        Edtf::Set(set) if set.kind() == SetKind::OneMember => Some(set.elements().to_vec()),
-        Edtf::Set(_) | Edtf::Interval(_) | Edtf::DateTime(_) => None,
+    let elements = match normalized.value {
+        Edtf::Date(date) => vec![SetElement::Date(date)],
+        Edtf::Set(set) if set.kind() == SetKind::OneMember => set.elements().to_vec(),
+        Edtf::Set(_) | Edtf::Interval(_) | Edtf::DateTime(_) => return None,
+    };
+    elements
+        .iter()
+        .all(|element| !element_date(element).is_some_and(|date| month_without_year(&date)))
+        .then_some(elements)
+}
+
+/// The date a set element names that could be year-less. A set range
+/// cannot hold unspecified digits (core refuses them), so it has none.
+const fn element_date(element: &SetElement) -> Option<Date> {
+    match *element {
+        SetElement::Date(date) | SetElement::OnOrBefore(date) | SetElement::OnOrAfter(date) => {
+            Some(date)
+        }
+        SetElement::Range(_) => None,
     }
 }
 
@@ -995,6 +1011,9 @@ mod planted {
         );
         for (left, right) in [
             ("June", "1914"),
+            ("XXXX-01", "1914"),
+            ("1914", "[1913,XXXX-01]"),
+            ("[..XXXX-01]", "1914"),
             ("1914~", "1920"),
             ("1985/1990", "1914"),
             ("{1914,1915}", "1920"),
