@@ -18,11 +18,14 @@
 //!
 //! 1. Range forms agree ([`check_range_forms_agree`]).
 //! 2. "Or" composes ([`check_or_composes`], N14).
-//! 3. Before and after compose ([`check_open_composes`], N8).
+//! 3. Before and after compose, with as many readings as there are
+//!    distinct answers among the operand's readings ([`check_open_composes`],
+//!    N8).
 //! 4. Letter case never changes an answer ([`check_case`], N18).
 //! 5. Every emitted string re-reads as itself ([`check_idempotent`], N13).
 //! 6. Whitespace never changes an answer ([`check_whitespace`]).
-//! 7. An option changes only what it resolves ([`check_options`], N5, N6).
+//! 7. An option changes only what it resolves, or a refusal for an
+//!    impossible date ([`check_options`], N5, N6).
 //! 8. No masked year beside a stated one ([`check_no_masked_year`], N9).
 //! 9. Readings are honest ([`check_honest`]).
 
@@ -331,13 +334,25 @@ pub fn check_or_composes(observation: &OrObservation) {
 // ---------------------------------------------------------------------------
 // 3. Before and after compose (N8)
 
-/// How many readings the operand had, and what each before/after form gave.
+/// One before/after form of an operand: what it gave, and how many
+/// distinct answers the same phrase gives over the operand's readings, each
+/// given back as its EDTF string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenForm {
+    /// The form, `phrase operand`.
+    pub input: String,
+    /// What it gave.
+    pub answer: Answer,
+    /// The distinct answers among `phrase reading`, over the operand's
+    /// readings.
+    pub distinct: usize,
+}
+
+/// Each before/after form of an operand.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenObservation {
-    /// The operand's readings, alone.
-    pub readings: usize,
-    /// Each before/after form, read.
-    pub forms: Forms,
+    /// One per row of the language's before/after phrases.
+    pub forms: Vec<OpenForm>,
 }
 
 /// Whether a date can be a before/after operand's edge: it states a year
@@ -370,33 +385,58 @@ fn is_operand(value: &Edtf) -> bool {
     }
 }
 
-/// Every before/after form of `operand`, read, when every reading of the
+/// Every before/after form of `operand`, read, with the distinct answers
+/// its phrase gives over the operand's readings, when every reading of the
 /// operand alone is a date that is not a season, or a span; `None`
 /// otherwise.
 #[must_use]
 pub fn observe_open(operand: &str, language: Language) -> Option<OpenObservation> {
-    let outcome = normalize_with(operand, options(language));
-    let alone = readings(&outcome);
-    (!alone.is_empty() && alone.iter().all(|&(value, _)| is_operand(value))).then(|| {
-        OpenObservation {
-            readings: alone.len(),
-            forms: observe_all(open_forms(operand, language), options(language)),
-        }
-    })
+    let opts = options(language);
+    let outcome = normalize_with(operand, opts);
+    if !readings(&outcome).iter().all(|&(value, _)| is_operand(value)) {
+        return None;
+    }
+    let alone = Answer::of(&outcome).strings();
+    if alone.is_empty() {
+        return None;
+    }
+    let forms = lang_for(language)
+        .open_phrases
+        .iter()
+        .map(|&(phrase, _)| {
+            let phrase = phrase.join(" ");
+            let mut answers: Vec<Answer> = Vec::new();
+            for reading in &alone {
+                let answer = Answer::of(&normalize_with(&format!("{phrase} {reading}"), opts));
+                if !answers.contains(&answer) {
+                    answers.push(answer);
+                }
+            }
+            let input = format!("{phrase} {operand}");
+            OpenForm {
+                answer: Answer::of(&normalize_with(&input, opts)),
+                input,
+                distinct: answers.len(),
+            }
+        })
+        .collect();
+    Some(OpenObservation { forms })
 }
 
-/// Rule 3: each before/after meaning reads, with as many readings as the
-/// operand has.
+/// Rule 3: each before/after meaning reads, with as many readings as there
+/// are distinct answers among the operand's readings.
 ///
 /// # Panics
 ///
 /// When a form is refused or reads with another number of readings.
 pub fn check_open_composes(observation: &OpenObservation) {
-    for (input, answer) in &observation.forms {
+    for form in &observation.forms {
         assert!(
-            matches!(*answer, Answer::Read(ref r) if r.len() == observation.readings),
-            "before/after does not compose: {input:?} gives {answer:?}, not {} readings",
-            observation.readings
+            matches!(form.answer, Answer::Read(ref r) if r.len() == form.distinct),
+            "before/after does not compose: {:?} gives {:?}, not {} readings",
+            form.input,
+            form.answer,
+            form.distinct
         );
     }
 }
@@ -593,8 +633,10 @@ pub fn observe_options(input: &str, language: Language, century: Century) -> Opt
     }
 }
 
-/// Rule 7: an option changes the outcome only of an input whose default
-/// outcome carries the note that option resolves.
+/// Rule 7: an option changes an outcome only when the default is `NoMatch
+/// ImpossibleDate` (the readings that failed are not visible), or when the
+/// default carries the note that option resolves and the option's outcome
+/// is not `NoMatch OutOfGrammar`.
 ///
 /// # Panics
 ///
@@ -917,8 +959,26 @@ mod planted {
     #[test]
     fn before_and_after_are_observed_for_operands_only() {
         let observation = observe_open("12/04/1985", Language::English);
-        assert_eq!(observation.as_ref().map(|o| o.readings), Some(2));
+        assert_eq!(
+            observation.as_ref().and_then(|o| o.forms.get(4)),
+            Some(&OpenForm {
+                input: String::from("before 12/04/1985"),
+                answer: read(&["[..1985-04-11]", "[..1985-12-03]"]),
+                distinct: 2,
+            })
+        );
         assert_eq!(observation.map(|o| o.forms.len()), Some(9));
+        // Two readings of the operand, one answer: the phrase over each
+        // reading gives `[0000..]` both times.
+        let merged = observe_open("from 1st century to 10's", Language::English);
+        assert_eq!(
+            merged.as_ref().and_then(|o| o.forms.get(1)),
+            Some(&OpenForm {
+                input: String::from("no earlier than from 1st century to 10's"),
+                answer: read(&["[0000..]"]),
+                distinct: 1,
+            })
+        );
         for operand in [
             "1914",
             "1985/1990",
@@ -1131,8 +1191,11 @@ mod planted {
     )]
     fn before_and_after_with_too_few_readings_fail() {
         check_open_composes(&OpenObservation {
-            readings: 2,
-            forms: vec![(String::from("before x"), read(&["[..1913]"]))],
+            forms: vec![OpenForm {
+                input: String::from("before x"),
+                answer: read(&["[..1913]"]),
+                distinct: 2,
+            }],
         });
     }
 
@@ -1140,19 +1203,22 @@ mod planted {
     #[should_panic(expected = "before/after does not compose: \"before x\" gives Refused")]
     fn before_and_after_refused_fail() {
         check_open_composes(&OpenObservation {
-            readings: 1,
-            forms: vec![(
-                String::from("before x"),
-                Answer::Refused(NoMatchReason::OutOfGrammar),
-            )],
+            forms: vec![OpenForm {
+                input: String::from("before x"),
+                answer: Answer::Refused(NoMatchReason::OutOfGrammar),
+                distinct: 1,
+            }],
         });
     }
 
     #[test]
     fn before_and_after_that_compose_pass() {
         check_open_composes(&OpenObservation {
-            readings: 2,
-            forms: vec![(String::from("before x"), read(&["[..1899]", "[..1799]"]))],
+            forms: vec![OpenForm {
+                input: String::from("before x"),
+                answer: read(&["[..1899]", "[..1799]"]),
+                distinct: 2,
+            }],
         });
     }
 
