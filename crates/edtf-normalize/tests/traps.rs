@@ -416,6 +416,14 @@ fn valid_edtf_passes_through() {
 }
 
 #[test]
+fn cyrillic_lookalikes_are_refused_in_english() {
+    // English has no lookalike row: the language option says which script
+    // the prose is in, and English refuses Cyrillic (N18).
+    no_match("\u{445}\u{445}\u{445}\u{445}"); // хххх
+    no_match("198\u{445}"); // 198х
+}
+
+#[test]
 fn whole_expression_qualifier_distributes() {
     // N10: "circa 1914-1918" qualifies both endpoints.
     match normalize("circa 1914-1918") {
@@ -565,7 +573,7 @@ const ALL_NOTES: &[Note] = &[
     Note::DecadeOfCentury,
     Note::EndpointYearDistributed,
     Note::CrossYearSeason,
-    Note::EdtfCaseNormalized,
+    Note::EdtfLettersNormalized,
 ];
 
 const fn _every_note_is_listed(note: Note) {
@@ -594,7 +602,7 @@ const fn _every_note_is_listed(note: Note) {
         | Note::DecadeOfCentury
         | Note::EndpointYearDistributed
         | Note::CrossYearSeason
-        | Note::EdtfCaseNormalized => {}
+        | Note::EdtfLettersNormalized => {}
     }
 }
 

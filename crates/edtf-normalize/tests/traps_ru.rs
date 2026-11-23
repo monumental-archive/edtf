@@ -117,6 +117,34 @@ fn edtf_letters_read_in_either_case() {
 }
 
 #[test]
+fn cyrillic_lookalikes_read_as_edtf_letters() {
+    // Russian х, у, е, т (either case) stand for X, Y, E, T: a row of the
+    // language's table, folded only where the result parses (N18).
+    ok("\u{445}\u{445}\u{445}\u{445}", "XXXX", 2); // хххх
+    ok("\u{425}\u{425}\u{425}\u{425}", "XXXX", 2); // ХХХХ
+    ok("198\u{445}", "198X", 1); // 198х
+    ok("\u{443}17\u{435}7", "Y17E7", 2); // у17е7
+    ok("1985-04-12\u{442}23:20:30", "1985-04-12T23:20:30", 0); // т
+    ok("1914 \u{438}\u{43b}\u{438} 198\u{445}", "[1914,198X]", 2); // или
+    match normalize_with("198\u{445}", ru()) {
+        Outcome::Normalized(n) => {
+            assert_eq!(n.notes, [Note::EdtfLettersNormalized]);
+            assert!(n.notes.iter().any(|note| note.decision() == Some("N18")));
+        }
+        other => panic!("expected Normalized, got {other:?}"),
+    }
+    // Unchanged: a two-letter numeral is a century; so is a four-letter one
+    // with a century word, from the Roman-digit row (N15).
+    ok("\u{445}\u{445}", "19XX", 1); // хх
+    ok(
+        "\u{445}\u{445}\u{445}\u{445} \u{432}\u{435}\u{43a}",
+        "39XX",
+        1,
+    ); // хххх век
+    ok("\u{425}\u{406}\u{425} \u{432}\u{435}\u{43a}", "18XX", 1); // ХІХ век
+}
+
+#[test]
 fn a_range_word_inside_an_era_phrase_is_not_the_split() {
     // "до" is both the range word and the start of "до н. э.": every
     // position is tried, left to right, and the first whose two sides

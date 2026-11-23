@@ -95,6 +95,13 @@ pub(crate) struct Lang {
     pub range_pairs: &'static [(Option<&'static str>, &'static str)],
     /// Whether centuries may be written as Roman numerals ("XIX век").
     pub roman_centuries: bool,
+    /// Letters of the language's script that stand for EDTF letters, in
+    /// both cases, → the upper-case Latin letter (N18). Folded only where
+    /// the result parses as EDTF, so prose is never rewritten.
+    pub edtf_letters: &'static [(char, char)],
+    /// Lower-case letters of the language's script that stand for Roman
+    /// digits, → the digit's value (N15).
+    pub roman_letters: &'static [(char, u32)],
     /// Numeric day/month order implied by the language's convention, if any;
     /// "12.04.1985" is unambiguously day-first in Russian usage (N5).
     pub implied_numeric_order: Option<NumericOrder>,
@@ -234,6 +241,8 @@ static EN: Lang = Lang {
         (None, "through"),
     ],
     roman_centuries: false,
+    edtf_letters: &[],
+    roman_letters: &[],
     implied_numeric_order: None,
 };
 
@@ -511,5 +520,25 @@ static RU: Lang = Lang {
         (Some("\u{441}"), "\u{434}\u{43e}"),
     ],
     roman_centuries: true,
+    // Unicode confusables (18.0.0): х Х у У е Е Т; т is Т's lower case.
+    edtf_letters: &[
+        ('\u{445}', 'X'),
+        ('\u{425}', 'X'),
+        ('\u{443}', 'Y'),
+        ('\u{423}', 'Y'),
+        ('\u{435}', 'E'),
+        ('\u{415}', 'E'),
+        ('\u{442}', 'T'),
+        ('\u{422}', 'T'),
+    ],
+    // і (Ukrainian/Belarusian i) х л с д м, as typed in "ХІХ век".
+    roman_letters: &[
+        ('\u{456}', 1),
+        ('\u{445}', 10),
+        ('\u{43b}', 50),
+        ('\u{441}', 100),
+        ('\u{434}', 500),
+        ('\u{43c}', 1000),
+    ],
     implied_numeric_order: Some(NumericOrder::DayFirst),
 };

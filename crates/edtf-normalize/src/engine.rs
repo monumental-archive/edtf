@@ -347,21 +347,28 @@ fn ordinal_num(t: &str, lang: &Lang) -> Option<u32> {
 
 /// Roman numeral 1–99 ("xix" → 19).
 ///
-/// Cyrillic lookalike letters are tolerated — real Russian sources
-/// routinely type "ХІХ век" with Cyrillic Х. ASCII letters are read in either case: preprocessing keeps an EDTF token as
-/// typed, and "XXXX" is one ("XXXX века" → `39XX`).
-fn roman_num(t: &str) -> Option<u32> {
+/// Latin letters are read in either case: preprocessing keeps an EDTF
+/// token as typed, and "XXXX" is one ("XXXX века" → `39XX`). The
+/// language's lookalike letters are read too, from its `roman_letters`
+/// table — Russian sources routinely type "ХІХ век" with Cyrillic Х (N15).
+/// Every letter is lower-cased first, so a kept token in upper-case
+/// lookalikes ("ХХХХ века") reads as well.
+fn roman_num(t: &str, lang: &Lang) -> Option<u32> {
     let mut vals = Vec::new();
-    for c in t.chars().map(|c| c.to_ascii_lowercase()) {
+    for c in t.chars().flat_map(char::to_lowercase) {
         vals.push(match c {
-            'i' | '\u{456}' => 1, // і (Cyrillic/Ukrainian i)
+            'i' => 1,
             'v' => 5,
-            'x' | '\u{445}' => 10,   // х
-            'l' | '\u{43b}' => 50,   // л
-            'c' | '\u{441}' => 100,  // с
-            'd' | '\u{434}' => 500,  // д
-            'm' | '\u{43c}' => 1000, // м
-            _ => return None,
+            'x' => 10,
+            'l' => 50,
+            'c' => 100,
+            'd' => 500,
+            'm' => 1000,
+            c => lang
+                .roman_letters
+                .iter()
+                .find(|&&(l, _)| l == c)
+                .map(|&(_, v)| v)?,
         });
     }
     // Signed accumulation: numerals STARTING with a subtractive pair (IV,
@@ -390,7 +397,7 @@ fn century_ordinal(t: &str, lang: &Lang) -> Option<(u32, bool)> {
         return (1..=99).contains(&n).then_some((n, false));
     }
     if lang.roman_centuries {
-        return Some((roman_num(t)?, true));
+        return Some((roman_num(t, lang)?, true));
     }
     None
 }
@@ -421,11 +428,22 @@ fn year_num(t: &str) -> Option<i32> {
 // ---------------------------------------------------------------------------
 // Preprocessing and qualifier stripping
 
-/// The one place input is read as EDTF (N18): the text as typed, then
-/// with its ASCII letters upper-cased. The flag says whether the fold
-/// changed the text.
-fn edtf_token(t: &str) -> Option<(Edtf, bool)> {
-    let upper = t.to_ascii_uppercase();
+/// The one place input is read as EDTF (N18).
+///
+/// The text is tried as typed, then folded: the language's lookalike
+/// letters read as the EDTF letters they stand for, and ASCII letters
+/// upper-cased. The flag says whether the fold changed the text.
+fn edtf_token(t: &str, lang: &Lang) -> Option<(Edtf, bool)> {
+    let upper: String = t
+        .chars()
+        .map(|c| {
+            lang.edtf_letters
+                .iter()
+                .find(|&&(l, _)| l == c)
+                .map_or(c, |&(_, e)| e)
+                .to_ascii_uppercase()
+        })
+        .collect();
     let folded = (upper != t).then_some((upper.as_str(), true));
     iter::once((t, false))
         .chain(folded)
@@ -434,9 +452,9 @@ fn edtf_token(t: &str) -> Option<(Edtf, bool)> {
 
 /// Unify dashes and collapse whitespace; lower-case every prose token.
 ///
-/// Per whitespace-separated token: an EDTF token is kept as typed (its letter case and commas are notation, N18); any other is
+/// Per whitespace-separated token: an EDTF token is kept as typed (its letters and commas are notation, N18); any other is
 /// lower-cased, its apostrophes unified and its commas dropped.
-fn preprocess(input: &str) -> String {
+fn preprocess(input: &str, lang: &Lang) -> String {
     let dashed: String = input
         .chars()
         .map(|c| match c {
@@ -447,7 +465,7 @@ fn preprocess(input: &str) -> String {
     let mut s = String::with_capacity(dashed.len());
     for tok in dashed.split_whitespace() {
         s.push(' ');
-        if edtf_token(tok).is_some() {
+        if edtf_token(tok, lang).is_some() {
             s.push_str(tok);
             continue;
         }
@@ -481,7 +499,7 @@ fn strip_qualifiers(s: &str, lang: &Lang) -> (String, Qualifier) {
     let mut toks: Vec<&str> = s.split(' ').filter(|t| !t.is_empty()).collect();
     let mut q = Qualifier::default();
     if let [t] = toks.as_slice() {
-        if edtf_token(t).is_some() {
+        if edtf_token(t, lang).is_some() {
             return (String::from(*t), q);
         }
     }
@@ -676,7 +694,7 @@ fn century_toks(toks: &[&str], lang: &Lang) -> Option<(u32, bool)> {
             // writes centuries that way ("XIX—XX вв." endpoints) — but a
             // lone letter with no century word is too weak a signal.
             (lang.roman_centuries && t.chars().count() >= 2)
-                .then(|| roman_num(t).map(|n| (n, true)))
+                .then(|| roman_num(t, lang).map(|n| (n, true)))
                 .flatten()
         })?,
         [o, w] if word(w) => century_ordinal(o, lang)?,
@@ -903,9 +921,9 @@ fn parse_single(s: &str, opts: Options, lang: &Lang, in_range: bool) -> Option<R
         if sub_year_collides(t, opts, lang) {
             return None;
         }
-        if let Some((value, folded)) = edtf_token(t) {
+        if let Some((value, folded)) = edtf_token(t, lang) {
             let note = if folded {
-                Note::EdtfCaseNormalized
+                Note::EdtfLettersNormalized
             } else {
                 Note::AlreadyValidEdtf
             };
@@ -1874,7 +1892,7 @@ fn outcome_from(reading: Reading) -> Outcome {
 /// one-token input that is EDTF reads through the atom reader (N18).
 pub(crate) fn run(input: &str, opts: Options) -> Outcome {
     let lang = lang_for(opts.language);
-    let pre = preprocess(input);
+    let pre = preprocess(input, lang);
     let (rest, q) = strip_qualifiers(&pre, lang);
     if rest.is_empty() {
         return no_match(NoMatchReason::OutOfGrammar);
