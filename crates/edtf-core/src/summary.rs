@@ -50,7 +50,7 @@ impl Edtf {
     pub fn summary(&self) -> Summary {
         let (kind, precision) = match *self {
             Self::Date(d) => ("date", Some(precision_word(&d))),
-            Self::DateTime(dt) => ("datetime", Some(precision_word(&dt.date))),
+            Self::DateTime(dt) => ("datetime", Some(precision_word(&dt.date()))),
             Self::Interval(_) => ("interval", None),
             Self::Set(_) => ("set", None),
         };

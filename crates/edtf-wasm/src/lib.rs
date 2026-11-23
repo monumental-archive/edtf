@@ -34,7 +34,9 @@
 )]
 
 use edtf_core::{Edtf, Relation, Summary};
-use edtf_normalize::{Language, NoMatchReason, NumericOrder, Options, Outcome, normalize_with};
+use edtf_normalize::{
+    Century, Language, NoMatchReason, NumericOrder, Options, Outcome, normalize_with,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -150,8 +152,8 @@ struct NormalizeOptionsJson {
     /// How to read an ambiguous all-numeric date: `"dayFirst"` or
     /// `"monthFirst"` (N5).
     numeric_order: Option<String>,
-    /// Century that resolves a bare decade ("the 80s"), e.g. `1900`;
-    /// domain `0..=9999` (N6).
+    /// Century that resolves a bare decade ("the 80s"), named by its
+    /// first year: a multiple of 100 from 0 to 9900, e.g. `1900` (N6).
     default_century: Option<u16>,
 }
 
@@ -172,15 +174,16 @@ fn parse_options(options: Option<&str>) -> Option<Options> {
         Some("monthFirst") => Some(NumericOrder::MonthFirst),
         Some(_) => return None,
     };
-    // Out-of-domain values are option errors (undefined to JS), never a
-    // fabricated noMatch for in-grammar prose.
-    if parsed.default_century.is_some_and(|c| c > 9999) {
-        return None;
-    }
+    // A value `Century` refuses is an option error (undefined to JS),
+    // never a fabricated noMatch for in-grammar prose.
+    let default_century = match parsed.default_century {
+        None => None,
+        Some(first_year) => Some(Century::new(first_year)?),
+    };
     Some(Options {
         language,
         numeric_order,
-        default_century: parsed.default_century,
+        default_century,
     })
 }
 
@@ -407,8 +410,6 @@ mod tests {
         // A typo'd KEY must be an option error, not a silent default (a
         // misspelled "lang" would otherwise silently run English tables).
         assert!(normalize("около 1920", Some(String::from("{\"lang\":\"ru\"}"))).is_none());
-        // Out-of-domain defaultCentury is an option error, not a noMatch.
-        assert!(normalize("the 80s", Some(String::from("{\"defaultCentury\":12345}"))).is_none());
     }
 
     #[test]
@@ -466,12 +467,16 @@ mod tests {
     }
 
     #[test]
-    fn default_century_upper_bound_is_inclusive() {
-        // 9999 is the last in-domain defaultCentury; 10000 is the first
-        // option error.
-        let max = Some(String::from("{\"defaultCentury\":9999}"));
-        assert!(normalize("the 80s", max).is_some());
-        let over = Some(String::from("{\"defaultCentury\":10000}"));
-        assert!(normalize("the 80s", over).is_none());
+    fn default_century_refuses_what_is_not_a_century() {
+        // Only a century's first year is an option; anything else is an
+        // option error, never a noMatch and never another century.
+        for first_year in [0, 1900, 9900] {
+            let ok = Some(format!("{{\"defaultCentury\":{first_year}}}"));
+            assert!(normalize("the 80s", ok).is_some(), "{first_year}");
+        }
+        for not_a_century in [1950, 9999, 10000, 12000] {
+            let bad = Some(format!("{{\"defaultCentury\":{not_a_century}}}"));
+            assert!(normalize("the 80s", bad).is_none(), "{not_a_century}");
+        }
     }
 }

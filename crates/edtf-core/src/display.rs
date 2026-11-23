@@ -63,7 +63,7 @@ use core::fmt::{self, Display, Formatter, Write as _};
 
 use crate::types::{
     Date, DateField, DateTime, Edtf, Interval, IntervalEndpoint, Qualifier, Set, SetElement,
-    SetKind, Time, TimeShift, Year, YearKind,
+    SetKind, Time, Year, YearKind,
 };
 
 impl Display for Edtf {
@@ -90,7 +90,7 @@ fn qual_symbol(q: Qualifier) -> char {
 /// The year's digits in the form the level requires, without its qualifier.
 fn year_body(year: &Year) -> String {
     let mut s = String::new();
-    match year.kind {
+    match year.kind() {
         YearKind::Standard { negative, digits } => {
             if negative {
                 s.push('-');
@@ -112,7 +112,7 @@ fn year_body(year: &Year) -> String {
             let _ = write!(s, "Y{significand}E{exponent}");
         }
     }
-    if let Some(p) = year.significant_digits {
+    if let Some(p) = year.significant_digits() {
         let _ = write!(s, "S{p}");
     }
     s
@@ -121,7 +121,7 @@ fn year_body(year: &Year) -> String {
 /// A date field's two digits, with `X` in every masked position.
 fn field_body(f: DateField) -> String {
     let mut s = String::new();
-    for d in f.digits {
+    for d in f.digits() {
         match d {
             Some(v) => s.push((b'0' + v) as char),
             None => s.push('X'),
@@ -146,12 +146,12 @@ fn qualified_prefix_end(parts: &[(String, Qualifier)], q0: Qualifier) -> usize {
 impl Display for Date {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut parts: Vec<(String, Qualifier)> = Vec::new();
-        parts.push((year_body(&self.year), self.year.qualifier));
-        if let Some(m) = &self.month {
-            parts.push((field_body(*m), m.qualifier));
+        parts.push((year_body(&self.year()), self.year().qualifier()));
+        if let Some(m) = self.month() {
+            parts.push((field_body(m), m.qualifier()));
         }
-        if let Some(d) = &self.day {
-            parts.push((field_body(*d), d.qualifier));
+        if let Some(d) = self.day() {
+            parts.push((field_body(d), d.qualifier()));
         }
 
         // Longest qualified prefix sharing the year's qualifier becomes one
@@ -179,32 +179,34 @@ impl Display for Date {
 
 impl Display for Time {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:02}:{:02}:{:02}", self.hour, self.minute, self.second)?;
-        match self.shift {
-            None => Ok(()),
-            Some(TimeShift::Utc) => f.write_char('Z'),
-            Some(TimeShift::Offset {
-                minutes,
-                hours_only,
-            }) => {
-                let sign = if minutes < 0 { '-' } else { '+' };
-                let mag = minutes.unsigned_abs();
-                let (h, m) = (mag / 60, mag % 60);
-                // The parser only sets `hours_only` for ±hh forms, whose
-                // minutes are zero by construction.
-                if hours_only && m == 0 {
-                    write!(f, "{sign}{h:02}")
-                } else {
-                    write!(f, "{sign}{h:02}:{m:02}")
-                }
-            }
+        write!(
+            f,
+            "{:02}:{:02}:{:02}",
+            self.hour(),
+            self.minute(),
+            self.second()
+        )?;
+        let Some(shift) = self.shift() else {
+            return Ok(());
+        };
+        let Some(minutes) = shift.minutes() else {
+            return f.write_char('Z');
+        };
+        let sign = if minutes < 0 { '-' } else { '+' };
+        let mag = minutes.unsigned_abs();
+        let (h, m) = (mag / 60, mag % 60);
+        // An hours-only shift is a whole number of hours (`TimeShift::offset`).
+        if shift.hours_only() {
+            write!(f, "{sign}{h:02}")
+        } else {
+            write!(f, "{sign}{h:02}:{m:02}")
         }
     }
 }
 
 impl Display for DateTime {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}T{}", self.date, self.time)
+        write!(f, "{}T{}", self.date(), self.time())
     }
 }
 
@@ -219,20 +221,20 @@ impl Display for Interval {
                 IntervalEndpoint::OnOrAfter(d) => write!(f, "{d}.."),
             }
         }
-        endpoint(f, &self.start)?;
+        endpoint(f, &self.start())?;
         f.write_char('/')?;
-        endpoint(f, &self.end)
+        endpoint(f, &self.end())
     }
 }
 
 impl Display for Set {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let (open, close) = match self.kind {
+        let (open, close) = match self.kind() {
             SetKind::AllMembers => ('{', '}'),
             SetKind::OneMember => ('[', ']'),
         };
         f.write_char(open)?;
-        for (i, e) in self.elements.iter().enumerate() {
+        for (i, e) in self.elements().iter().enumerate() {
             if i > 0 {
                 f.write_char(',')?;
             }
@@ -240,7 +242,7 @@ impl Display for Set {
                 SetElement::Date(d) => d.fmt(f)?,
                 SetElement::OnOrBefore(d) => write!(f, "..{d}")?,
                 SetElement::OnOrAfter(d) => write!(f, "{d}..")?,
-                SetElement::Range(a, b) => write!(f, "{a}..{b}")?,
+                SetElement::Range(r) => write!(f, "{}..{}", r.start(), r.end())?,
             }
         }
         f.write_char(close)
@@ -315,49 +317,21 @@ mod tests {
                 "%",
             ),
         ];
+        let year = Year::from_value(2004);
+        let month = DateField::from_value(6).ok();
+        let day = DateField::from_value(11).ok();
         for (q, symbol) in states {
-            let year = Year {
-                kind: YearKind::Standard {
-                    negative: false,
-                    digits: [Some(2), Some(0), Some(0), Some(4)],
-                },
-                significant_digits: None,
-                qualifier: q,
-            };
-            let month_field = DateField {
-                digits: [Some(0), Some(6)],
-                qualifier: q,
-            };
-            let day_field = DateField {
-                digits: [Some(1), Some(1)],
-                qualifier: q,
-            };
             let shapes = [
                 (None, None, "2004"),
-                (Some(month_field), None, "2004-06"),
-                (Some(month_field), Some(day_field), "2004-06-11"),
+                (month, None, "2004-06"),
+                (month, day, "2004-06-11"),
             ];
-            for (month, day, body) in shapes {
-                let date = Date { year, month, day };
-                assert_eq!(format!("{date}"), format!("{body}{symbol}"));
+            for (m, d, body) in shapes {
+                let rendered = year
+                    .and_then(|y| Date::new(y, m, d))
+                    .map(|date| format!("{}", date.qualified(q)));
+                assert_eq!(rendered, Ok(format!("{body}{symbol}")));
             }
         }
-    }
-
-    /// The parser only sets `hours_only` on `±hh`, whose minutes are zero, so
-    /// a hand-built shift carrying both is out of the parser's reach. Display
-    /// degrades gracefully rather than truncating: the minutes survive.
-    #[test]
-    fn hours_only_shift_with_minutes_still_renders_them() {
-        let t = Time {
-            hour: 9,
-            minute: 30,
-            second: 0,
-            shift: Some(TimeShift::Offset {
-                minutes: 90,
-                hours_only: true,
-            }),
-        };
-        assert_eq!(format!("{t}"), "09:30:00+01:30");
     }
 }

@@ -13,7 +13,7 @@
 use core::str::from_utf8;
 
 use edtf_core::Edtf;
-use edtf_normalize::{Language, NumericOrder, Options, Outcome, normalize_with};
+use edtf_normalize::{Century, Language, NumericOrder, Options, Outcome, normalize_with};
 use libfuzzer_sys::fuzz_target;
 
 /// Every reading the normaliser emits is canonical and reparses to the value
@@ -46,7 +46,7 @@ fuzz_target!(|data: &[u8]| {
             Some(NumericOrder::DayFirst),
             Some(NumericOrder::MonthFirst),
         ] {
-            for default_century in [None, Some(1900)] {
+            for default_century in [None, Century::new(1900)] {
                 let options = Options {
                     language,
                     numeric_order,

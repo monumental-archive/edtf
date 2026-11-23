@@ -5,9 +5,9 @@ Deterministic prose-date → EDTF normalizer: `"1980s"` → `198X`,
 the same answer on every keystroke. `no_std` + `alloc`, no third-party
 dependencies (only `edtf-core`).
 
-Built for the human input boundary: values are constructed through
-[`edtf-core`](https://crates.io/crates/edtf-core)'s model and rendered by its canonical `Display`,
-then re-parsed, so **every output is valid, canonical EDTF by construction**.
+Built for the human input boundary: values are built through
+[`edtf-core`](https://crates.io/crates/edtf-core)'s validating constructors and rendered by its
+canonical `Display`, so **every output is valid, canonical EDTF by construction**.
 
 The return type is honest — `Normalized { edtf, value, notes }`,
 `Ambiguous { interpretations }`, or `NoMatch` — never a silent guess:
@@ -16,7 +16,7 @@ The return type is honest — `Normalized { edtf, value, notes }`,
 use edtf_normalize::{normalize, Outcome};
 
 let Outcome::Normalized(n) = normalize("early 19th century") else { panic!() };
-assert_eq!(n.edtf, "1801/1830");
+assert_eq!(n.edtf, "[1800..1829]");
 
 // "12/04/1985" is DD/MM or MM/DD — the form gets both readings, not a guess.
 assert!(matches!(normalize("12/04/1985"), Outcome::Ambiguous(_)));

@@ -53,10 +53,6 @@
     reason = "each index is preceded by the bounds check that justifies it, or indexes a fixed-size array whose length is in its type"
 )]
 #![expect(
-    clippy::integer_division,
-    reason = "calendar arithmetic is integer division by definition — the leap rules are /4, /100 and /400, and a float would be wrong"
-)]
-#![expect(
     clippy::missing_inline_in_public_items,
     reason = "inlining is the compiler's call across a crate boundary, and the release profile enables fat LTO — annotating every public item would assert a decision this crate has not measured"
 )]
@@ -73,10 +69,6 @@
     reason = "these enums enumerate what ISO 8601-2 defines; the spec fixes the variants, so non_exhaustive would promise additions the format cannot make"
 )]
 #![expect(
-    clippy::missing_errors_doc,
-    reason = "edtf-core declares every module private and exports only named types, so nothing flagged here is reachable from outside the crate and there is no published error contract to document"
-)]
-#![expect(
     clippy::too_long_first_doc_paragraph,
     reason = "the items are crate-private, so these paragraphs render in no rustdoc summary; they are written to be read next to the code they describe"
 )]
@@ -84,15 +76,12 @@
 use alloc::vec::Vec;
 
 use crate::{
-    bounds::{
-        big_width, day_candidates_of, is_leap, last_day, month_candidates_of, significant_range,
-    },
-    types::{Date, DateField, Edtf, Precision, Qualifier, SetElement, Year, YearKind},
+    bounds::{date_span, day_candidates_of, is_leap, last_day, month_candidates_of},
+    types::{Date, DateField, Edtf, Qualifier, SetElement, SetRange, ValueError, Year, YearKind},
 };
 
 /// Why [`Edtf::values`] cannot enumerate an expression (decisions D24–D25).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Unenumerable {
     /// Intervals denote a single continuous extent, not a collection of
     /// values (ISO 8601-2 Clause 10 defines no enumeration for them).
@@ -100,12 +89,6 @@ pub enum Unenumerable {
     /// The set contains a `..date` or `date..` element, whose value set is
     /// unbounded (§6.3 a–b give "indication", not "expansion").
     UnboundedSetElement,
-    /// A significant-digit sweep or range endpoint lies beyond the years
-    /// this library computes with — the same cases where `bounds()` reports
-    /// [`Bound::Unknown`](crate::Bound::Unknown). The parser admits only
-    /// years of at most 18 digits (decision D30), so only a hand-built value
-    /// reports this.
-    YearRangeOverflow,
 }
 
 impl core::fmt::Display for Unenumerable {
@@ -113,7 +96,6 @@ impl core::fmt::Display for Unenumerable {
         f.write_str(match self {
             Self::Interval => "intervals denote an extent, not enumerable values",
             Self::UnboundedSetElement => "'..'-open set elements denote unbounded value sets",
-            Self::YearRangeOverflow => "year range exceeds the computable range",
         })
     }
 }
@@ -159,19 +141,20 @@ impl Edtf {
     /// # Errors
     ///
     /// [`Unenumerable`] when the value denotes no finite collection: an
-    /// interval, a set with an unbounded `..date`/`date..` element, or a
-    /// year sweep beyond the numeric range this library computes with.
+    /// interval, or a set with an unbounded `..date`/`date..` element. Every
+    /// year sweep fits the numeric range this library computes with
+    /// (decision D30).
     pub fn values(&self) -> Result<Values, Unenumerable> {
         let state = match self {
             Self::Interval(_) => return Err(Unenumerable::Interval),
             Self::DateTime(dt) => State::Singleton(Some(Self::DateTime(*dt))),
-            Self::Date(d) => State::Date(DateValues::new(d)?),
+            Self::Date(d) => State::Date(DateValues::new(d)),
             Self::Set(s) => {
-                let mut queue = Vec::with_capacity(s.elements.len());
-                for e in &s.elements {
+                let mut queue = Vec::with_capacity(s.elements().len());
+                for e in s.elements() {
                     queue.push(match e {
-                        SetElement::Date(d) => ElementValues::Date(DateValues::new(d)?),
-                        SetElement::Range(a, b) => ElementValues::Range(RangeWalk::new(a, b)?),
+                        SetElement::Date(d) => ElementValues::Date(DateValues::new(d)),
+                        SetElement::Range(r) => ElementValues::Range(RangeWalk::new(r)),
                         SetElement::OnOrBefore(_) | SetElement::OnOrAfter(_) => {
                             return Err(Unenumerable::UnboundedSetElement);
                         }
@@ -244,37 +227,27 @@ impl Iterator for Values {
     }
 }
 
+/// A value enumeration builds from a valid one. Every value it yields is a
+/// completion or a step of a valid value, so each constructor accepts it.
+fn built<T>(value: Result<T, ValueError>) -> T {
+    value.unwrap_or_else(|e| unreachable!("enumeration builds only valid values: {e}"))
+}
+
 /// Rebuild a concrete year value in its canonical syntactic form: four
 /// digits within ±9999 (D2: `-0000` cannot arise — the value would be 0),
 /// `Y`-prefixed beyond (D1).
 fn concrete_year(v: i64, qualifier: Qualifier) -> Year {
-    let kind = if (-9999..=9999).contains(&v) {
-        let mag = v.unsigned_abs();
-        YearKind::Standard {
-            negative: v < 0,
-            digits: [
-                Some((mag / 1000 % 10) as u8),
-                Some((mag / 100 % 10) as u8),
-                Some((mag / 10 % 10) as u8),
-                Some((mag % 10) as u8),
-            ],
-        }
-    } else {
-        YearKind::Big { value: v }
-    };
-    Year {
-        kind,
-        significant_digits: None,
-        qualifier,
-    }
+    built(Year::from_value(v)).with_qualifier(qualifier)
 }
 
 /// A concrete value as a `DateField`, carrying the field's qualifier.
-const fn concrete_field(v: u8, qualifier: Qualifier) -> DateField {
-    DateField {
-        digits: [Some(v / 10), Some(v % 10)],
-        qualifier,
-    }
+fn concrete_field(v: u8, qualifier: Qualifier) -> DateField {
+    built(DateField::from_value(v)).with_qualifier(qualifier)
+}
+
+/// A concrete date of these components.
+fn concrete_date(year: Year, month: Option<DateField>, day: Option<DateField>) -> Date {
+    built(Date::new(year, month, day))
 }
 
 /// Values of a single (possibly masked or significant-digit) date.
@@ -299,27 +272,24 @@ enum DateValues {
 
 impl DateValues {
     /// Build a walker for one date, or say why it cannot be enumerated.
-    fn new(d: &Date) -> Result<Self, Unenumerable> {
-        if d.year.significant_digits.is_some() {
-            // S-years are year-precision only (the parser enforces this).
-            let value = d.year.value().ok_or(Unenumerable::YearRangeOverflow)?;
-            let (lo, hi) =
-                significant_range(value, d.year.significant_digits, big_width(&d.year.kind))
-                    .ok_or(Unenumerable::YearRangeOverflow)?;
-            return Ok(Self::Sweep {
-                cur: lo,
-                hi,
-                qualifier: d.year.qualifier,
+    fn new(d: &Date) -> Self {
+        let year = d.year();
+        if year.significant_digits().is_some() {
+            let (lo, hi) = date_span(d);
+            return Self::Sweep {
+                cur: lo.year(),
+                hi: hi.year(),
+                qualifier: year.qualifier(),
                 done: false,
-            });
+            };
         }
         if !d.has_unspecified() {
-            return Ok(Self::Singleton(Some(*d)));
+            return Self::Singleton(Some(*d));
         }
-        Ok(Self::Masked(Masked::new(d)))
+        Self::Masked(Masked::new(d))
     }
 
-    /// The next date in the walk, or `None` when it is finished.
+    /// The next value, if any.
     fn next(&mut self) -> Option<Date> {
         match self {
             Self::Singleton(d) => d.take(),
@@ -338,11 +308,7 @@ impl DateValues {
                 } else {
                     *cur += 1;
                 }
-                Some(Date {
-                    year: concrete_year(v, *qualifier),
-                    month: None,
-                    day: None,
-                })
+                Some(concrete_date(concrete_year(v, *qualifier), None, None))
             }
             Self::Masked(m) => m.next(),
         }
@@ -391,9 +357,9 @@ struct Masked {
 impl Masked {
     /// Build the odometer for a masked date.
     fn new(d: &Date) -> Self {
-        // Masks only occur on standard years; Y-years are digit-valued.
-        let (year, year_count) = match (d.year.value(), d.year.kind) {
-            (Some(v), _) => (MaskedYear::Fixed(v), 1),
+        // Masks only occur on four-digit years; any other year is fixed, and
+        // a fixed year is its own earliest year.
+        let (year, year_count) = match (d.year().value(), d.year().kind()) {
             (
                 None,
                 YearKind::Standard {
@@ -405,16 +371,16 @@ impl Masked {
                 let n = u32::try_from(digits.iter().filter(|x| x.is_none()).count()).unwrap_or(4);
                 (MaskedYear::Pattern(digits), 10_u32.pow(n))
             }
-            (None, _) => unreachable!("only standard years carry X digits"),
+            _ => (MaskedYear::Fixed(date_span(d).0.year()), 1),
         };
         Self {
             year,
             year_count,
-            months: d.month.map(month_candidates_of),
-            days: d.day.map(day_candidates_of),
-            yq: d.year.qualifier,
-            mq: d.month.map(|m| m.qualifier).unwrap_or_default(),
-            dq: d.day.map(|f| f.qualifier).unwrap_or_default(),
+            months: d.month().map(month_candidates_of),
+            days: d.day().map(day_candidates_of),
+            yq: d.year().qualifier(),
+            mq: d.month().map(DateField::qualifier).unwrap_or_default(),
+            dq: d.day().map(DateField::qualifier).unwrap_or_default(),
             yi: 0,
             mi: 0,
             di: 0,
@@ -448,11 +414,7 @@ impl Masked {
             let y = self.year_at(self.yi);
             let Some(months) = &self.months else {
                 self.yi += 1;
-                return Some(Date {
-                    year: concrete_year(y, self.yq),
-                    month: None,
-                    day: None,
-                });
+                return Some(concrete_date(concrete_year(y, self.yq), None, None));
             };
             while self.mi < months.len() {
                 let m = months[self.mi];
@@ -460,21 +422,21 @@ impl Masked {
                     self.mi += 1;
                     // `m` may be a season code 21–41 (only when written
                     // concretely — masked slots draw from 01–12, D14).
-                    return Some(Date {
-                        year: concrete_year(y, self.yq),
-                        month: Some(concrete_field(m, self.mq)),
-                        day: None,
-                    });
+                    return Some(concrete_date(
+                        concrete_year(y, self.yq),
+                        Some(concrete_field(m, self.mq)),
+                        None,
+                    ));
                 };
                 while self.di < days.len() {
                     let dd = days[self.di];
                     self.di += 1;
                     if dd <= last_day(m, is_leap(y)) {
-                        return Some(Date {
-                            year: concrete_year(y, self.yq),
-                            month: Some(concrete_field(m, self.mq)),
-                            day: Some(concrete_field(dd, self.dq)),
-                        });
+                        return Some(concrete_date(
+                            concrete_year(y, self.yq),
+                            Some(concrete_field(m, self.mq)),
+                            Some(concrete_field(dd, self.dq)),
+                        ));
                     }
                 }
                 self.di = 0;
@@ -487,10 +449,9 @@ impl Masked {
 }
 
 /// Inclusive expansion of a set range element `a..b` (§6.3 c, §6.4) by
-/// calendar successor at the endpoints' shared precision. The parser (D27)
-/// guarantees the endpoints are concrete, unqualified, non-season,
-/// same-precision dates in order (D18), so the walk terminates by reaching
-/// `b` exactly.
+/// calendar successor at the endpoints' shared precision. A [`SetRange`]
+/// holds concrete, unqualified, non-season, same-precision dates in order
+/// (D27, D18), so the walk terminates by reaching `b` exactly.
 #[derive(Debug, Clone)]
 struct RangeWalk {
     /// Current position; slots beyond the precision stay 0 so plain
@@ -498,27 +459,53 @@ struct RangeWalk {
     cur: (i64, u8, u8),
     /// The last (year, month, day) in the walk, inclusive.
     end: (i64, u8, u8),
-    /// The precision the walk steps at.
-    precision: Precision,
+    /// The unit the walk steps by.
+    step: Step,
     /// Set once the walk has passed `end`.
     done: bool,
 }
 
+/// The unit a range walks by: its endpoints' precision. A range endpoint is
+/// never a season (D27), so a month is a calendar month.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step {
+    /// One year.
+    Year,
+    /// One calendar month.
+    Month,
+    /// One calendar day.
+    Day,
+}
+
 impl RangeWalk {
-    /// Build a walker between two endpoints, or say why it cannot be enumerated.
-    fn new(a: &Date, b: &Date) -> Result<Self, Unenumerable> {
-        let ay = a.year.value().ok_or(Unenumerable::YearRangeOverflow)?;
-        let by = b.year.value().ok_or(Unenumerable::YearRangeOverflow)?;
-        let field = |f: Option<DateField>| f.and_then(DateField::value).unwrap_or(0);
-        Ok(Self {
-            cur: (ay, field(a.month), field(a.day)),
-            end: (by, field(b.month), field(b.day)),
-            precision: a.precision(),
+    /// Build a walker between a range's two endpoints.
+    fn new(r: &SetRange) -> Self {
+        let (a, b) = (r.start(), r.end());
+        let step = if a.day().is_some() {
+            Step::Day
+        } else if a.month().is_some() {
+            Step::Month
+        } else {
+            Step::Year
+        };
+        // An unmasked date's earliest day carries its year, month and day.
+        let position = |d: &Date| {
+            let first = date_span(d).0;
+            (
+                first.year(),
+                if step == Step::Year { 0 } else { first.month() },
+                if step == Step::Day { first.day() } else { 0 },
+            )
+        };
+        Self {
+            cur: position(&a),
+            end: position(&b),
+            step,
             done: false,
-        })
+        }
     }
 
-    /// The next date in the range, or `None` when it is finished.
+    /// The next value in the walk, if any.
     fn next(&mut self) -> Option<Date> {
         if self.done {
             return None;
@@ -527,16 +514,16 @@ impl RangeWalk {
         if self.cur == self.end {
             self.done = true;
         } else {
-            self.cur = match self.precision {
-                Precision::Year => (y + 1, 0, 0),
-                Precision::Month => {
+            self.cur = match self.step {
+                Step::Year => (y + 1, 0, 0),
+                Step::Month => {
                     if m == 12 {
                         (y + 1, 1, 0)
                     } else {
                         (y, m + 1, 0)
                     }
                 }
-                Precision::Day => {
+                Step::Day => {
                     if d < last_day(m, is_leap(y)) {
                         (y, m, d + 1)
                     } else if m == 12 {
@@ -545,82 +532,28 @@ impl RangeWalk {
                         (y, m + 1, 1)
                     }
                 }
-                Precision::Season => unreachable!("D27 rejects season range endpoints"),
             };
         }
         let q = Qualifier::default();
-        Some(Date {
-            year: concrete_year(y, q),
-            month: (self.precision != Precision::Year).then(|| concrete_field(m, q)),
-            day: (self.precision == Precision::Day).then(|| concrete_field(d, q)),
-        })
+        Some(concrete_date(
+            concrete_year(y, q),
+            (self.step != Step::Year).then(|| concrete_field(m, q)),
+            (self.step == Step::Day).then(|| concrete_field(d, q)),
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![expect(
-        clippy::missing_panics_doc,
-        reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
-    )]
-    #![expect(
-        clippy::unwrap_used,
-        reason = "test code: a panic here is the failure signal, not a crash path"
-    )]
-
-    use alloc::vec;
-
     use super::*;
-    use crate::types::{Set, SetKind};
 
-    const PLAIN: Qualifier = Qualifier {
-        uncertain: false,
-        approximate: false,
-    };
-
-    /// A hand-built date carrying an `X` in a field while its year is an
-    /// exponential too large for `i64` — `Year::value()` is then `None` on a
-    /// kind that cannot hold `X` digits. The parser cannot build this (masks
-    /// only attach to standard years), and the odometer refuses to guess a
-    /// year pattern for it.
+    /// Enumeration rebuilds values from valid ones, so a constructor's
+    /// refusal is a broken invariant: it panics, naming the rule, rather
+    /// than yield a wrong value or stop early.
     #[test]
-    #[should_panic(expected = "only standard years carry X digits")]
-    fn masked_field_under_an_unrepresentable_year_panics() {
-        let d = Date {
-            year: Year {
-                // 1 × 10^100 overflows i64, so `value()` yields None.
-                kind: YearKind::Exponential {
-                    significand: 1,
-                    exponent: 100,
-                },
-                significant_digits: None,
-                qualifier: PLAIN,
-            },
-            month: Some(DateField {
-                digits: [Some(0), None],
-                qualifier: PLAIN,
-            }),
-            day: None,
-        };
-        drop(Edtf::Date(d).values());
-    }
-
-    /// D27 rejects season endpoints in a set range at parse time — seasons
-    /// have no spec-defined successor, so the walk has no step to take. A
-    /// hand-built `2001-21..2002-21` reaches the guard on the first step.
-    #[test]
-    #[should_panic(expected = "D27 rejects season range endpoints")]
-    fn season_range_endpoints_have_no_successor() {
-        let season = |y: i64| Date {
-            year: concrete_year(y, PLAIN),
-            month: Some(concrete_field(21, PLAIN)),
-            day: None,
-        };
-        let set = Edtf::Set(Set {
-            kind: SetKind::AllMembers,
-            elements: vec![SetElement::Range(season(2001), season(2002))],
-        });
-        let mut values = set.values().unwrap();
-        drop(values.next());
+    #[should_panic(expected = "enumeration builds only valid values: a day requires a month")]
+    fn a_refused_rebuild_panics_naming_the_rule() {
+        let refused: Result<Date, ValueError> = Err(ValueError::new(ValueError::DAY_WITHOUT_MONTH));
+        let _refused = built(refused);
     }
 }

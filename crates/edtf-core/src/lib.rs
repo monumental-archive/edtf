@@ -91,7 +91,7 @@ pub use relation::{Modality, Relation, Relations};
 pub use summary::Summary;
 pub use types::{
     Date, DateField, DateTime, Edtf, Interval, IntervalEndpoint, ParseError, Precision, Qualifier,
-    Set, SetElement, SetKind, Time, TimeShift, Year, YearKind,
+    Set, SetElement, SetKind, SetRange, Time, TimeShift, ValueError, Year, YearKind,
 };
 
 /// Returns true if `input` is a valid EDTF string (levels 0–2).

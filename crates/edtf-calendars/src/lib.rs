@@ -173,7 +173,7 @@ impl core::fmt::Display for JulianDate {
 /// single day; year- or month-precision input converts to the earliest and
 /// latest Gregorian days the Julian span covers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum Converted {
     /// A complete Julian date: exactly one proleptic-Gregorian day.
     Day(BoundDate),
@@ -193,11 +193,6 @@ pub enum Converted {
 #[must_use]
 pub const fn is_julian_leap(year: i64) -> bool {
     year.rem_euclid(4) == 0
-}
-
-/// Proleptic Gregorian leap rule on the astronomical year number.
-const fn is_gregorian_leap(year: i64) -> bool {
-    year.rem_euclid(4) == 0 && (year.rem_euclid(100) != 0 || year.rem_euclid(400) == 0)
 }
 
 /// Days in `month` (1–12) under the given February length.
@@ -278,13 +273,11 @@ const fn jdn_to_julian(jdn: i128) -> (i128, u8, u8) {
 ///
 /// # Errors
 ///
-/// [`CalendarError::OutOfRange`] when the year does not fit `i64`.
+/// [`CalendarError::OutOfRange`] when the year does not fit `i64`. The
+/// inversion yields a real Gregorian day, so the day itself is never refused.
 fn to_bound_date(ymd: (i128, u8, u8)) -> Result<BoundDate, CalendarError> {
-    Ok(BoundDate {
-        year: i64::try_from(ymd.0).map_err(|_| CalendarError::OutOfRange)?,
-        month: ymd.1,
-        day: ymd.2,
-    })
+    let year = i64::try_from(ymd.0).map_err(|_| CalendarError::OutOfRange)?;
+    BoundDate::new(year, ymd.1, ymd.2).map_err(|_| CalendarError::InvalidDate)
 }
 
 /// Convert a complete proleptic Julian date to its proleptic Gregorian day.
@@ -311,16 +304,14 @@ pub fn julian_to_gregorian(date: JulianDate) -> Result<BoundDate, CalendarError>
 /// Convert a complete proleptic Gregorian date to its proleptic Julian
 /// (Old Style) date — the round-trip partner of [`julian_to_gregorian`].
 ///
-/// Rejects inputs that are not real Gregorian calendar days: Gregorian
-/// `1900-02-29` never existed and stays invalid, exactly as in `edtf-core`.
+/// Every [`BoundDate`] is a real Gregorian calendar day (`edtf-core` checks
+/// it at construction), so Gregorian `1900-02-29` cannot reach here.
 ///
 /// # Errors
 ///
-/// [`CalendarError::InvalidDate`] when the input is not a real Gregorian
-/// calendar day; [`CalendarError::OutOfRange`] when the converted year
-/// exceeds the numeric range this library computes with.
+/// [`CalendarError::OutOfRange`] when the converted year exceeds the
+/// numeric range this library computes with.
 pub fn gregorian_to_julian(date: BoundDate) -> Result<JulianDate, CalendarError> {
-    check(date.month, date.day, is_gregorian_leap(date.year))?;
     let jdn = date.julian_day_number();
     let (year, month, day) = jdn_to_julian(jdn);
     Ok(JulianDate {
@@ -424,8 +415,8 @@ mod tests {
 
     /// The month-length table itself, direct: February is the only month the
     /// `leap` flag moves, and the flag is the *caller's* leap rule — this
-    /// function is shared by the Julian and Gregorian checks and must not
-    /// have an opinion of its own.
+    /// function takes the caller's leap rule and must not have an opinion
+    /// of its own.
     #[test]
     fn last_day_table() {
         for month in [1, 3, 5, 7, 8, 10, 12] {

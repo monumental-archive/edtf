@@ -37,10 +37,6 @@
     reason = "inlining is the compiler's call across a crate boundary, and the release profile enables fat LTO — annotating every public item would assert a decision this crate has not measured"
 )]
 #![expect(
-    clippy::arithmetic_side_effects,
-    reason = "every flagged operation is bounded where it stands: slice indices by a length guard on the line above, digit values to 0-9 by the match arm that binds them, and the JDN forms by being computed in i128 so any i64 year fits. The operations that genuinely could leave range already use checked_/saturating_ and return an error rather than wrapping"
-)]
-#![expect(
     clippy::absolute_paths,
     reason = "a one-use std path written in full at the call site is clearer than an import that only appears once"
 )]
@@ -58,7 +54,7 @@
 )]
 
 use crate::{
-    bounds::{Bound, BoundDate, is_leap, last_day},
+    bounds::{Bound, BoundDate},
     types::Edtf,
 };
 
@@ -69,7 +65,6 @@ use crate::{
 /// `Equal`, proper containment (including a shared endpoint) is
 /// `Contains`/`Within`, and partial overlap is `Overlaps`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Relation {
     /// A ends before B starts (no shared day).
     Before,
@@ -138,7 +133,6 @@ impl Relation {
 
 /// How firmly a relation holds across the completions of two expressions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Modality {
     /// Holds for no pair of completions.
     Impossible,
@@ -163,7 +157,6 @@ impl Modality {
 /// The modality of every [`Relation`] between one pair of expressions, as
 /// computed by [`Edtf::relation`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Relations {
     /// One modality per Allen relation, in `Relation`'s own order.
     modalities: [Modality; 6],
@@ -279,57 +272,18 @@ const fn ext(b: Bound) -> Option<Ext> {
 
 /// The calendar day after `e`; year overflow saturates to `PosInf`, which
 /// only under-reports overlap feasibility at the edge of representable time.
-/// A parsed year is at most 18 digits (decision D30), so only a hand-built
-/// bound at `i64::MAX` overflows here.
-fn succ(e: Ext) -> Ext {
+/// A value's year is at most 18 digits (decision D30), so only a
+/// `BoundDate` built directly at year `i64::MAX` overflows here.
+fn after(e: Ext) -> Ext {
     let Ext::Day(d) = e else { return e };
-    if d.day < last_day(d.month, is_leap(d.year)) {
-        Ext::Day(BoundDate {
-            day: d.day + 1,
-            ..d
-        })
-    } else if d.month < 12 {
-        Ext::Day(BoundDate {
-            year: d.year,
-            month: d.month + 1,
-            day: 1,
-        })
-    } else {
-        d.year.checked_add(1).map_or(Ext::PosInf, |year| {
-            Ext::Day(BoundDate {
-                year,
-                month: 1,
-                day: 1,
-            })
-        })
-    }
+    d.next_day().map_or(Ext::PosInf, Ext::Day)
 }
 
 /// The calendar day before `e`; year underflow saturates to `NegInf`. As
-/// with `succ`, only a hand-built bound at `i64::MIN` underflows (D30).
-fn pred(e: Ext) -> Ext {
+/// with `after`, only a `BoundDate` built at year `i64::MIN` underflows.
+fn before(e: Ext) -> Ext {
     let Ext::Day(d) = e else { return e };
-    if d.day > 1 {
-        Ext::Day(BoundDate {
-            day: d.day - 1,
-            ..d
-        })
-    } else if d.month > 1 {
-        let month = d.month - 1;
-        Ext::Day(BoundDate {
-            year: d.year,
-            month,
-            day: last_day(month, is_leap(d.year)),
-        })
-    } else {
-        d.year.checked_sub(1).map_or(Ext::NegInf, |year| {
-            Ext::Day(BoundDate {
-                year,
-                month: 12,
-                day: 31,
-            })
-        })
-    }
+    d.previous_day().map_or(Ext::NegInf, Ext::Day)
 }
 
 /// Can some completion of A start strictly before some completion of B and
@@ -337,7 +291,7 @@ fn pred(e: Ext) -> Ext {
 /// day (A's end, B's start), feasibility is exactly
 /// `∃p: lo_a < p <= hi_a ∧ lo_b <= p < hi_b`.
 fn half_overlap(lo_a: Ext, hi_a: Ext, lo_b: Ext, hi_b: Ext) -> bool {
-    succ(lo_a).max(lo_b) <= hi_a.min(pred(hi_b))
+    after(lo_a).max(lo_b) <= hi_a.min(before(hi_b))
 }
 
 impl Edtf {
@@ -390,35 +344,23 @@ mod tests {
         clippy::missing_panics_doc,
         reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
     )]
-    use super::{BoundDate, Ext, pred, succ};
+    use super::{BoundDate, Ext, after, before};
 
     fn day(year: i64, month: u8, day: u8) -> Ext {
-        Ext::Day(BoundDate { year, month, day })
+        // Every fixture is a real day; one that is not fails the asserts.
+        BoundDate::new(year, month, day).map_or(Ext::NegInf, Ext::Day)
     }
 
-    fn ymd(e: Ext) -> Option<(i64, u8, u8)> {
-        match e {
-            Ext::Day(d) => Some((d.year, d.month, d.day)),
-            Ext::NegInf | Ext::PosInf => None,
-        }
-    }
-
-    /// Mid-month, month end, year end and a leap February: each step lands
-    /// on the true calendar neighbour.
+    /// A step past the last representable day saturates to the infinity on
+    /// that side; an infinity steps to itself. The calendar step itself is
+    /// `BoundDate::next_day`'s, tested beside it.
     #[test]
-    fn succ_steps_to_the_next_calendar_day() {
-        assert_eq!(ymd(succ(day(1985, 4, 12))), Some((1985, 4, 13)));
-        assert_eq!(ymd(succ(day(1985, 4, 30))), Some((1985, 5, 1)));
-        assert_eq!(ymd(succ(day(1984, 2, 28))), Some((1984, 2, 29)));
-        assert_eq!(ymd(succ(day(1985, 12, 31))), Some((1986, 1, 1)));
-    }
-
-    /// The mirror of `succ`, across the same boundaries.
-    #[test]
-    fn pred_steps_to_the_previous_calendar_day() {
-        assert_eq!(ymd(pred(day(1985, 4, 12))), Some((1985, 4, 11)));
-        assert_eq!(ymd(pred(day(1985, 5, 1))), Some((1985, 4, 30)));
-        assert_eq!(ymd(pred(day(1984, 3, 1))), Some((1984, 2, 29)));
-        assert_eq!(ymd(pred(day(1985, 1, 1))), Some((1984, 12, 31)));
+    fn steps_saturate_at_the_edges_of_representable_time() {
+        assert!(after(day(i64::MAX, 12, 31)) == Ext::PosInf);
+        assert!(before(day(i64::MIN, 1, 1)) == Ext::NegInf);
+        assert!(after(day(1985, 12, 31)) == day(1986, 1, 1));
+        assert!(before(day(1985, 1, 1)) == day(1984, 12, 31));
+        assert!(after(Ext::NegInf) == Ext::NegInf);
+        assert!(before(Ext::PosInf) == Ext::PosInf);
     }
 }

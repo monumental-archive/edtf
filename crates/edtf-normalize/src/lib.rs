@@ -6,8 +6,8 @@
 //! Real people typing dates into forms need instant, offline, deterministic
 //! normalization — "1980s" → `198X` on every keystroke, the same answer every
 //! time. This crate is a bounded pattern grammar over date prose: values are
-//! constructed through the [`edtf_core`] model and rendered via its canonical
-//! `Display`, then re-parsed, so every output is valid, canonical EDTF by
+//! built through [`edtf_core`]'s validating constructors and rendered via its
+//! canonical `Display`, so every output is valid, canonical EDTF by
 //! construction. Anything outside the grammar is [`Outcome::NoMatch`] — never
 //! a silent guess. Genuinely ambiguous inputs ("12/04/1985") report every
 //! reading instead of picking one.
@@ -80,11 +80,38 @@ pub struct Options {
     /// Resolves the DD/MM vs MM/DD ambiguity (N5). Overrides any
     /// locale-implied order. `None` (default) reports both readings.
     pub numeric_order: Option<NumericOrder>,
-    /// Century base year for bare decades: `Some(1900)` reads "the 80s" as
-    /// `198X` (N6). `None` (default) reports the plausible readings.
-    /// Domain is `0..=9999` (the value's century is used); values above 9999
-    /// are ignored as if unset.
-    pub default_century: Option<u16>,
+    /// Century that resolves a bare decade (N6): with
+    /// `Century::new(1900)`, "the 80s" reads as `198X`. `None` (default)
+    /// reports the plausible readings.
+    pub default_century: Option<Century>,
+}
+
+/// A century named by its first year: a multiple of 100 from 0 to 9900.
+///
+/// `1900` is the century 1900–1999. Only a first year constructs, so one
+/// century has one spelling: `1950` is refused rather than read as `1900`
+/// (N6). The two-digit ISO 8601-1 century (`19` for the 1900s) is not
+/// used: it reads as "the 19th century", which is the 1800s.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Century(u16);
+
+impl Century {
+    /// The century whose first year is `first_year`, or `None` unless
+    /// `first_year` is a multiple of 100 in `0..=9900`.
+    #[must_use]
+    pub const fn new(first_year: u16) -> Option<Self> {
+        if engine::is_century_first_year(first_year) {
+            Some(Self(first_year))
+        } else {
+            None
+        }
+    }
+
+    /// The century's first year: `1900` for the 1900s.
+    #[must_use]
+    pub const fn first_year(self) -> u16 {
+        self.0
+    }
 }
 
 /// Why an output looks the way it does. Each variant cites the N-decision in
@@ -94,17 +121,17 @@ pub struct Options {
 pub enum Note {
     /// The input was already valid EDTF; only canonicalized.
     AlreadyValidEdtf,
-    /// early/mid/late or half-of-century mapped to a decade-rounded interval
-    /// (N1).
-    CenturyPartInterval,
+    /// early/mid/late or half-of-century mapped to a one-of set over a
+    /// decade-rounded range of years, `[1800..1829]` (N1).
+    CenturyPart,
     /// An early/mid/late modifier was dropped as false precision and recorded
     /// (N1).
     ModifierDropped,
-    /// "19th century" → `18XX`: centuries run 1801–1900 (N2).
+    /// "19th century" → `18XX`: centuries run 1800–1899 (N2).
     CenturyMask,
     /// BC centuries have no digit mask (negative years cannot carry `X`);
-    /// emitted as exact intervals like `-0199/-0100` (N2).
-    BcCenturyInterval,
+    /// emitted as a one-of set over their years, `[-0199..-0100]` (N2).
+    BcCentury,
     /// BC year converted to astronomical numbering: year 0 exists, so
     /// 500 BC → `-0499` (N3).
     AstronomicalYear,
@@ -127,14 +154,16 @@ pub enum Note {
     DefaultCenturyApplied,
     /// Season name mapped to an ISO 8601-2 sub-year grouping code (N7).
     SeasonCode,
-    /// before/after rendered as an open interval `../X` or `X/..` (N8).
-    OpenInterval,
+    /// before/after rendered as a one-of set, `[..1916]` or `[1918..]`, or
+    /// "until"/"since" as an open interval, `../X` or `X/..` (N8).
+    BeforeAfter,
     /// A date with no year: the year is masked as `XXXX` (N9).
     MissingYearMasked,
     /// A whole-expression qualifier was distributed over interval endpoints
     /// (N10).
     QualifierDistributed,
-    /// "X or Y": each alternative reported instead of picking one (N14).
+    /// "X or Y": one one-of set `[X,Y]`, or, when an alternative is a
+    /// period, each alternative reported instead of picking one (N14).
     OrAlternatives,
     /// `NNNN-NN` collides between an EDTF sub-year code and an elided year
     /// range; both readings reported (N13).
@@ -151,9 +180,9 @@ pub enum Note {
     /// "winter 1941-42" may be one boundary-spanning winter or a
     /// season-to-year range; both readings reported (N17).
     CrossYearSeason,
-    /// EDTF letters are read in either case and written in upper case
-    /// (N18).
-    EdtfCaseNormalized,
+    /// EDTF letters are read in either case or script and written as
+    /// upper-case Latin ("198х" → `198X`) (N18).
+    EdtfLettersNormalized,
 }
 
 impl Note {
@@ -162,8 +191,8 @@ impl Note {
     pub const fn decision(self) -> Option<&'static str> {
         match self {
             Self::AlreadyValidEdtf => None,
-            Self::CenturyPartInterval | Self::ModifierDropped => Some("N1"),
-            Self::CenturyMask | Self::BcCenturyInterval => Some("N2"),
+            Self::CenturyPart | Self::ModifierDropped => Some("N1"),
+            Self::CenturyMask | Self::BcCentury => Some("N2"),
             Self::AstronomicalYear => Some("N3"),
             Self::ElidedEndYear => Some("N4"),
             Self::NumericUnambiguous
@@ -175,7 +204,7 @@ impl Note {
                 Some("N6")
             }
             Self::SeasonCode => Some("N7"),
-            Self::OpenInterval => Some("N8"),
+            Self::BeforeAfter => Some("N8"),
             Self::MissingYearMasked => Some("N9"),
             Self::QualifierDistributed => Some("N10"),
             Self::SeasonRangeCollision => Some("N13"),
@@ -183,7 +212,7 @@ impl Note {
             Self::RomanCentury => Some("N15"),
             Self::EndpointYearDistributed => Some("N16"),
             Self::CrossYearSeason => Some("N17"),
-            Self::EdtfCaseNormalized => Some("N18"),
+            Self::EdtfLettersNormalized => Some("N18"),
         }
     }
 
@@ -192,15 +221,13 @@ impl Note {
     pub const fn message(self) -> &'static str {
         match self {
             Self::AlreadyValidEdtf => "input was already valid EDTF; canonicalized",
-            Self::CenturyPartInterval => {
-                "part-of-century phrase mapped to a decade-rounded year interval"
-            }
+            Self::CenturyPart => "part-of-century phrase mapped to a set of decade-rounded years",
             Self::ModifierDropped => {
                 "early/mid/late modifier dropped (sub-decade precision would be false)"
             }
-            Self::CenturyMask => "Nth century runs (N-1)01 to N00, so it masks as (N-1)XX",
-            Self::BcCenturyInterval => {
-                "BC centuries cannot be digit-masked; emitted as an exact year interval"
+            Self::CenturyMask => "Nth century runs (N-1)00 to (N-1)99, so it masks as (N-1)XX",
+            Self::BcCentury => {
+                "BC centuries cannot be digit-masked; emitted as a set of their years"
             }
             Self::AstronomicalYear => "BC year converted to astronomical numbering (year 0 exists)",
             Self::ElidedEndYear => "elided end year inherits the start year's century",
@@ -214,12 +241,14 @@ impl Note {
             Self::DecadeAmbiguity => "decade form has more than one plausible reading",
             Self::DefaultCenturyApplied => "bare decade resolved by the configured century",
             Self::SeasonCode => "season mapped to ISO 8601-2 sub-year grouping code",
-            Self::OpenInterval => "before/after expressed as an open interval",
+            Self::BeforeAfter => "before/after expressed as a set; until/since as an open interval",
             Self::MissingYearMasked => "no year given; year masked as XXXX",
             Self::QualifierDistributed => {
                 "whole-expression qualifier applied to every interval endpoint"
             }
-            Self::OrAlternatives => "alternatives reported instead of picking one",
+            Self::OrAlternatives => {
+                "alternatives expressed as a set, or reported instead of picking one"
+            }
             Self::SeasonRangeCollision => {
                 "NNNN-NN is both an EDTF sub-year code and a plausible year range"
             }
@@ -233,7 +262,9 @@ impl Note {
             Self::CrossYearSeason => {
                 "season-year-pair prose may name one boundary-spanning season or a range"
             }
-            Self::EdtfCaseNormalized => "EDTF letters read in either case; written in upper case",
+            Self::EdtfLettersNormalized => {
+                "EDTF letters read in either case or script; written as upper-case Latin"
+            }
         }
     }
 }

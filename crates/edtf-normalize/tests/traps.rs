@@ -33,7 +33,7 @@
 )]
 
 use edtf_core::Edtf;
-use edtf_normalize::{Note, NumericOrder, Options, Outcome, normalize, normalize_with};
+use edtf_normalize::{Century, Note, NumericOrder, Options, Outcome, normalize, normalize_with};
 
 /// Assert a Normalized outcome with the given canonical EDTF and level.
 #[track_caller]
@@ -100,30 +100,50 @@ fn centuries_are_off_by_one() {
 }
 
 #[test]
-fn bc_centuries_are_exact_intervals() {
-    // Negative years cannot carry X digits (core rejects them), so BC
-    // centuries get exact intervals, not python-edtf's invalid "-01XX" (N2).
-    ok("2nd century BC", "-0199/-0100", 1);
-    ok("2nd century BCE", "-0199/-0100", 1);
+fn bc_centuries_are_one_of_ranges() {
+    // Negative years cannot carry X digits (core rejects them, D21), so a
+    // BC century is one year of its span, not python-edtf's invalid
+    // "-01XX" (N2, ISO 8601-2 6.2, 6.3 c).
+    ok("2nd century BC", "[-0199..-0100]", 2);
+    ok("2nd century BCE", "[-0199..-0100]", 2);
 }
 
 #[test]
-fn century_parts_are_decade_rounded_intervals() {
-    // N1: thirds (early/mid/late) and halves, rounded to decades.
-    ok("early 19th century", "1801/1830", 0);
-    ok("mid 19th century", "1831/1870", 0);
-    ok("late 19th century", "1871/1900", 0);
-    ok("first half of the 19th century", "1801/1850", 0);
-    ok("second half of the 19th century", "1851/1900", 0);
+fn century_parts_are_decade_rounded_one_of_ranges() {
+    // N1: thirds (early/mid/late) and halves, rounded to decades, of ISO's
+    // century (P1 3.1.2.23: the 19th century is 1800 to 1899). A vague
+    // date is one year of the span, not a period over it (A.4.4, 6.2).
+    ok("early 19th century", "[1800..1829]", 2);
+    ok("mid 19th century", "[1830..1869]", 2);
+    ok("late 19th century", "[1870..1899]", 2);
+    ok("first half of the 19th century", "[1800..1849]", 2);
+    ok("second half of the 19th century", "[1850..1899]", 2);
+    ok("early 1st century", "[0000..0029]", 2);
     // BC centuries take their parts chronologically.
-    ok("late 2nd century BC", "-0129/-0100", 1);
-    ok("early 2nd century BC", "-0199/-0170", 1);
+    ok("late 2nd century BC", "[-0129..-0100]", 2);
+    ok("early 2nd century BC", "[-0199..-0170]", 2);
+}
+
+#[test]
+fn a_qualified_century_part_falls_back_to_the_mask() {
+    // A range inside a set cannot carry a qualifier (D27): the part is
+    // dropped for the century's mask, true but looser (N1).
+    ok("circa early 19th century", "18XX~", 1);
+    let Outcome::Normalized(n) = normalize("circa early 19th century") else {
+        panic!()
+    };
+    assert!(n.notes.contains(&Note::ModifierDropped));
+    // A BC century has no mask (D21), so a qualified one is refused.
+    no_match("circa 2nd century BC");
+    no_match("circa early 2nd century BC");
+    ok("19th century", "18XX", 1);
+    ok("circa 19th century", "18XX~", 1);
 }
 
 #[test]
 fn first_century_bc_has_no_mask() {
     // -00XX would need year -0000; the span is -0099..0000 (N2).
-    ok("1st century BC", "-0099/0000", 1);
+    ok("1st century BC", "[-0099..0000]", 2);
 }
 
 #[test]
@@ -137,7 +157,7 @@ fn bare_decades_are_ambiguous() {
     ambiguous("the 80s", &["188X", "198X"]);
     ambiguous("'80s", &["188X", "198X"]);
     let opts = Options {
-        default_century: Some(1900),
+        default_century: Century::new(1900),
         ..Options::default()
     };
     match normalize_with("the 80s", opts) {
@@ -204,18 +224,75 @@ fn reversed_ranges_are_rejected() {
 }
 
 #[test]
-fn before_after_are_open_intervals() {
-    // N8: current-spec `..`, not the old-draft bare slash.
-    ok("before 1917", "../1917", 1);
-    ok("after 1917", "1917/..", 1);
+fn before_after_take_iso_forms() {
+    // N8: strictly before and after exclude the operand; on or before and
+    // after include it (ISO 8601-2 6.3 a, b); "until" and "since" state a
+    // period, an open interval with the current-spec `..`.
+    ok("before 1917", "[..1916]", 2);
+    ok("earlier than 1917", "[..1916]", 2);
+    ok("no later than 1917", "[..1917]", 2);
+    ok("by 1917", "[..1917]", 2);
     ok("until 1917", "../1917", 1);
+    ok("after 1917", "[1918..]", 2);
+    ok("later than 1917", "[1918..]", 2);
+    ok("no earlier than 1917", "[1917..]", 2);
     ok("since 1917", "1917/..", 1);
-    ok("earlier than 1917", "../1917", 1);
-    ok("later than 1917", "1917/..", 1);
-    ok("before January 1928", "../1928-01", 1);
-    ok("before approx January 18 1928", "../1928-01-18~", 1);
-    ok("after about the 1920s", "192X~/..", 2);
-    ok("before 19th century", "../18XX", 2);
+    // A step is one unit at the operand's own precision.
+    ok("before June 1940", "[..1940-05]", 2);
+    ok("before January 1940", "[..1939-12]", 2);
+    ok("before 12 June 1940", "[..1940-06-11]", 2);
+    ok("before 1 March 1900", "[..1900-02-28]", 2);
+    ok("before 1 March 2000", "[..2000-02-29]", 2);
+    ok("after 31 December 1999", "[2000-01-01..]", 2);
+    ok("before January 1928", "[..1927-12]", 2);
+    ok("before approx January 18 1928", "[..1928-01-17~]", 2);
+    // A masked or span operand gives its earliest or latest unit.
+    ok("before the 1980s", "[..1979]", 2);
+    ok("no later than the 1980s", "[..1989]", 2);
+    ok("until the 1980s", "../198X", 2);
+    ok("after about the 1920s", "[1930~..]", 2);
+    ok("before 19th century", "[..1799]", 2);
+    ok("before early 19th century", "[..1799]", 2);
+    ok("no later than early 19th century", "[..1829]", 2);
+    ok("after early 19th century", "[1830..]", 2);
+    ok("before 1914-1918", "[..1913]", 2);
+    ok("after 1914-1918", "[1919..]", 2);
+    // An unmasked date is its own lo and hi, as written; a stepped or cut
+    // unit takes the year form its value takes (ISO 8601-2 4.7.2).
+    ok("no later than y17e7", "[..Y17E7]", 2);
+    ok("before y17e7", "[..Y169999999]", 2);
+    ok("before Y10000", "[..9999]", 2);
+    ok("after Y-10000", "[-9999..]", 2);
+    ok("after 9999", "[Y10000..]", 2);
+    ok("before -9999", "[..Y-10000]", 2);
+    // Y17E7S3 is some year in 170000000..170999999.
+    ok("before y17e7s3", "[..Y169999999]", 2);
+    ok("no later than y17e7s3", "[..Y170999999]", 2);
+    // A year-less operand has no unit of its own (N8, N9): only "until"
+    // and "since" take it, as written.
+    for input in [
+        "before June",
+        "after June",
+        "no later than June",
+        "no earlier than June",
+        "before xxxx",
+        "no later than xxxx",
+    ] {
+        no_match(input);
+    }
+    ok("until June", "../XXXX-06", 2);
+    ok("since June", "XXXX-06/..", 2);
+    // A partly masked year still reads.
+    ok("before 19XX", "[..1899]", 2);
+    ok("before 1985-XX", "[..1984-12]", 2);
+    // The unit carries the operand's qualifier.
+    ok("before circa 1917", "[..1916~]", 2);
+    // A season has no predecessor or successor (4.8.1).
+    no_match("before spring 1920");
+    no_match("after winter 1941");
+    ok("no later than spring 1920", "[..1920-21]", 2);
+    // One reading with no form refuses the input (N13, N14).
+    no_match("before 1914-21");
 }
 
 #[test]
@@ -288,8 +365,19 @@ fn season_code_range_collision() {
 
 #[test]
 fn or_alternatives() {
-    // N14: python-edtf silently keeps the first; we report both.
-    ambiguous("1863 or 1864", &["1863", "1864"]);
+    // N14: python-edtf silently keeps the first; ISO's one-of set (6.2)
+    // says exactly what was written.
+    ok("1863 or 1864", "[1863,1864]", 2);
+    ok("1863 or 1864 or 1865", "[1863,1864,1865]", 2);
+    ok("circa 1863 or 1864", "[1863~,1864~]", 2);
+    ok("1863 or before 1850", "[1863,..1849]", 2);
+    ok("June or July 1940", "[1940-06,1940-07]", 2);
+    ok("1863 or early 19th century", "[1863,1800..1829]", 2);
+    ok("1914 or [1667,1668]", "[1914,1667,1668]", 2);
+    ambiguous("1863 or 1900s", &["[1863,190X]", "[1863,19XX]"]);
+    ok("1914 or 1914", "1914", 0);
+    // A period has no place in a set: each alternative is a reading.
+    ambiguous("from 1914 to 1918 or 1920", &["1914/1918", "1920"]);
 }
 
 #[test]
@@ -328,6 +416,14 @@ fn valid_edtf_passes_through() {
 }
 
 #[test]
+fn cyrillic_lookalikes_are_refused_in_english() {
+    // English has no lookalike row: the language option says which script
+    // the prose is in, and English refuses Cyrillic (N18).
+    no_match("\u{445}\u{445}\u{445}\u{445}"); // хххх
+    no_match("198\u{445}"); // 198х
+}
+
+#[test]
 fn whole_expression_qualifier_distributes() {
     // N10: "circa 1914-1918" qualifies both endpoints.
     match normalize("circa 1914-1918") {
@@ -343,8 +439,8 @@ fn whole_expression_qualifier_distributes() {
 #[test]
 fn negated_open_phrases() {
     // N8: the English forms the doc quotes must actually work.
-    ok("no later than 1917", "../1917", 1);
-    ok("no earlier than 1917", "1917/..", 1);
+    ok("no later than 1917", "[..1917]", 2);
+    ok("no earlier than 1917", "[1917..]", 2);
 }
 
 #[test]
@@ -396,21 +492,29 @@ fn dead_readings_poison_the_whole_input() {
     // Reversed decade ranges must not resolve to the century reading.
     no_match("1910s to 1900s");
     no_match("1990s-1980s");
-    // Two valid alternatives still report both.
-    ambiguous("1 July 1940 or 2 July 1940", &["1940-07-01", "1940-07-02"]);
+    // Two valid alternatives still make one set.
+    ok("1 July 1940 or 2 July 1940", "[1940-07-01,1940-07-02]", 2);
 }
 
 #[test]
-fn out_of_domain_default_century_is_ignored() {
-    // Domain 0..=9999 (documented); larger values behave as unset.
+fn default_century_holds_only_a_century() {
+    // Only a century's first year constructs: a multiple of 100 in
+    // 0..=9900 (N6). 1950 is refused, never read as 1900.
+    for first_year in [0, 1900, 9900] {
+        let century = Century::new(first_year).expect("a first year constructs");
+        assert_eq!(century.first_year(), first_year);
+    }
+    for not_a_century in [1950, 9999, 10000] {
+        assert_eq!(Century::new(not_a_century), None, "{not_a_century}");
+    }
     let opts = Options {
-        default_century: Some(10000),
+        default_century: Century::new(1900),
         ..Options::default()
     };
-    assert!(matches!(
-        normalize_with("the 80s", opts),
-        Outcome::Ambiguous(_)
-    ));
+    match normalize_with("the 80s", opts) {
+        Outcome::Normalized(n) => assert_eq!(n.edtf, "198X"),
+        other => panic!("expected Normalized, got {other:?}"),
+    }
 }
 
 #[test]
@@ -437,6 +541,36 @@ fn no_match_reasons_discriminate() {
     ));
 }
 
+/// N14: a date the calendar refuses is refused as impossible wherever it
+/// stands.
+///
+/// That holds as a range end on either side, and under before or after. Core
+/// refuses it at construction (D31), so the refusal reaches the outcome
+/// before any construct around the date is read.
+#[test]
+fn an_impossible_date_is_impossible_inside_any_construct() {
+    use edtf_normalize::NoMatchReason;
+    for input in [
+        "February 30 1985 to 1990",
+        "1990 to February 30 1985",
+        "before February 30 1985",
+        "after 30 February 1985",
+        "before February 30",
+        "until February 30 1985",
+        "29 February 1985 or 1986",
+    ] {
+        assert!(
+            matches!(
+                normalize(input),
+                Outcome::NoMatch {
+                    reason: NoMatchReason::ImpossibleDate
+                }
+            ),
+            "{input:?}"
+        );
+    }
+}
+
 #[test]
 fn notes_cite_decisions() {
     let Outcome::Normalized(n) = normalize("500 BC") else {
@@ -454,10 +588,10 @@ fn notes_cite_decisions() {
 // exhaustive rather than drifting.
 const ALL_NOTES: &[Note] = &[
     Note::AlreadyValidEdtf,
-    Note::CenturyPartInterval,
+    Note::CenturyPart,
     Note::ModifierDropped,
     Note::CenturyMask,
-    Note::BcCenturyInterval,
+    Note::BcCentury,
     Note::AstronomicalYear,
     Note::ElidedEndYear,
     Note::NumericUnambiguous,
@@ -468,7 +602,7 @@ const ALL_NOTES: &[Note] = &[
     Note::DecadeAmbiguity,
     Note::DefaultCenturyApplied,
     Note::SeasonCode,
-    Note::OpenInterval,
+    Note::BeforeAfter,
     Note::MissingYearMasked,
     Note::QualifierDistributed,
     Note::OrAlternatives,
@@ -477,16 +611,16 @@ const ALL_NOTES: &[Note] = &[
     Note::DecadeOfCentury,
     Note::EndpointYearDistributed,
     Note::CrossYearSeason,
-    Note::EdtfCaseNormalized,
+    Note::EdtfLettersNormalized,
 ];
 
 const fn _every_note_is_listed(note: Note) {
     match note {
         Note::AlreadyValidEdtf
-        | Note::CenturyPartInterval
+        | Note::CenturyPart
         | Note::ModifierDropped
         | Note::CenturyMask
-        | Note::BcCenturyInterval
+        | Note::BcCentury
         | Note::AstronomicalYear
         | Note::ElidedEndYear
         | Note::NumericUnambiguous
@@ -497,7 +631,7 @@ const fn _every_note_is_listed(note: Note) {
         | Note::DecadeAmbiguity
         | Note::DefaultCenturyApplied
         | Note::SeasonCode
-        | Note::OpenInterval
+        | Note::BeforeAfter
         | Note::MissingYearMasked
         | Note::QualifierDistributed
         | Note::OrAlternatives
@@ -506,7 +640,7 @@ const fn _every_note_is_listed(note: Note) {
         | Note::DecadeOfCentury
         | Note::EndpointYearDistributed
         | Note::CrossYearSeason
-        | Note::EdtfCaseNormalized => {}
+        | Note::EdtfLettersNormalized => {}
     }
 }
 
