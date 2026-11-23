@@ -47,8 +47,7 @@ Consequences worth knowing before you reach for a knob:
 - `cargo test -p edtf-core parser::` — a single crate or test filter
 - `mise run coverage:check` — the committed ratchet in `.coverage-floor`
 - `mise run bench` — the criterion benchmarks the README quotes
-- `mise run wasm` / `mise run wasm:pack` — the wasm artifact, and the
-  npm-ready package
+- `mise run wasm:pack` — the wasm artifact, as the npm-ready package
 
 ### Postgres extension
 
