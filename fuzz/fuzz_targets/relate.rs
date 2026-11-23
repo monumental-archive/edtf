@@ -12,66 +12,79 @@
 
 #![no_main]
 
+use core::str::from_utf8;
+
 use edtf_core::{Bound, Edtf, Modality, Relation};
 use libfuzzer_sys::fuzz_target;
 
-fn any_unknown(v: &Edtf) -> bool {
-    let b = v.bounds();
-    b.earliest == Bound::Unknown || b.latest == Bound::Unknown
+/// Whether either of `value`'s bounds is Unknown.
+fn any_unknown(value: &Edtf) -> bool {
+    let bounds = value.bounds();
+    bounds.earliest == Bound::Unknown || bounds.latest == Bound::Unknown
 }
 
 fuzz_target!(|data: &[u8]| {
-    let Ok(s) = core::str::from_utf8(data) else {
+    let Ok(input) = from_utf8(data) else {
         return;
     };
-    let (left, right) = s.split_once('\n').unwrap_or((s, s));
-    let (Ok(a), Ok(b)) = (Edtf::parse(left), Edtf::parse(right)) else {
+    let (left_text, right_text) = input.split_once('\n').unwrap_or((input, input));
+    let (Ok(left), Ok(right)) = (Edtf::parse(left_text), Edtf::parse(right_text)) else {
         return;
     };
-    let ab = a.relation(&b);
-    let ba = b.relation(&a);
+    let forward = left.relation(&right);
+    let backward = right.relation(&left);
 
     // Converse symmetry: swapping the operands maps every relation to its
     // converse with the same modality.
-    for r in Relation::ALL {
+    for relation in Relation::ALL {
         assert_eq!(
-            ab.modality(r),
-            ba.modality(r.converse()),
-            "{a} vs {b}: {r:?} and its converse disagree"
+            forward.modality(relation),
+            backward.modality(relation.converse()),
+            "{left} vs {right}: {relation:?} and its converse disagree"
         );
     }
 
     // Soundness: something is possible, at most one relation is definite,
     // and a definite one is the only possibility and is Before, After or
     // Equal (containment and overlap are never forced).
-    let possible: Vec<Relation> = ab.possible().collect();
-    assert!(!possible.is_empty(), "{a} vs {b}: no relation is possible");
+    let possible: Vec<Relation> = forward.possible().collect();
+    assert!(
+        !possible.is_empty(),
+        "{left} vs {right}: no relation is possible"
+    );
     let definite: Vec<Relation> = Relation::ALL
         .into_iter()
-        .filter(|r| ab.is_definite(*r))
+        .filter(|relation| forward.is_definite(*relation))
         .collect();
-    assert!(definite.len() <= 1, "{a} vs {b}: two definite relations");
-    assert_eq!(ab.definite(), definite.first().copied(), "{a} vs {b}");
-    if let Some(d) = ab.definite() {
+    assert!(
+        definite.len() <= 1,
+        "{left} vs {right}: two definite relations"
+    );
+    assert_eq!(
+        forward.definite(),
+        definite.first().copied(),
+        "{left} vs {right}"
+    );
+    if let Some(sole) = forward.definite() {
         assert_eq!(
             possible,
-            [d],
-            "{a} vs {b}: a definite relation must be sole"
+            [sole],
+            "{left} vs {right}: a definite relation must be sole"
         );
         assert!(
-            matches!(d, Relation::Before | Relation::After | Relation::Equal),
-            "{a} vs {b}: {d:?} can never be definite"
+            matches!(sole, Relation::Before | Relation::After | Relation::Equal),
+            "{left} vs {right}: {sole:?} can never be definite"
         );
     }
 
     // An Unknown bound on either side leaves every relation possible.
-    let unknown = any_unknown(&a) || any_unknown(&b);
+    let unknown = any_unknown(&left) || any_unknown(&right);
     if unknown {
-        for r in Relation::ALL {
+        for relation in Relation::ALL {
             assert_eq!(
-                ab.modality(r),
+                forward.modality(relation),
                 Modality::Possible,
-                "{a} vs {b}: an Unknown bound must leave {r:?} possible"
+                "{left} vs {right}: an Unknown bound must leave {relation:?} possible"
             );
         }
     }
@@ -80,28 +93,38 @@ fuzz_target!(|data: &[u8]| {
     // earliest day and no bound anywhere is Unknown.
     let expected_before = !unknown
         && matches!(
-            (a.bounds().latest, b.bounds().earliest),
+            (left.bounds().latest, right.bounds().earliest),
             (Bound::Date(hi), Bound::Date(lo)) if hi < lo
         );
     assert_eq!(
-        ab.is_definite(Relation::Before),
+        forward.is_definite(Relation::Before),
         expected_before,
-        "{a} vs {b}: definite Before disagrees with the bounds"
+        "{left} vs {right}: definite Before disagrees with the bounds"
     );
 
     // Impossible is exactly not-possible, every relation and modality has a
     // name, and the description of the relation is never empty.
-    for r in Relation::ALL {
-        assert_eq!(ab.is_impossible(r), !ab.is_possible(r), "{a} vs {b}: {r:?}");
-        assert!(!r.as_str().is_empty() && !ab.modality(r).as_str().is_empty());
+    for relation in Relation::ALL {
+        assert_eq!(
+            forward.is_impossible(relation),
+            !forward.is_possible(relation),
+            "{left} vs {right}: {relation:?}"
+        );
+        assert!(
+            !relation.as_str().is_empty() && !forward.modality(relation).as_str().is_empty(),
+            "{left} vs {right}: {relation:?} or its modality has no name"
+        );
     }
-    assert!(!ab.to_string().is_empty(), "{a} vs {b}: empty description");
+    assert!(
+        !forward.to_string().is_empty(),
+        "{left} vs {right}: empty description"
+    );
 
     // A value can always equal itself.
-    if a == b {
+    if left == right {
         assert!(
-            ab.is_possible(Relation::Equal),
-            "{a} vs itself: Equal is ruled out"
+            forward.is_possible(Relation::Equal),
+            "{left} vs itself: Equal is ruled out"
         );
     }
 });

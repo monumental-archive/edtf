@@ -10,12 +10,18 @@
 
 #![no_main]
 
+use core::str::from_utf8;
+
 use edtf_core::Edtf;
 use edtf_normalize::{Language, NumericOrder, Options, Outcome, normalize_with};
 use libfuzzer_sys::fuzz_target;
 
 /// Every reading the normaliser emits is canonical and reparses to the value
 /// it was reported with.
+///
+/// # Panics
+///
+/// When either half fails: a panic is how a fuzz target reports a finding.
 fn assert_emitted(input: &str, options: Options, edtf: &str, value: &Edtf) {
     assert_eq!(
         Edtf::parse(edtf).as_ref(),
@@ -30,7 +36,7 @@ fn assert_emitted(input: &str, options: Options, edtf: &str, value: &Edtf) {
 }
 
 fuzz_target!(|data: &[u8]| {
-    let Ok(input) = core::str::from_utf8(data) else {
+    let Ok(input) = from_utf8(data) else {
         return;
     };
     let already_valid = Edtf::parse(input).ok();
@@ -47,11 +53,11 @@ fuzz_target!(|data: &[u8]| {
                     default_century,
                 };
                 match normalize_with(input, options) {
-                    Outcome::Normalized(n) => {
-                        assert_emitted(input, options, &n.edtf, &n.value);
-                        if let Some(v) = &already_valid {
+                    Outcome::Normalized(normalized) => {
+                        assert_emitted(input, options, &normalized.edtf, &normalized.value);
+                        if let Some(valid) = already_valid.as_ref() {
                             assert_eq!(
-                                &n.value, v,
+                                &normalized.value, valid,
                                 "{input:?} under {options:?}: valid EDTF was read as another value"
                             );
                         }
@@ -60,11 +66,11 @@ fuzz_target!(|data: &[u8]| {
                         // N13: a sub-year code that is also a plausible
                         // elided range is reported both ways, but its own
                         // reading is never lost.
-                        if let Some(v) = &already_valid {
+                        if let Some(valid) = already_valid.as_ref() {
                             assert!(
                                 amb.interpretations
                                     .iter()
-                                    .any(|reading| &reading.value == v),
+                                    .any(|reading| &reading.value == valid),
                                 "{input:?} under {options:?}: valid EDTF was reported ambiguous without its own reading"
                             );
                         }
@@ -72,20 +78,21 @@ fuzz_target!(|data: &[u8]| {
                             amb.interpretations.len() >= 2,
                             "{input:?} under {options:?}: ambiguous with fewer than two readings"
                         );
-                        for (i, reading) in amb.interpretations.iter().enumerate() {
+                        for (index, reading) in amb.interpretations.iter().enumerate() {
                             assert_emitted(input, options, &reading.edtf, &reading.value);
                             assert!(
-                                amb.interpretations[..i]
+                                amb.interpretations
                                     .iter()
+                                    .take(index)
                                     .all(|earlier| earlier.value != reading.value),
                                 "{input:?} under {options:?}: reading {:?} reported twice",
                                 reading.edtf
                             );
                         }
                     }
-                    Outcome::NoMatch { .. } => assert!(
+                    Outcome::NoMatch { reason } => assert!(
                         already_valid.is_none(),
-                        "{input:?} under {options:?}: valid EDTF was not matched"
+                        "{input:?} under {options:?}: valid EDTF was not matched ({reason:?})"
                     ),
                 }
             }

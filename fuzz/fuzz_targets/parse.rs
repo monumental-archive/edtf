@@ -8,10 +8,13 @@
 
 #![no_main]
 
+use core::str::from_utf8;
+
+use edtf_core::Edtf;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
-    if let Ok(s) = core::str::from_utf8(data) {
-        drop(edtf_core::Edtf::parse(s));
+    if let Ok(input) = from_utf8(data) {
+        drop(Edtf::parse(input));
     }
 });
