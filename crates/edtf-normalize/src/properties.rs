@@ -265,15 +265,47 @@ fn one_date(input: &str, language: Language) -> bool {
     }
 }
 
-/// Every range form of `left` and `right`, read, when each reads alone as
-/// one unqualified date; `None` otherwise.
-#[must_use]
-pub fn observe_range_forms(left: &str, right: &str, language: Language) -> Option<Forms> {
-    (one_date(left, language) && one_date(right, language))
-        .then(|| observe_all(range_forms(left, right, language), options(language)))
+/// Whether joining `left` and `right` by a hyphen writes an ISO date across
+/// it: core reads the token formed around the dash (`left`'s last token, the
+/// hyphen, `right`'s first) as a date with a month, season or sub-year code.
+///
+/// That join is a different text (#397, ISO 8601-1 3.2.6), so the unspaced
+/// forms are not compared. It is stated through core's parser, not the
+/// normaliser's, so the rule stays independent of the code it tests.
+fn joins_into_a_date(left: &str, right: &str) -> bool {
+    let token = format!(
+        "{}-{}",
+        left.split_whitespace().last().unwrap_or_default(),
+        right.split_whitespace().next().unwrap_or_default()
+    );
+    matches!(Edtf::parse(&token), Ok(Edtf::Date(date)) if date.month().is_some())
 }
 
-/// Rule 1: every range form of two dates gives the same outcome.
+/// Every range form of `left` and `right`, read, when each reads alone as
+/// one unqualified date; `None` otherwise. The range words and the spaced
+/// dashes are always read; the unspaced dashes only when the join does not
+/// write an ISO date across the dash.
+#[must_use]
+pub fn observe_range_forms(left: &str, right: &str, language: Language) -> Option<Forms> {
+    let fused = joins_into_a_date(left, right);
+    (one_date(left, language) && one_date(right, language)).then(|| {
+        let forms = range_forms(left, right, language)
+            .into_iter()
+            .filter(|form| !(fused && is_unspaced(form, left, right)))
+            .collect();
+        observe_all(forms, options(language))
+    })
+}
+
+/// Whether `form` is `left` and `right` joined by one dash, unspaced.
+fn is_unspaced(form: &str, left: &str, right: &str) -> bool {
+    form.strip_prefix(left)
+        .and_then(|rest| rest.strip_suffix(right))
+        .is_some_and(|dash| matches!(dash, "-" | "\u{2013}" | "\u{2014}"))
+}
+
+/// Rule 1: every range form of two dates gives the same outcome; an
+/// unspaced form only where the join writes no ISO date across the dash.
 ///
 /// # Panics
 ///
@@ -962,6 +994,38 @@ mod planted {
                 "by 1914",
             ]
         );
+    }
+
+    #[test]
+    fn an_unspaced_join_that_writes_a_date_is_not_compared() {
+        assert!(joins_into_a_date("1000", "12 january 1914"));
+        assert!(joins_into_a_date("from 00XX", "21"), "a season code");
+        assert!(
+            !joins_into_a_date("1914", "1920"),
+            "an interval, not a date"
+        );
+        assert!(!joins_into_a_date("1000", "13 january 1914"), "no month 13");
+        assert!(!joins_into_a_date("1000", "january 1914"));
+        let forms: Vec<String> = observe_range_forms("1000", "12 january 1914", Language::English)
+            .into_iter()
+            .flatten()
+            .map(|form| form.0)
+            .collect();
+        assert_eq!(
+            forms,
+            [
+                "from 1000 to 12 january 1914",
+                "between 1000 and 12 january 1914",
+                "1000 to 12 january 1914",
+                "1000 through 12 january 1914",
+                "1000 - 12 january 1914",
+                "1000 \u{2013} 12 january 1914",
+                "1000 \u{2014} 12 january 1914",
+            ]
+        );
+        assert!(is_unspaced("1914\u{2014}1920", "1914", "1920"));
+        assert!(!is_unspaced("1914 - 1920", "1914", "1920"));
+        assert!(!is_unspaced("1914 to 1920", "1914", "1920"));
     }
 
     #[test]
