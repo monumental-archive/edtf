@@ -1254,22 +1254,60 @@ fn is_season(d: &Date) -> bool {
     d.month.and_then(DateField::value).is_some_and(|m| m > 12)
 }
 
+/// Whether every digit of `d` is specified and its year carries no
+/// significant digits: a date that is its own `lo` and `hi` (N8).
+fn unmasked(d: &Date) -> bool {
+    d.year.significant_digits.is_none()
+        && d.year.value().is_some()
+        && d.month.is_none_or(|m| m.value().is_some())
+        && d.day.is_none_or(|day| day.value().is_some())
+}
+
 /// The first (or last) unit of `d` at its own precision, qualified. A
-/// season is its own unit.
+/// season, or any unmasked date, is its own unit, in its own year form
+/// (`Y17E7` stays `Y17E7`).
 fn unit(d: &Date, last: bool, q: Qualifier) -> Option<Date> {
-    if is_season(d) {
-        let mut season = *d;
-        qualify_date(&mut season, q);
-        return Some(season);
+    if is_season(d) || unmasked(d) {
+        let mut own = *d;
+        qualify_date(&mut own, q);
+        return Some(own);
     }
     cut(edge(d, last)?, d, q)
 }
 
 /// The unit just before `d`'s first (or just after its last), qualified.
-/// A season has none.
+/// A season has none. A `Y`-prefixed or exponential year steps as a
+/// `Y`-prefixed year (`Y17E7` → `Y169999999`).
 fn step(d: &Date, forward: bool, q: Qualifier) -> Option<Date> {
     if is_season(d) {
         return None;
+    }
+    if unmasked(d)
+        && !matches!(
+            d.year.kind,
+            YearKind::Standard {
+                negative: _,
+                digits: _
+            }
+        )
+    {
+        let y = d.year.value()?;
+        let value = if forward {
+            y.checked_add(1)
+        } else {
+            y.checked_sub(1)
+        }?;
+        let mut out = Date {
+            year: Year {
+                kind: YearKind::Big { value },
+                significant_digits: None,
+                qualifier: Qualifier::default(),
+            },
+            month: None,
+            day: None,
+        };
+        qualify_date(&mut out, carried(d, q));
+        return Some(out);
     }
     let day = edge(d, forward)?;
     let next = if forward {
@@ -1289,15 +1327,8 @@ fn edge(d: &Date, last: bool) -> Option<BoundDate> {
     }
 }
 
-/// `day` cut to the precision of `like`, carrying `like`'s qualifier and
-/// `q`.
-fn cut(day: BoundDate, like: &Date, q: Qualifier) -> Option<Date> {
-    let y = i32::try_from(day.year).ok()?;
-    let mut out = match (like.month, like.day) {
-        (None, _) => date_y(y)?,
-        (Some(_), None) => date_ym(y, day.month)?,
-        (Some(_), Some(_)) => date_ymd(y, day.month, day.day)?,
-    };
+/// `like`'s qualifier, every component's merged, with `q`.
+fn carried(like: &Date, q: Qualifier) -> Qualifier {
     let mut carried = q;
     for field in [
         Some(like.year.qualifier),
@@ -1309,7 +1340,19 @@ fn cut(day: BoundDate, like: &Date, q: Qualifier) -> Option<Date> {
     {
         merge(&mut carried, field);
     }
-    qualify_date(&mut out, carried);
+    carried
+}
+
+/// `day` cut to the precision of `like`, carrying `like`'s qualifier and
+/// `q`.
+fn cut(day: BoundDate, like: &Date, q: Qualifier) -> Option<Date> {
+    let y = i32::try_from(day.year).ok()?;
+    let mut out = match (like.month, like.day) {
+        (None, _) => date_y(y)?,
+        (Some(_), None) => date_ym(y, day.month)?,
+        (Some(_), Some(_)) => date_ymd(y, day.month, day.day)?,
+    };
+    qualify_date(&mut out, carried(like, q));
     Some(out)
 }
 

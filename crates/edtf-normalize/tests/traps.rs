@@ -257,6 +257,9 @@ fn before_after_take_iso_forms() {
     ok("after early 19th century", "[1830..]", 2);
     ok("before 1914-1918", "[..1913]", 2);
     ok("after 1914-1918", "[1919..]", 2);
+    // An unmasked date is its own lo and hi, in its own year form.
+    ok("no later than y17e7", "[..Y17E7]", 2);
+    ok("before y17e7", "[..Y169999999]", 2);
     // The unit carries the operand's qualifier.
     ok("before circa 1917", "[..1916~]", 2);
     // A season has no predecessor or successor (4.8.1).

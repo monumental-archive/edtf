@@ -258,8 +258,14 @@ fn edtf_letters_read_in_either_case() {
     ok("until y17e7", "../Y17E7");
     ok("before 1985-xx", "[..1984-12]");
     ok("before -0500", "[..-0501]");
-    // A unit beyond four-digit years has no form here.
-    no_match("before y17e7");
+    // An unmasked date is its own unit, in its own year form; a step from
+    // a Y-year is a Y-year (N8).
+    ok("no later than y17e7", "[..Y17E7]");
+    ok("no earlier than y17e7", "[Y17E7..]");
+    ok("before y17e7", "[..Y169999999]");
+    ok("after y17e7", "[Y170000001..]");
+    ok("before circa y17e7", "[..Y169999999~]");
+    ok("after y-17e7", "[Y-169999999..]");
     ok("198X or 1990", "[198X,1990]");
     ok("1985~ or 1990", "[1985~,1990]");
     ok("2004-06~-11 or 2005", "[2004-06~-11,2005]");
