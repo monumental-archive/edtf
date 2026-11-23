@@ -39,26 +39,39 @@ against the N-number.
 - **N1 — early/mid/late and halves of centuries:** ISO 8601-2 is silent on
   prose; python-edtf silently *discards* these modifiers ("1857-mid 1860s" →
   `1857/186X` in its own tests). We map standalone part-of-century phrases to
-  decade-rounded year intervals: for the century starting `s`, **early** =
-  `s..s+29`, **mid** = `s+30..s+69`, **late** = `s+70..s+99`, **first half**
-  = `s..s+49`, **second half** = `s+50..s+99`. "early 19th century" →
-  `1801/1830`. Thirds and halves each partition the century exactly
-  (property-tested). BC centuries take their parts chronologically:
-  "late 2nd century BC" → `-0129/-0100`. Scope limits, both recorded with
-  `Note::ModifierDropped`: on **decades** ("early 1930s") the modifier is
-  dropped — sub-decade thirds would be false precision; inside **range
-  endpoints** ("конец XIX - начало XX века") a century modifier collapses to
-  the whole century, because an interval cannot nest inside an interval.
-- **N2 — century arithmetic:** the *n*th century runs `(n-1)·100+1 ..= n·100`
-  (19th century = 1801–1900), so it masks as `(n-1)XX`: "19th century" →
-  `18XX`, "1st century" → `00XX`. **BC centuries cannot be masked**:
-  edtf-core rejects unspecified digits in negative years (Annex A's L1 mask
-  shapes are positive-only), and the 1st century BC would need `-0000`. They
-  are emitted as exact astronomical intervals: "2nd century BC" →
-  `-0199/-0100`, "1st century BC" → `-0099/0000`, carrying
-  `BcCenturyInterval` (never `CenturyMask`, whose masking claim would be
-  false for them). python-edtf emits `-01XX`, which our core rejects —
-  recorded as an ism, not adopted.
+  decade-rounded spans of years: for the century starting `s` (N2),
+  **early** = `s..s+29`, **mid** = `s+30..s+69`, **late** = `s+70..s+99`,
+  **first half** = `s..s+49`, **second half** = `s+50..s+99`. The phrase
+  names one year somewhere in the span, so the output is ISO's one-of set
+  over a range (ISO 8601-2 6.2, 6.3 c), not a period: "early 19th century"
+  → `[1800..1829]` (`CenturyPart`). An interval `1800/1829` would say
+  something began sometime in 1800 and ended sometime in 1829 (A.4.4); the
+  repository already reads "19th century" as "some year during" (`18XX`,
+  9.2.2), and a part reads the same way. Thirds and halves each partition
+  the century exactly (property-tested). BC centuries take their parts
+  chronologically: "late 2nd century BC" → `[-0129..-0100]`. Scope limits,
+  each recorded with `Note::ModifierDropped`: on **decades** ("early
+  1930s") the modifier is dropped — sub-decade thirds would be false
+  precision; inside **range endpoints** ("конец XIX - начало XX века") a
+  century modifier collapses to the whole century, because a range end is
+  a "sometime in" date (A.4.4) and a part's edge would state a year the
+  prose never gave; and a **qualified part** ("circa early 19th century")
+  falls back to the century's mask, `18XX~`, true but looser, because a
+  range inside a set cannot carry a qualifier (D27). A qualified BC century
+  or BC century part has no mask (D21) and is refused.
+- **N2 — century arithmetic:** the *n*th century runs
+  `(n-1)·100 ..= (n-1)·100+99`. ISO 8601-1 3.1.2.23 defines a century as
+  beginning with a year divisible by 100 and gives the 19th century as 1800
+  through 1899, so it masks as `(n-1)XX`, which says exactly that: "19th
+  century" → `18XX`, "1st century" → `00XX` (years 0 to 99). **BC
+  centuries cannot be masked**: edtf-core rejects unspecified digits in
+  negative years (D21; Annex A's L1 mask shapes are positive-only), and the
+  1st century BC would need `-0000`. They are counted from 1 BC backwards
+  as ISO 8601-2 4.4.1.8 does, and emitted as the one-of set of their
+  astronomical years (6.2, 6.3 c): "2nd century BC" → `[-0199..-0100]`,
+  "1st century BC" → `[-0099..0000]`, carrying `BcCentury` (never
+  `CenturyMask`, whose masking claim would be false for them). python-edtf
+  emits `-01XX`, which our core rejects — recorded as an ism, not adopted.
 - **N3 — astronomical BC years:** EDTF/ISO 8601-2 uses astronomical
   numbering: year 0 exists and is 1 BC. Year *b* BC = `-(b-1)`: "500 BC" →
   `-0499`, "64 BCE" → `-0063`. Year markers may sit *before* the era phrase
@@ -102,21 +115,53 @@ against the N-number.
   internally inconsistent here ("1800s" → `18XX` but "c1900s" → `190X~`) —
   recorded, not adopted.
 - **N7 — seasons:** season names map to ISO 8601-2 §4.8 sub-year grouping
-  codes 21–24 (northern-hemisphere reading: spring=21, summer=22,
-  autumn/fall=23, winter=24; Russian весна/лето/осень/зима likewise). Codes
-  25–41 (hemisphere-specific, quarters, semesters) are **never emitted** —
-  no deterministic English or Russian prose form maps to them.
-- **N8 — before/after are open intervals:** "before 1917" → `../1917`,
-  "after 1917" → `1917/..` (current-spec `..`, not python-edtf's old-draft
-  bare slash `/1928`). Interval, not set, because the prose asserts a single
-  event somewhere in an open span — `[..1917]` (a one-of set) says the value
-  is one of an enumerated list, which is a different claim and a level-2
-  feature besides. "no later than" style phrases (`не позднее`) read the
-  same way. The operand may be a span: "before 1914-1918" is `../1914`
-  and "after 1914-1918" is `1918/..`; before a span is before its start,
-  after it is after its end. A century part keeps its modifier here
-  ("before early 19th century" → `../1801`). An operand with two readings
-  gives two readings.
+  codes 21–24 (spring=21, summer=22, autumn/fall=23, winter=24; Russian
+  весна/лето/осень/зима likewise), which 4.8.1 lists as independent of
+  location. Codes 25–41 (hemisphere-specific, quarters, semesters) are
+  **never emitted** — no deterministic English or Russian prose form maps
+  to them. A season has no dates (4.8.1), so it has no predecessor or
+  successor: strictly before or after one has no form (N8).
+- **N8 — before and after take ISO's forms:** one table of phrases, each
+  row carrying its meaning, matched longest phrase first:
+
+  | Meaning | English | Russian | Output |
+  | --- | --- | --- | --- |
+  | strictly before | `earlier than`, `before` | `ранее`, `до` | `[..pred(lo)]` |
+  | on or before | `no later than`, `by` | `не позднее` | `[..hi]` |
+  | period ending | `until` | none | `../X` |
+  | strictly after | `later than`, `after` | `после` | `[succ(hi)..]` |
+  | on or after | `no earlier than` | `не ранее` | `[lo..]` |
+  | period starting | `since` | `начиная с`, `с` | `X/..` |
+
+  "before 1917" names one year before 1917, so it is the one-of set
+  `[..1916]`: ISO 8601-2 6.3 a reads `..1984` as 1984 or a year before it,
+  which is the claim "on or before" makes, and "strictly before" ends a
+  unit earlier. "until" and "since" state a period, so they stay open
+  intervals with the current-spec `..` (never python-edtf's old-draft bare
+  slash `/1928`). Standing alone, Russian `до` is exclusive (`по` is the
+  inclusive end); inside a range `с … до …` and `от … до …` stay range
+  words. `lo` and `hi` are the operand's earliest and latest day
+  (`bounds()`), cut to the operand's own precision (year, month or day);
+  `pred` and `succ` step one unit at that precision, through core's
+  `BoundDate::previous_day` and `next_day`, so the leap rule lives in one
+  place: "before 1 March 1900" → `[..1900-02-28]`, "before the 1980s" →
+  `[..1979]`, "no later than the 1980s" → `[..1989]`. The unit carries the
+  operand's qualifier ("before circa 1917" → `[..1916~]`). A span — a
+  one-of range, or an interval with two dated ends — gives the `lo` of its
+  start and the `hi` of its end: "before 1914-1918" → `[..1913]`, "after
+  early 19th century" → `[1830..]`. For the two period rows `X` is the
+  operand itself when it is one date ("until the 1980s" → `../198X`) and
+  its `hi` or `lo` when it is a span. A season has no predecessor or
+  successor (N7), so strictly before or after one is refused; the other
+  rows use the season date itself ("no later than spring 1920" →
+  `[..1920-21]`). A set of several elements, a datetime and an interval
+  with an open or unknown end are refused as operands. An operand with
+  several readings gives one output per reading, and a reading with no
+  form refuses the input (N14). Recorded so it is not re-proposed: the
+  open interval `../1917` was chosen first for every row, as "a single
+  event somewhere in an open span", and overruled by 6.3, under which
+  `../1917` includes the year "before" excludes and one output served
+  three meanings.
 - **N9 — missing years are masked:** a *standalone* month with no year
   ("January", "January 12", "апрель") gets year `XXXX`: `XXXX-01`,
   `XXXX-01-12`. Never an assumed current year — the normalizer has no clock
@@ -132,7 +177,7 @@ against the N-number.
   `1868?/1871?`. The symbols `?`, `~` and `%` scope alike, and like a
   trailing qualifier word: a trailing symbol on a range or an "or" list
   scopes all of it ("1868-1871~" → `1868~/1871~`, "1914 or 1985~" →
-  `1914~` or `1985~`). Text that is valid EDTF as it stands carries its
+  `[1914~,1985~]`). Text that is valid EDTF as it stands carries its
   own qualifiers and passes through untouched ("1984?/2004~"). python-edtf
   attaches the trailing qualifier to the end year only (`1868/1871?`);
   prose uncertainty scopes the whole range, so we diverge. Endpoint-local
@@ -156,24 +201,37 @@ against the N-number.
   EDTF does not pass through silently: when the elided reading is
   chronologically possible, both readings are reported. Elided ends 13–20
   and 42–99 are not valid codes, so only the range reading exists
-  ("1914-18" → `1914/1918`). Inside a phrase the same holds: "before
-  1914-21" is `../1914-21` or `../1914`. Where no elided reading exists
-  the token is simply the sub-year date ("before 1985-21" →
-  `../1985-21`). As a range endpoint a colliding token is refused.
-- **N14 — alternatives stay alternatives, and dead readings poison:**
-  "1863 or 1864" ("1863 или 1864") → `Ambiguous` with both years.
-  python-edtf silently keeps the first. When any reading of an ambiguous
-  input dies at the calendar check ("31 June 1940 or 1 July 1940", a
-  reversed masked range like "1910s to 1900s"), the whole input fails
-  closed with `NoMatchReason::ImpossibleDate` — promoting the survivor
-  would fake certainty the prose never had. (A future extension could offer
-  a one-of set `[1863, 1864]` as a third reading; today the two plain
-  readings keep the form's choice simple.) An alternative is any prose
-  reading a whole input could have: a date, a range, an open range, a
-  century part. "or" always separates whole alternatives and never binds
-  inside a range: "from 1914 to 1918 or 1920" is `1914/1918` or `1920`. Any
-  number of alternatives is read. An alternative that is itself ambiguous
-  ("1863 or 1900s") is still refused.
+  ("1914-18" → `1914/1918`). Inside a phrase the same holds: "no later
+  than 1914-21" has two readings, `[..1914-21]` and `[..1921]`, while
+  "before 1914-21" is refused, because strictly before a season has no
+  form (N7, N8) and a reading with no form refuses the input (N14). Where
+  no elided reading exists the token is simply the sub-year date ("no
+  later than 1985-21" → `[..1985-21]`). As a range endpoint a colliding
+  token is refused.
+- **N14 — alternatives are one set, and dead readings poison:**
+  "1863 or 1864" ("1863 или 1864") → `[1863,1864]`, ISO's one-of set
+  (ISO 8601-2 6.2), which says exactly what was written: one of these.
+  python-edtf silently keeps the first. When every alternative is a date or
+  a one-of set (whose elements are taken in place), the result is one set
+  in written order, `Normalized`, with `OrAlternatives`: "1863 or before
+  1850" → `[1863,..1849]`, "1863 or early 19th century" →
+  `[1863,1800..1829]`, "1914 or [1667,1668]" → `[1914,1667,1668]`. Equal
+  elements are written once, and a set left with one plain date is that
+  date ("1914 or 1914" → `1914`). Year inheritance (N16) and qualifiers
+  apply before the set is built ("circa 1863 or 1864" → `[1863~,1864~]`).
+  An alternative with several readings gives one set per combination
+  ("1863 or 1900s" → `[1863,190X]` or `[1863,19XX]`). When any alternative
+  is a period (an interval), a datetime or an all-members set, no single
+  expression exists and each alternative is reported as a reading:
+  "from 1914 to 1918 or 1920" is `1914/1918` or `1920`. "or" always
+  separates whole alternatives and never binds inside a range, and any
+  number of alternatives is read. When any reading of an input dies at the
+  calendar check ("31 June 1940 or 1 July 1940", a reversed masked range
+  like "1910s to 1900s"), or has no form, the whole input fails closed —
+  promoting the survivor would fake certainty the prose never had.
+  Recorded so it is not re-proposed: the set was first rejected here as "a
+  different claim" from two plain readings; ISO 8601-2 6.2 and 6.3 make it
+  the claim.
 - **N15 — Roman-numeral centuries (Russian):** "XIX век", "XIX в.",
   "XVII-XIX вв." parse as centuries, including with Cyrillic lookalike
   letters (Х/х for X, etc.), which real Russian sources routinely contain,
@@ -191,9 +249,9 @@ against the N-number.
   when the prose gives it. Reversed month ranges ("July-June 1940") fail
   closed at the calendar check. Both-endpoints-year-less ranges
   ("May-June") keep their masks: no year exists anywhere in the input. The
-  same holds between alternatives: "June or July 1940" is `1940-06` or
-  `1940-07`. When the alternatives that state a year disagree, or state one
-  that is not fully specified, the input is refused.
+  same holds between alternatives: "June or July 1940" is
+  `[1940-06,1940-07]`. When the alternatives that state a year disagree,
+  or state one that is not fully specified, the input is refused.
 - **N17 — cross-year winters are ambiguous:** "winter 1941-42" (also
   "-1942", "зима 1941-1942 гг.") names either ONE winter spanning the year
   boundary — EDTF's code 24 wraps, so `1941-24` already covers Dec 1941 –
@@ -203,16 +261,17 @@ against the N-number.
   season that wraps; the others compose as plain ranges.
 - **N18 — EDTF letters in either case:** EDTF notation is read in either
   letter case, as a whole input and as a token inside a phrase ("198x" →
-  `198X`; "before 198X" → `../198X`; "198X or 1990" → `198X` or `1990`).
+  `198X`; "until 198X" → `../198X`; "198X or 1990" → `[198X,1990]`).
   A whole input and a one-token part of a phrase alike are tried as EDTF
-  before they are read as prose, so Russian "xxxx" and "до xxxx" are the
-  masked year `XXXX` and `../XXXX`, not a century; forty as a Roman
-  numeral is XL ("до xxxx века" is still `../39XX`). The one exception is
-  a colliding sub-year token, which stays N13's question. Any EDTF value
-  may be an alternative ("1914 or 1985/1990", "1914 or [1667,1668]"); an
-  interval with two dated ends is a span, so it is a before/after operand
-  by its near edge (N8); a set, a datetime or an interval with an open or
-  unknown end is neither an operand nor a range end. The note
+  before they are read as prose, so Russian "xxxx" is the masked year
+  `XXXX`, not a century, and "до xxxx" is before every year it admits,
+  `[..-0001]`; forty as a Roman numeral is XL ("до xxxx века", before the
+  40th century, is `[..3899]`). The one exception is a colliding sub-year
+  token, which stays N13's question. Any EDTF value may be an alternative
+  ("1914 or 1985/1990", "1914 or [1667,1668]"); an interval with two dated
+  ends is a span, so it is a before/after operand by its start or its end
+  (N8); a set of several elements, a datetime or an interval with an open
+  or unknown end is no operand, and none of these is a range end. The note
   `EdtfCaseNormalized` is attached exactly when the fold changed the
   text, and `AlreadyValidEdtf` only when the EDTF token is the whole
   input.
@@ -221,9 +280,10 @@ against the N-number.
 
 - `tests/traps.rs` / `tests/traps_ru.rs` — the acceptance trap lists; every
   expected output is re-parsed in core and its level asserted.
-- `tests/props.rs` — constructive property tests: century parts partition
-  exactly; BC arithmetic; and the umbrella invariant that anything emitted
-  parses in core and equals its returned `value`.
+- `tests/props.rs` — constructive property tests: for every century 2 to
+  20, century parts partition ISO's century exactly as one-of ranges; BC
+  arithmetic; and the umbrella invariant that anything emitted parses in
+  core and equals its returned `value`.
 - `tests/oracle.rs` over
   `tests/fixtures/natlang/python-edtf-natlang.json` — the python-edtf
   corpus, bucketed: `agreements` (enforced equal), `divergences` (enforced

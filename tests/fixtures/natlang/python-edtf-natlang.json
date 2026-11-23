@@ -8,7 +8,7 @@
     "license": "MIT",
     "note": "Oracle corpus harvested from python-edtf's natural-language tests, same ceremony as the interop corpus (issue #12). Inputs are theirs; expectations are bucketed."
   },
-  "note": "Buckets: 'agreements' — our output matches python-edtf exactly (enforced). 'divergences' — we deliberately produce something different; every entry cites the N-decision in docs/normalize-notes.md and records their output as an ism we do not adopt (enforced against OUR expected output). 'not_adopted' — python-edtf extracts a date from freeform prose or guesses; we return NoMatch by policy N11/N5 (enforced as NoMatch). ours_kind is 'normalized' (ours = string), 'ambiguous' (ours_interpretations = list), or 'noMatch'.",
+  "note": "Buckets: 'agreements' — our output matches python-edtf exactly (enforced). 'divergences' — we deliberately produce something different; every entry cites the N-decision in docs/normalize-notes.md and records their output as an ism we do not adopt (enforced against OUR expected output). 'not_adopted' — python-edtf extracts a date from freeform prose, guesses, or gives a form ISO 8601-2 has none for; we return NoMatch by policy N11/N5/N8 (enforced as NoMatch). ours_kind is 'normalized' (ours = string), 'ambiguous' (ours_interpretations = list), or 'noMatch'.",
   "agreements": [
     { "input": "1860", "edtf": "1860" },
     { "input": "the year 1800", "edtf": "1800" },
@@ -95,97 +95,89 @@
       "input": "before 1928",
       "theirs": "/1928",
       "ours_kind": "normalized",
-      "ours": "../1928",
+      "ours": "[..1927]",
       "decision": "N8",
-      "ism": "old-draft EDTF open-interval syntax; current ISO 8601-2 uses '..'"
+      "ism": "old-draft EDTF open-interval syntax, and inclusive of the year it excludes; strictly before is the one-of set [..pred] (ISO 8601-2 6.3 a)"
     },
     {
       "input": "earlier than 1928",
       "theirs": "/1928",
       "ours_kind": "normalized",
-      "ours": "../1928",
+      "ours": "[..1927]",
       "decision": "N8",
-      "ism": "old-draft open-interval syntax"
+      "ism": "old-draft open-interval syntax, and inclusive of the year; strictly before is a one-of set ending a unit earlier (ISO 8601-2 6.3 a)"
     },
     {
       "input": "after 1928",
       "theirs": "1928/",
       "ours_kind": "normalized",
-      "ours": "1928/..",
+      "ours": "[1929..]",
       "decision": "N8",
-      "ism": "old-draft open-interval syntax"
+      "ism": "old-draft open-interval syntax, and inclusive of the year; strictly after is a one-of set starting a unit later (ISO 8601-2 6.3 b)"
     },
     {
       "input": "later than 1928",
       "theirs": "1928/",
       "ours_kind": "normalized",
-      "ours": "1928/..",
+      "ours": "[1929..]",
       "decision": "N8",
-      "ism": "old-draft open-interval syntax"
+      "ism": "old-draft open-interval syntax, and inclusive of the year; strictly after is a one-of set starting a unit later (ISO 8601-2 6.3 b)"
     },
     {
       "input": "before January 1928",
       "theirs": "/1928-01",
       "ours_kind": "normalized",
-      "ours": "../1928-01",
+      "ours": "[..1927-12]",
       "decision": "N8",
-      "ism": "old-draft open-interval syntax"
+      "ism": "old-draft open-interval syntax, and inclusive of the year; strictly before is a one-of set ending a unit earlier (ISO 8601-2 6.3 a)"
     },
     {
       "input": "before 18 January 1928",
       "theirs": "/1928-01-18",
       "ours_kind": "normalized",
-      "ours": "../1928-01-18",
+      "ours": "[..1928-01-17]",
       "decision": "N8",
-      "ism": "old-draft open-interval syntax"
+      "ism": "old-draft open-interval syntax, and inclusive of the year; strictly before is a one-of set ending a unit earlier (ISO 8601-2 6.3 a)"
     },
     {
       "input": "before approx January 18 1928",
       "theirs": "/1928-01-18~",
       "ours_kind": "normalized",
-      "ours": "../1928-01-18~",
+      "ours": "[..1928-01-17~]",
       "decision": "N8",
-      "ism": "old-draft open-interval syntax"
+      "ism": "old-draft open-interval syntax, and inclusive of the year; strictly before is a one-of set ending a unit earlier (ISO 8601-2 6.3 a); the unit carries the qualifier"
     },
     {
       "input": "before approx January 1928",
       "theirs": "/1928-01~",
       "ours_kind": "normalized",
-      "ours": "../1928-01~",
+      "ours": "[..1927-12~]",
       "decision": "N8",
-      "ism": "old-draft open-interval syntax"
+      "ism": "old-draft open-interval syntax, and inclusive of the year; strictly before is a one-of set ending a unit earlier (ISO 8601-2 6.3 a); the unit carries the qualifier"
     },
     {
       "input": "after approx January 1928",
       "theirs": "1928-01~/",
       "ours_kind": "normalized",
-      "ours": "1928-01~/..",
+      "ours": "[1928-02~..]",
       "decision": "N8",
-      "ism": "old-draft open-interval syntax"
-    },
-    {
-      "input": "after approx Summer 1928",
-      "theirs": "1928-22~/",
-      "ours_kind": "normalized",
-      "ours": "1928-22~/..",
-      "decision": "N8",
-      "ism": "old-draft open-interval syntax"
+      "ism": "old-draft open-interval syntax, and inclusive of the month; strictly after is a one-of set starting a unit later (ISO 8601-2 6.3 b)"
     },
     {
       "input": "after about the 1920s",
       "theirs": "192X~/",
       "ours_kind": "normalized",
-      "ours": "192X~/..",
+      "ours": "[1930~..]",
       "decision": "N8",
-      "ism": "old-draft open-interval syntax"
+      "ism": "old-draft open-interval syntax, and inclusive of the decade; strictly after the 1920s is from 1930 (ISO 8601-2 6.3 b)"
     },
     {
       "input": "before 19th century",
       "theirs": "/18XX",
       "ours_kind": "normalized",
-      "ours": "../18XX",
+      "ours": "[..1799]",
       "decision": "N8",
-      "ism": "old-draft open-interval syntax"
+      "ism": "old-draft open-interval syntax, and inclusive of the year; strictly before is a one-of set ending a unit earlier (ISO 8601-2 6.3 a); before the 19th century is before 1800"
     },
     {
       "input": "1800s",
@@ -230,18 +222,18 @@
     {
       "input": "before the 1900s",
       "theirs": "/19XX",
-      "ours_kind": "ambiguous",
-      "ours_interpretations": ["../190X", "../19XX"],
-      "decision": "N6",
-      "ism": "old-draft syntax and a silently picked century reading"
+      "ours_kind": "normalized",
+      "ours": "[..1899]",
+      "decision": "N8",
+      "ism": "old-draft syntax and inclusive of the span; both readings of '1900s' (N6) begin in 1900, so strictly before is one answer"
     },
     {
       "input": "before about the 1900s",
       "theirs": "/190X~",
-      "ours_kind": "ambiguous",
-      "ours_interpretations": ["../190X~", "../19XX~"],
-      "decision": "N6",
-      "ism": "old-draft syntax and a silently picked decade reading"
+      "ours_kind": "normalized",
+      "ours": "[..1899~]",
+      "decision": "N8",
+      "ism": "old-draft syntax and a silently picked decade reading; both readings of '1900s' (N6) begin in 1900, so strictly before is one answer"
     },
     {
       "input": "10/7/2008",
@@ -254,16 +246,16 @@
     {
       "input": "1863 or 1864",
       "theirs": "1863",
-      "ours_kind": "ambiguous",
-      "ours_interpretations": ["1863", "1864"],
+      "ours_kind": "normalized",
+      "ours": "[1863,1864]",
       "decision": "N14",
-      "ism": "silently discards the second alternative"
+      "ism": "silently discards the second alternative; ISO's one-of set (8601-2 6.2) says what was written"
     },
     {
       "input": "1864 or 1866",
       "theirs": "1864",
-      "ours_kind": "ambiguous",
-      "ours_interpretations": ["1864", "1866"],
+      "ours_kind": "normalized",
+      "ours": "[1864,1866]",
       "decision": "N14",
       "ism": "silently discards the second alternative"
     },
@@ -287,15 +279,15 @@
       "input": "2nd century bc",
       "theirs": "-01XX",
       "ours_kind": "normalized",
-      "ours": "-0199/-0100",
+      "ours": "[-0199..-0100]",
       "decision": "N2",
-      "ism": "negative masked years are rejected by edtf-core (Annex A mask shapes are positive-only); the exact interval carries the same meaning"
+      "ism": "negative masked years are rejected by edtf-core (D21; Annex A mask shapes are positive-only); the one-of set of the century's years carries the same meaning"
     },
     {
       "input": "2nd century bce",
       "theirs": "-01XX",
       "ours_kind": "normalized",
-      "ours": "-0199/-0100",
+      "ours": "[-0199..-0100]",
       "decision": "N2",
       "ism": "negative masked years are rejected by edtf-core"
     },
@@ -325,6 +317,11 @@
     }
   ],
   "not_adopted": [
+    {
+      "input": "after approx Summer 1928",
+      "theirs": "1928-22~/",
+      "ism": "old-draft open-interval syntax, and a season has no successor (ISO 8601-2 4.8.1 gives codes 21-24 no dates), so strictly after one has no form (N8)"
+    },
     {
       "input": "90",
       "theirs": "1990",
