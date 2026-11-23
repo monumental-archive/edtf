@@ -265,8 +265,9 @@ fn one_date(input: &str, language: Language) -> bool {
     }
 }
 
-/// Whether joining `left` and `right` by a hyphen writes an ISO date across
-/// it: core reads the token formed around the dash (`left`'s last token, the
+/// Whether joining `left` and `right` by a hyphen writes an ISO date.
+///
+/// Core reads the token formed around the dash (`left`'s last token, the
 /// hyphen, `right`'s first) as a date with a month, season or sub-year code.
 ///
 /// That join is a different text (#397, ISO 8601-1 3.2.6), so the unspaced
@@ -281,10 +282,11 @@ fn joins_into_a_date(left: &str, right: &str) -> bool {
     matches!(Edtf::parse(&token), Ok(Edtf::Date(date)) if date.month().is_some())
 }
 
-/// Every range form of `left` and `right`, read, when each reads alone as
-/// one unqualified date; `None` otherwise. The range words and the spaced
-/// dashes are always read; the unspaced dashes only when the join does not
-/// write an ISO date across the dash.
+/// Every range form of `left` and `right`, read.
+///
+/// `None` unless each reads alone as one unqualified date. The range words
+/// and the spaced dashes are always read; the unspaced dashes only when the
+/// join does not write an ISO date across the dash.
 #[must_use]
 pub fn observe_range_forms(left: &str, right: &str, language: Language) -> Option<Forms> {
     let fused = joins_into_a_date(left, right);
