@@ -77,11 +77,15 @@ on each under AddressSanitizer on the dated nightly declared as
 any string, canonical form, bounds, enumeration, upper-case letters, no
 whitespace, qualification never moving bounds), `relate` (the relation
 algebra, and for two dates order and interval, over two parsed values)
-and `normalize` (the normaliser's output is canonical EDTF, under every
-option). `roundtrip` and `relate` hold no assertion of their own: they
-feed parsed values to the checks in `crates/edtf-core/src/properties.rs`,
-which the proptest engine and the deterministic harness beside it drive
-too, so each general rule is asserted once. The seed corpus is committed under
+and `normalize` (the normaliser's readings are honest under every
+option; split at a newline into A and B, ranges, "or" lists and
+before/after compose, and every emitted string re-reads as itself). No
+target holds an assertion of its own: `roundtrip` and `relate` feed
+parsed values to the checks in `crates/edtf-core/src/properties.rs`, and
+`normalize` feeds prose to those in
+`crates/edtf-normalize/src/properties.rs`; each crate's proptest engine
+drives the same checks, so each general rule is asserted once. The seed
+corpus is committed under
 `fuzz/corpus/<target>/`, and `crates/edtf-core/tests/fuzz_corpus.rs` holds
 it to the fixtures: every EDTF string they define must be a file there,
 and the `normalize` corpus holds the natural-language inputs too.

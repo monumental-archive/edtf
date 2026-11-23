@@ -349,10 +349,20 @@ against the N-number.
 
 - `tests/traps.rs` / `tests/traps_ru.rs` — the acceptance trap lists; every
   expected output is re-parsed in core and its level asserted.
-- `tests/props.rs` — constructive property tests: for every century 2 to
-  20, century parts partition ISO's century exactly as one-of ranges; BC
-  arithmetic; and the umbrella invariant that anything emitted parses in
-  core and equals its returned `value`.
+- `src/properties.rs` — the composition rules, each asserted once
+  (#368): range forms agree; "A or B" is the one-of set of A and B (N14);
+  before and after compose (N8); case and whitespace never change an
+  answer (N18); every emitted string re-reads as itself (N13); an option
+  changes only what it resolves (N5, N6); no `XXXX` beside a stated year
+  (N9); and every reading is canonical, reparses to its value and is
+  reported once. The proptest engine (`src/properties/proptests.rs`)
+  builds its atoms from every row of every language's tables and its
+  compositions from every range pair, "or" word and before/after phrase,
+  so a new row or language is covered without a new test; the `normalize`
+  fuzz target drives the same checks over arbitrary input. The
+  constructive tests live there too: for every century 2 to 20, century
+  parts partition ISO's century exactly as one-of ranges, and BC
+  arithmetic.
 - `tests/oracle.rs` over
   `tests/fixtures/natlang/python-edtf-natlang.json` — the python-edtf
   corpus, bucketed: `agreements` (enforced equal), `divergences` (enforced
