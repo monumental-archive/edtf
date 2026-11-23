@@ -44,10 +44,6 @@
     clippy::missing_panics_doc,
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
-#![expect(
-    clippy::pattern_type_mismatch,
-    reason = "matching through a reference without restating & at every level"
-)]
 
 extern crate std;
 
@@ -100,12 +96,12 @@ const ALPHABET: &[u8] = b"0123456789XYESTZ?~%-+:./,{}[]";
 fn check(input: &str) {
     let text = observe_text(input);
     check_text(&text);
-    if let Ok(value) = &text.parsed {
+    if let Ok(value) = text.parsed.as_ref() {
         check_value(&observe_value(value, VALUES_CHECKED));
         check_letters(&observe_letters(input));
         check_whitespace(&observe_whitespace(input));
-        if let Edtf::Date(date) = value {
-            check_qualification(&observe_qualification(*date));
+        if let &Edtf::Date(date) = value {
+            check_qualification(&observe_qualification(date));
         }
     }
 }
