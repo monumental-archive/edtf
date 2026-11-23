@@ -636,6 +636,25 @@ fn distributed_endpoint_year_replaces_the_masked_note() {
 }
 
 #[test]
+fn a_typed_masked_year_inherits_like_a_prose_one() {
+    // Year-less is the value's `XXXX` year, not a note: an EDTF atom typed
+    // with one inherits the stated year as a prose month does (N9, N16).
+    ok("from XXXX-01 to 1985", "1985-01/1985");
+    ok("from 1985 to XXXX-03", "1985/1985-03");
+    assert_eq!(
+        notes_of("from XXXX-01 to 1985"),
+        [Note::EndpointYearDistributed]
+    );
+    assert_eq!(normalize("XXXX-01 or 1985"), normalize("january or 1985"));
+    // A bare `XXXX` is an unknown year, not a year-less date: it has
+    // nothing for a stated year to scope (N9).
+    ok("from XXXX to 1985", "XXXX/1985");
+    ok("XXXX or 1985", "[XXXX,1985]");
+    // Two year-less ends keep their masks, typed or prose (N16).
+    ok("XXXX-01 to june", "XXXX-01/XXXX-06");
+}
+
+#[test]
 fn qualifier_distribution_is_noted_only_for_qualified_intervals() {
     // N10's note marks a whole-expression qualifier spread over interval
     // endpoints: not an unqualified interval, not a qualified date.

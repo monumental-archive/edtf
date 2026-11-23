@@ -1604,23 +1604,45 @@ fn endpoint_pair(left: &str, right: &str, opts: Options, lang: &Lang) -> Option<
     })
 }
 
+/// A month or day whose year is not given: a fully masked `XXXX` year with
+/// a month (N9).
+///
+/// It holds whether a prose month masked the year or the input typed it as
+/// EDTF. A bare `XXXX` is a year that is unknown, not a year-less date: it
+/// has nothing for a stated year to scope. A partly masked year (`XX85`)
+/// states a year that is not fully specified.
+const fn year_less(d: &Date) -> bool {
+    d.month().is_some()
+        && matches!(
+            d.year().kind(),
+            YearKind::Standard {
+                negative: _,
+                digits: [None, None, None, None],
+            }
+        )
+}
+
 /// N16: a stated year scopes every year-less date beside it — both range
 /// endpoints, or every "or" alternative.
 ///
-/// When some but not all dates lack a year (`XXXX` via N9), every date that
-/// states one must state the same fully specified year; each year-less date
-/// takes it and swaps its note. Fails (→ `NoMatch`) when the stated years
-/// disagree or are not fully specified: pairing a masked month with a masked
-/// decade would compound the guessing.
+/// A date is year-less by its value (`year_less`), not by how it was read:
+/// a note marks only a prose month's mask, so testing one would let a typed
+/// `XXXX` year leak beside a stated one.
+///
+/// When some but not all dates are year-less, every date that states a year
+/// must state the same fully specified one; each year-less date takes it
+/// and is noted as such. Fails (→ `NoMatch`) when the stated years disagree
+/// or are not fully specified: pairing a masked month with a masked decade
+/// would compound the guessing.
 fn distribute_year(dates: &mut [(&mut Expr, &mut Vec<Note>)]) -> Option<()> {
-    let masked = |notes: &[Note]| notes.contains(&Note::MissingYearMasked);
-    let n_masked = dates.iter().filter(|(_, n)| masked(n)).count();
+    let masked = |e: &Expr| matches!(e, Expr::Date(d) if year_less(d));
+    let n_masked = dates.iter().filter(|(e, _)| masked(e)).count();
     if n_masked == 0 || n_masked == dates.len() {
         return Some(());
     }
     let mut stated: Option<(i64, YearKind)> = None;
-    for (e, n) in &*dates {
-        if masked(n) {
+    for (e, _) in &*dates {
+        if masked(e) {
             continue;
         }
         let Expr::Date(d) = e else { continue };
@@ -1634,7 +1656,7 @@ fn distribute_year(dates: &mut [(&mut Expr, &mut Vec<Note>)]) -> Option<()> {
     let (_, kind) = stated?;
     for (e, n) in &mut *dates {
         let Expr::Date(d) = e else { continue };
-        if masked(n) {
+        if year_less(d) {
             // The stated year can make the date impossible: February 29
             // in a common year (N14).
             let year = Year::new(kind).ok()?.with_qualifier(d.year().qualifier());
