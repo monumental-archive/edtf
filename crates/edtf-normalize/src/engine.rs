@@ -420,8 +420,10 @@ fn edtf_token(t: &str, lang: &Lang) -> Option<(Edtf, bool)> {
 /// Unify dashes and collapse whitespace; lower-case every prose token.
 ///
 /// Per whitespace-separated token: an EDTF token is kept as typed (its letters and commas are notation, N18); any other is
-/// lower-cased, its apostrophes unified and its commas dropped.
-fn preprocess(input: &str, lang: &Lang) -> String {
+/// lower-cased, its apostrophes unified and its commas dropped. A token
+/// the range splitter cuts (`range_hyphens`) is taken piece by piece, so
+/// an EDTF piece keeps its case as a whole EDTF token does (N4).
+fn preprocess(input: &str, opts: Options, lang: &Lang) -> String {
     let dashed: String = input
         .chars()
         .map(|c| match c {
@@ -436,12 +438,27 @@ fn preprocess(input: &str, lang: &Lang) -> String {
             s.push_str(tok);
             continue;
         }
-        for ch in tok.chars() {
-            match ch {
-                '\u{2019}' => s.push('\''),
-                ',' => s.push(' '),
-                c => s.extend(c.to_lowercase()),
+        // A token the range splitter cuts is read piece by piece, so an
+        // EDTF piece ("XXXX-01" in "XXXX-01-1985") is kept as typed too.
+        let mut start = 0;
+        for end in range_hyphens(tok, opts, lang)
+            .into_iter()
+            .chain(iter::once(tok.len()))
+        {
+            let piece = &tok[start..end];
+            if edtf_token(piece, lang).is_some() {
+                s.push_str(piece);
+            } else {
+                for ch in piece.chars() {
+                    match ch {
+                        '\u{2019}' => s.push('\''),
+                        ',' => s.push(' '),
+                        c => s.extend(c.to_lowercase()),
+                    }
+                }
             }
+            s.push_str(tok.get(end..=end).unwrap_or_default());
+            start = end + 1;
         }
     }
     let mut out = String::with_capacity(s.len());
@@ -1413,10 +1430,12 @@ fn one_of(alternatives: &[Candidate]) -> Option<Expr> {
 
 /// Two-sided ranges: "from X to Y", "с X по Y", "X to Y", "X-Y".
 ///
-/// One splitter: the range word and the hyphen are each tried at every
-/// position, left to right, and the first position whose two sides read
-/// wins ("от 44 г. до н. э. до 1914", where the era phrase holds the
-/// separator word).
+/// The range word is tried at every whitespace token, left to right, and
+/// the first position whose two sides read wins ("от 44 г. до н. э. до
+/// 1914", where the era phrase holds the separator word). Failing that,
+/// the hyphen is tried at every candidate (`range_hyphens`): a hyphen
+/// inside a date unit is never one (N4). One split that reads gives its
+/// readings; several give every split's readings, left to right (N14).
 fn parse_range(s: &str, toks: &[&str], opts: Options, lang: &Lang) -> Option<Reading> {
     for (lead, sep) in lang.range_pairs {
         let inner = match lead {
@@ -1440,11 +1459,56 @@ fn parse_range(s: &str, toks: &[&str], opts: Options, lang: &Lang) -> Option<Rea
             return found;
         }
     }
-    s.char_indices().find_map(|(i, c)| {
-        (c == '-')
-            .then(|| endpoint_pair(s[..i].trim(), s[i + 1..].trim(), opts, lang))
-            .flatten()
-    })
+    let splits: Reading = range_hyphens(s, opts, lang)
+        .into_iter()
+        .filter_map(|i| endpoint_pair(s[..i].trim(), s[i + 1..].trim(), opts, lang))
+        .flatten()
+        .collect();
+    (!splits.is_empty()).then_some(splits)
+}
+
+/// The hyphens that may separate a range: every `-` outside a date unit.
+///
+/// A date unit is the longest run, starting at a token start or just
+/// after a candidate hyphen and ending at a hyphen, a space or the end,
+/// that core reads as one date with a month, season or sub-year code
+/// (N4): a hyphen inside an ISO 8601 extended-format date separates its
+/// components, never a range (ISO 8601-1 §3.2.6). A bare year has no
+/// component hyphen, so it is not a unit and a minus before it stays a
+/// candidate ("1985 -1990"). A colliding sub-year token is not a unit;
+/// it is the range grammar's question (N13).
+fn range_hyphens(s: &str, opts: Options, lang: &Lang) -> Vec<usize> {
+    let mut hyphens = Vec::new();
+    let mut i = 0;
+    let mut unit_may_start = true;
+    while let Some(c) = s[i..].chars().next() {
+        if unit_may_start {
+            if let Some(end) = date_unit(&s[i..], opts, lang) {
+                i += end;
+                unit_may_start = false;
+                continue;
+            }
+        }
+        unit_may_start = matches!(c, '-' | ' ');
+        if c == '-' {
+            hyphens.push(i);
+        }
+        i += c.len_utf8();
+    }
+    hyphens
+}
+
+/// The length of the longest date unit `s` starts with (`range_hyphens`).
+fn date_unit(s: &str, opts: Options, lang: &Lang) -> Option<usize> {
+    s.char_indices()
+        .filter(|&(_, c)| matches!(c, '-' | ' '))
+        .map(|(i, _)| i)
+        .chain(iter::once(s.len()))
+        .rfind(|&end| {
+            let t = &s[..end];
+            !sub_year_collides(t, opts, lang)
+                && matches!(edtf_token(t, lang), Some((Edtf::Date(d), _)) if d.month().is_some())
+        })
 }
 
 /// Two readings' descriptions, joined for a range built from them.
@@ -1860,7 +1924,7 @@ fn outcome_from(reading: Reading) -> Outcome {
 /// one-token input that is EDTF reads through the atom reader (N18).
 pub(crate) fn run(input: &str, opts: Options) -> Outcome {
     let lang = lang_for(opts.language);
-    let pre = preprocess(input, lang);
+    let pre = preprocess(input, opts, lang);
     let (rest, q) = strip_qualifiers(&pre, lang);
     if rest.is_empty() {
         return no_match(NoMatchReason::OutOfGrammar);

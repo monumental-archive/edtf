@@ -186,6 +186,32 @@ fn hyphenated_year_pair_rejects_non_ranges() {
 }
 
 #[test]
+fn a_hyphen_inside_an_iso_date_never_splits_a_range() {
+    // ISO 8601-1 §3.2.6: in extended format the hyphen separates a date's
+    // own components, so a date core reads is one unit (N4).
+    ok("1000-01-01-1000", "1000-01-01/1000");
+    ok("-1000-01-01-1000", "-1000-01-01/1000");
+    ok("1985-04-1990", "1985-04/1990");
+    ok("1985-04-12\u{2013}1986", "1985-04-12/1986");
+    // A piece the splitter cuts keeps its case, so spacing changes no
+    // note; a lower-case piece is still folded and says so.
+    assert_eq!(normalize("XXXX-01-1985"), normalize("XXXX-01 - 1985"));
+    assert_eq!(normalize("XXXX-1985"), normalize("XXXX - 1985"));
+    assert!(notes_of("xxxx-01-1985").contains(&Note::EdtfLettersNormalized));
+    ok("circa 1985-04-1990", "1985-04~/1990~"); // a unit starts after a space
+    ok("1985 -1990", "1985/1990"); // a bare year is not a unit
+    // `1985-4` is not ISO (core reads no one-digit month), so both hyphens
+    // are candidates and both splits read: every reading, left to right.
+    ambiguous("1985-4-1990", &["1985/1990-04", "1985-04/1990"]);
+    // Unchanged by the unit rule.
+    ok("1914-18", "1914/1918");
+    ok("1985-21-1990", "1985-21/1990");
+    ambiguous("12-04-1985", &["1985-04-12", "1985-12-04"]);
+    ok("1985-04-12-1985-05", "1985-04-12/1985-05");
+    ok("1985-1990", "1985/1990");
+}
+
+#[test]
 fn season_range_collisions_cover_every_season_name() {
     // N13: 21-24 collide with the four season codes.
     ambiguous("1915-21", &["1915-21", "1915/1921"]);
