@@ -1,101 +1,49 @@
 // SPDX-FileCopyrightText: Copyright (c) the edtf contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Coverage-guided normaliser properties: `normalize_with` must return, not
-//! crash, on arbitrary UTF-8 under every option it reads, and everything it
-//! emits must be canonical EDTF that the core parser reads back as the value
-//! it reports. Input the core parser already accepts must come back as that
-//! same value (the already-valid path the N-decisions put first), or, for
-//! the N13 sub-year-code collision, among the readings reported.
+//! Coverage-guided drive of the normaliser's properties
+//! (`edtf_normalize::properties`, built under `cfg(fuzzing)`).
+//!
+//! Arbitrary UTF-8 is read under every option, and its readings must be
+//! honest (rule 9). The input is also split at its first newline into A and
+//! B, and in every language the composition rules run on them: range forms
+//! agree (1), "A or B" composes (2), before and after compose (3), and every
+//! emitted string re-reads as itself (5). The rules live in the crate; this
+//! target only feeds them.
 
 #![no_main]
 
 use core::str::from_utf8;
 
-use edtf_core::Edtf;
-use edtf_normalize::{Century, Language, NumericOrder, Options, Outcome, normalize_with};
+use edtf_normalize::properties::{
+    LANGUAGES, check_honest, check_idempotent, check_open_composes, check_or_composes,
+    check_range_forms_agree, every_options, observe_honest, observe_open, observe_or,
+    observe_range_forms, observe_reread, options,
+};
 use libfuzzer_sys::fuzz_target;
-
-/// Every reading the normaliser emits is canonical and reparses to the value
-/// it was reported with.
-///
-/// # Panics
-///
-/// When either half fails: a panic is how a fuzz target reports a finding.
-fn assert_emitted(input: &str, options: Options, edtf: &str, value: &Edtf) {
-    assert_eq!(
-        Edtf::parse(edtf).as_ref(),
-        Ok(value),
-        "{input:?} under {options:?}: emitted {edtf:?} does not reparse to its value"
-    );
-    assert_eq!(
-        value.to_string(),
-        edtf,
-        "{input:?} under {options:?}: emitted {edtf:?} is not canonical"
-    );
-}
 
 fuzz_target!(|data: &[u8]| {
     let Ok(input) = from_utf8(data) else {
         return;
     };
-    let already_valid = Edtf::parse(input).ok();
-    for language in [Language::English, Language::Russian] {
-        for numeric_order in [
-            None,
-            Some(NumericOrder::DayFirst),
-            Some(NumericOrder::MonthFirst),
-        ] {
-            for default_century in [None, Century::new(1900)] {
-                let options = Options {
-                    language,
-                    numeric_order,
-                    default_century,
-                };
-                match normalize_with(input, options) {
-                    Outcome::Normalized(normalized) => {
-                        assert_emitted(input, options, &normalized.edtf, &normalized.value);
-                        if let Some(valid) = already_valid.as_ref() {
-                            assert_eq!(
-                                &normalized.value, valid,
-                                "{input:?} under {options:?}: valid EDTF was read as another value"
-                            );
-                        }
-                    }
-                    Outcome::Ambiguous(amb) => {
-                        // N13: a sub-year code that is also a plausible
-                        // elided range is reported both ways, but its own
-                        // reading is never lost.
-                        if let Some(valid) = already_valid.as_ref() {
-                            assert!(
-                                amb.interpretations
-                                    .iter()
-                                    .any(|reading| &reading.value == valid),
-                                "{input:?} under {options:?}: valid EDTF was reported ambiguous without its own reading"
-                            );
-                        }
-                        assert!(
-                            amb.interpretations.len() >= 2,
-                            "{input:?} under {options:?}: ambiguous with fewer than two readings"
-                        );
-                        for (index, reading) in amb.interpretations.iter().enumerate() {
-                            assert_emitted(input, options, &reading.edtf, &reading.value);
-                            assert!(
-                                amb.interpretations
-                                    .iter()
-                                    .take(index)
-                                    .all(|earlier| earlier.value != reading.value),
-                                "{input:?} under {options:?}: reading {:?} reported twice",
-                                reading.edtf
-                            );
-                        }
-                    }
-                    Outcome::NoMatch { reason } => assert!(
-                        already_valid.is_none(),
-                        "{input:?} under {options:?}: valid EDTF was not matched ({reason:?})"
-                    ),
-                }
+    for opts in every_options() {
+        check_honest(&observe_honest(input, opts));
+    }
+    let Some((left, right)) = input.split_once('\n') else {
+        return;
+    };
+    for language in LANGUAGES {
+        if let Some(forms) = observe_range_forms(left, right, language) {
+            check_range_forms_agree(&forms);
+        }
+        if let Some(observation) = observe_or(left, right, language) {
+            check_or_composes(&observation);
+        }
+        for side in [left, right] {
+            if let Some(observation) = observe_open(side, language) {
+                check_open_composes(&observation);
             }
+            check_idempotent(&observe_reread(side, options(language)));
         }
     }
 });

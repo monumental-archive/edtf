@@ -51,6 +51,8 @@ use alloc::{string::String, vec::Vec};
 use edtf_core::Edtf;
 
 mod engine;
+#[cfg(any(test, fuzzing))]
+pub mod properties;
 mod tables;
 
 /// Which pattern-table set to match against.
