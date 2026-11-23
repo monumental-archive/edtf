@@ -37,9 +37,10 @@ browser hosting the code.
 
 - **The input string** is the primary boundary: everything after
   `parse()` is typed, validated data; everything before it is untrusted
-  bytes. All downstream crates construct values through `edtf-core`'s
-  model, so outputs are valid by construction — there is no code path
-  that emits an EDTF string that does not re-parse.
+  bytes. Every value, the parser's included, is built through
+  `edtf-core`'s validating constructors (D31), so outputs are valid by
+  construction — there is no code path that emits an EDTF string that
+  does not re-parse.
 - **The process boundary** around each deployment shape: the extension
   inside a Postgres backend, the wasm module inside a browser sandbox,
   the CLI as an ordinary process. The core is `#![no_std]` with no

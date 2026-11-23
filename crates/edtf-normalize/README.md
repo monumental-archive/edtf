@@ -5,9 +5,9 @@ Deterministic prose-date → EDTF normalizer: `"1980s"` → `198X`,
 the same answer on every keystroke. `no_std` + `alloc`, no third-party
 dependencies (only `edtf-core`).
 
-Built for the human input boundary: values are constructed through
-[`edtf-core`](https://crates.io/crates/edtf-core)'s model and rendered by its canonical `Display`,
-then re-parsed, so **every output is valid, canonical EDTF by construction**.
+Built for the human input boundary: values are built through
+[`edtf-core`](https://crates.io/crates/edtf-core)'s validating constructors and rendered by its
+canonical `Display`, so **every output is valid, canonical EDTF by construction**.
 
 The return type is honest — `Normalized { edtf, value, notes }`,
 `Ambiguous { interpretations }`, or `NoMatch` — never a silent guess:

@@ -56,7 +56,7 @@
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 
-use edtf_core::{Edtf, Set, SetElement, SetKind};
+use edtf_core::{Edtf, SetElement, SetKind};
 use edtf_normalize::{Language, Options, Outcome, normalize, normalize_with};
 use proptest::prelude::*;
 
@@ -223,13 +223,10 @@ proptest! {
 fn one_of_range(input: &str) -> (i64, i64) {
     match normalize(input) {
         Outcome::Normalized(n) => match n.value {
-            Edtf::Set(Set {
-                kind: SetKind::OneMember,
-                elements,
-            }) => match elements.as_slice() {
-                &[SetElement::Range(a, b)] => (
-                    a.year.value().expect("a plain year"),
-                    b.year.value().expect("a plain year"),
+            Edtf::Set(set) if set.kind() == SetKind::OneMember => match set.elements() {
+                &[SetElement::Range(r)] => (
+                    r.start().year().value().expect("a plain year"),
+                    r.end().year().value().expect("a plain year"),
                 ),
                 other => panic!("expected one range for {input:?}, got {other:?}"),
             },

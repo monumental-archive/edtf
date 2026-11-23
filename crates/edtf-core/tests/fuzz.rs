@@ -105,8 +105,8 @@ fn check(input: &str) {
         let bounds = parsed.bounds();
         let (start_unknown, end_unknown) = match parsed {
             Edtf::Interval(iv) => (
-                matches!(iv.start, IntervalEndpoint::Unknown),
-                matches!(iv.end, IntervalEndpoint::Unknown),
+                matches!(iv.start(), IntervalEndpoint::Unknown),
+                matches!(iv.end(), IntervalEndpoint::Unknown),
             ),
             Edtf::Date(_) | Edtf::DateTime(_) | Edtf::Set(_) => (false, false),
         };

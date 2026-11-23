@@ -6,8 +6,8 @@
 //! Real people typing dates into forms need instant, offline, deterministic
 //! normalization — "1980s" → `198X` on every keystroke, the same answer every
 //! time. This crate is a bounded pattern grammar over date prose: values are
-//! constructed through the [`edtf_core`] model and rendered via its canonical
-//! `Display`, then re-parsed, so every output is valid, canonical EDTF by
+//! built through [`edtf_core`]'s validating constructors and rendered via its
+//! canonical `Display`, so every output is valid, canonical EDTF by
 //! construction. Anything outside the grammar is [`Outcome::NoMatch`] — never
 //! a silent guess. Genuinely ambiguous inputs ("12/04/1985") report every
 //! reading instead of picking one.

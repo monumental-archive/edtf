@@ -26,7 +26,7 @@
     reason = "a test asserts by panicking; that is the failure signal, so there is no caller to warn"
 )]
 
-use edtf_core::{Date, Edtf, Qualifier, Set, SetElement, SetKind, Unenumerable, Year, YearKind};
+use edtf_core::{Edtf, Unenumerable};
 
 /// Enumerate `input` and render each value canonically.
 fn values_of(input: &str) -> Vec<String> {
@@ -272,64 +272,6 @@ fn unbounded_set_elements_are_not_enumerable() {
     }
 }
 
-#[test]
-fn overflowing_sweeps_report_year_range_overflow() {
-    // The same values where bounds() reports Unknown. The parser refuses
-    // every year past 18 digits (D30), so these are built by hand.
-    assert_eq!(
-        Edtf::parse("Y99E17S1").unwrap_err().message,
-        "year out of supported range"
-    );
-    let overflow = Unenumerable::YearRangeOverflow;
-    // 99E17 fits i64, but its S1 sweep's top does not.
-    let sweep = Edtf::Date(exponential(99, 17, Some(1)));
-    assert_eq!(sweep.values().unwrap_err(), overflow);
-    // 1E19 itself has no i64 value, so there is nothing to sweep.
-    let unvalued = Edtf::Date(exponential(1, 19, Some(1)));
-    assert_eq!(unvalued.values().unwrap_err(), overflow);
-    // A set range with either endpoint unvalued cannot be walked.
-    let y1985 = Date {
-        year: Year {
-            kind: YearKind::Standard {
-                negative: false,
-                digits: [Some(1), Some(9), Some(8), Some(5)],
-            },
-            significant_digits: None,
-            qualifier: Qualifier::default(),
-        },
-        month: None,
-        day: None,
-    };
-    let huge = exponential(1, 19, None);
-    for (a, b) in [(huge, huge), (y1985, huge)] {
-        assert_eq!(range_set(a, b).values().unwrap_err(), overflow);
-    }
-}
-
-/// A hand-built exponential year, for values past D30's 18-digit limit.
-fn exponential(significand: i64, exponent: u32, significant_digits: Option<u32>) -> Date {
-    Date {
-        year: Year {
-            kind: YearKind::Exponential {
-                significand,
-                exponent,
-            },
-            significant_digits,
-            qualifier: Qualifier::default(),
-        },
-        month: None,
-        day: None,
-    }
-}
-
-/// A hand-built `{a..b}`.
-fn range_set(a: Date, b: Date) -> Edtf {
-    Edtf::Set(Set {
-        kind: SetKind::AllMembers,
-        elements: vec![SetElement::Range(a, b)],
-    })
-}
-
 // --------------------------------------------------- D27 parse-time rules
 
 #[test]
@@ -376,10 +318,5 @@ fn unenumerable_reasons_display() {
     assert_eq!(
         unenumerable("[1985..]").to_string(),
         "'..'-open set elements denote unbounded value sets"
-    );
-    let huge = exponential(1, 19, None);
-    assert_eq!(
-        range_set(huge, huge).values().unwrap_err().to_string(),
-        "year range exceeds the computable range"
     );
 }
