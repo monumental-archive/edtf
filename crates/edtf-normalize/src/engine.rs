@@ -420,8 +420,10 @@ fn edtf_token(t: &str, lang: &Lang) -> Option<(Edtf, bool)> {
 /// Unify dashes and collapse whitespace; lower-case every prose token.
 ///
 /// Per whitespace-separated token: an EDTF token is kept as typed (its letters and commas are notation, N18); any other is
-/// lower-cased, its apostrophes unified and its commas dropped.
-fn preprocess(input: &str, lang: &Lang) -> String {
+/// lower-cased, its apostrophes unified and its commas dropped. A token
+/// the range splitter cuts (`range_hyphens`) is taken piece by piece, so
+/// an EDTF piece keeps its case as a whole EDTF token does (N4).
+fn preprocess(input: &str, opts: Options, lang: &Lang) -> String {
     let dashed: String = input
         .chars()
         .map(|c| match c {
@@ -436,12 +438,27 @@ fn preprocess(input: &str, lang: &Lang) -> String {
             s.push_str(tok);
             continue;
         }
-        for ch in tok.chars() {
-            match ch {
-                '\u{2019}' => s.push('\''),
-                ',' => s.push(' '),
-                c => s.extend(c.to_lowercase()),
+        // A token the range splitter cuts is read piece by piece, so an
+        // EDTF piece ("XXXX-01" in "XXXX-01-1985") is kept as typed too.
+        let mut start = 0;
+        for end in range_hyphens(tok, opts, lang)
+            .into_iter()
+            .chain(iter::once(tok.len()))
+        {
+            let piece = &tok[start..end];
+            if edtf_token(piece, lang).is_some() {
+                s.push_str(piece);
+            } else {
+                for ch in piece.chars() {
+                    match ch {
+                        '\u{2019}' => s.push('\''),
+                        ',' => s.push(' '),
+                        c => s.extend(c.to_lowercase()),
+                    }
+                }
             }
+            s.push_str(tok.get(end..=end).unwrap_or_default());
+            start = end + 1;
         }
     }
     let mut out = String::with_capacity(s.len());
@@ -1907,7 +1924,7 @@ fn outcome_from(reading: Reading) -> Outcome {
 /// one-token input that is EDTF reads through the atom reader (N18).
 pub(crate) fn run(input: &str, opts: Options) -> Outcome {
     let lang = lang_for(opts.language);
-    let pre = preprocess(input, lang);
+    let pre = preprocess(input, opts, lang);
     let (rest, q) = strip_qualifiers(&pre, lang);
     if rest.is_empty() {
         return no_match(NoMatchReason::OutOfGrammar);

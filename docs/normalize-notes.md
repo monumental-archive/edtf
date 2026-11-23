@@ -109,7 +109,10 @@ against the N-number.
   year is not a unit, and a colliding sub-year token (N13) is not one
   either, since its hyphen is the very question N13 answers. Every other
   hyphen is a candidate; one that reads is the answer, and several that
-  read give every split's readings, left to right (N14). ISO's `--`
+  read give every split's readings, left to right (N14). The same scan
+  runs before lower-casing, so a piece between candidates that is EDTF
+  keeps its case as a whole EDTF token does (N18): "XXXX-01-1985" reads
+  exactly as "XXXX-01 - 1985", notes included. ISO's `--`
   interval separator is not adopted ("by mutual agreement" only, and
   EDTF does not use it): "1985-04-12--1986" is refused.
 - **N5 — all-numeric dates:** "12/04/1985" is DD/MM or MM/DD; without context
