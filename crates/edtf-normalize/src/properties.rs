@@ -311,10 +311,11 @@ fn joins_into_a_date(left: &str, right: &str, language: Language) -> bool {
     one_unit(&token, language)
 }
 
-/// Whether `token` holds a range candidate of its own: a dash that, by
-/// N4, is not inside one unit and does not open one of the language's
-/// number suffixes (an `ordinal_suffixes` or `decade_suffixes` entry
-/// starting with `-`, at the token's end).
+/// Whether `token` holds a range candidate of its own (N4).
+///
+/// That is a dash not inside one unit that does not open one of the
+/// language's number suffixes (an `ordinal_suffixes` or `decade_suffixes`
+/// entry starting with `-`, at the token's end).
 ///
 /// Joined unspaced to the other side, such a token gives the text a
 /// second candidate hyphen, and N4 reads every split of it that reads:
@@ -323,21 +324,23 @@ fn joins_into_a_date(left: &str, right: &str, language: Language) -> bool {
 /// not compared (#419).
 fn holds_its_own_hyphen(token: &str, language: Language) -> bool {
     let lang = lang_for(language);
-    let token = token.replace(['\u{2013}', '\u{2014}'], "-").to_lowercase();
+    let dashed = token.replace(['\u{2013}', '\u{2014}'], "-").to_lowercase();
     let bare = lang
         .ordinal_suffixes
         .iter()
         .chain(lang.decade_suffixes)
         .filter(|suffix| suffix.starts_with('-'))
-        .find_map(|suffix| token.strip_suffix(suffix))
-        .unwrap_or(&token);
+        .find_map(|suffix| dashed.strip_suffix(suffix))
+        .unwrap_or(&dashed);
     bare.contains('-') && !one_unit(bare, language)
 }
 
-/// Whether the unspaced join of `left` and `right` is a different text
-/// from the spaced and worded forms: it writes an ISO date across the dash
+/// Whether the unspaced join of `left` and `right` is another text.
+///
+/// It is when the join writes an ISO date across the dash
 /// ([`joins_into_a_date`]), or a side's token at the join holds a range
-/// candidate of its own ([`holds_its_own_hyphen`]).
+/// candidate of its own ([`holds_its_own_hyphen`]); the spaced and worded
+/// forms are then a different text from it.
 fn unspaced_is_another_text(left: &str, right: &str, language: Language) -> bool {
     joins_into_a_date(left, right, language)
         || [
@@ -1133,15 +1136,21 @@ mod planted {
         // #419: the fuzz input "1985\nХХ " (Cyrillic Х). Folded as N18
         // reads it, the join is `1985-XX`, an ISO date.
         let ru = Language::Russian;
-        assert!(joins_into_a_date("1985", "ХХ ", ru));
-        assert!(joins_into_a_date("1985", "хх", ru), "either case");
+        assert!(joins_into_a_date("1985", "\u{425}\u{425} ", ru));
+        assert!(
+            joins_into_a_date("1985", "\u{445}\u{445}", ru),
+            "either case"
+        );
         assert!(joins_into_a_date("1985", "xx", Language::English), "Latin");
         assert!(
-            !joins_into_a_date("1985", "ХХ", Language::English),
+            !joins_into_a_date("1985", "\u{425}\u{425}", Language::English),
             "English has no lookalike row"
         );
-        assert!(!joins_into_a_date("1985", "ХIХ", ru), "a Roman numeral");
-        assert_only_unspaced_left_out("1985", "ХХ ", ru);
+        assert!(
+            !joins_into_a_date("1985", "\u{425}I\u{425}", ru),
+            "a Roman numeral"
+        );
+        assert_only_unspaced_left_out("1985", "\u{425}\u{425} ", ru);
     }
 
     #[test]
@@ -1156,18 +1165,21 @@ mod planted {
         assert!(!holds_its_own_hyphen("1914", en), "no hyphen");
         assert!(!holds_its_own_hyphen("1914-09", en), "one unit");
         assert!(!holds_its_own_hyphen("xxxx-01", en), "one unit, any case");
-        assert!(!holds_its_own_hyphen("1980-е", ru), "a decade suffix");
-        assert!(!holds_its_own_hyphen("19-й", ru), "an ordinal suffix");
-        assert!(holds_its_own_hyphen("1980-е", en), "not English's suffix");
+        assert!(!holds_its_own_hyphen("1980-\u{435}", ru), "a decade suffix");
+        assert!(!holds_its_own_hyphen("19-\u{439}", ru), "an ordinal suffix");
+        assert!(
+            holds_its_own_hyphen("1980-\u{435}", en),
+            "not English's suffix"
+        );
         assert!(unspaced_is_another_text("1914-9", "1989", en));
         assert!(unspaced_is_another_text("1989", "9-1989", en));
         assert!(!unspaced_is_another_text("1914", "1989", en));
-        assert!(!unspaced_is_another_text("1980-е", "1990", ru));
+        assert!(!unspaced_is_another_text("1980-\u{435}", "1990", ru));
         assert_only_unspaced_left_out("1914-9", "1989", en);
         // The same text spaced still compares every other form.
         assert_eq!(
-            observe_range_forms("1980-е", "1990", ru).map(|forms| forms.len()),
-            Some(range_forms("1980-е", "1990", ru).len()),
+            observe_range_forms("1980-\u{435}", "1990", ru).map(|forms| forms.len()),
+            Some(range_forms("1980-\u{435}", "1990", ru).len()),
             "a suffix's hyphen binds its number, so the join is the same text"
         );
     }
