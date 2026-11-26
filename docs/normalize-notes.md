@@ -60,6 +60,7 @@ against the N-number.
   falls back to the century's mask, `18XX~`, true but looser, because a
   range inside a set cannot carry a qualifier (D27). A qualified BC century
   or BC century part has no mask (D21) and is refused.
+
 - **N2 — century arithmetic:** the *n*th century runs
   `(n-1)·100 ..= (n-1)·100+99`. ISO 8601-1 3.1.2.23 defines a century as
   beginning with a year divisible by 100 and gives the 19th century as 1800
@@ -73,6 +74,7 @@ against the N-number.
   "1st century BC" → `[-0099..0000]`, carrying `BcCentury` (never
   `CenturyMask`, whose masking claim would be false for them). python-edtf
   emits `-01XX`, which our core rejects — recorded as an ism, not adopted.
+
 - **N3 — astronomical BC years:** EDTF/ISO 8601-2 uses astronomical
   numbering: year 0 exists and is 1 BC. Year *b* BC = `-(b-1)`: "500 BC" →
   `-0499`, "64 BCE" → `-0063`. Year markers may sit *before* the era phrase
@@ -81,6 +83,7 @@ against the N-number.
   centuries but *not* to years (its tests demand `c64 BCE` → `-0064~` yet
   `2nd century bc` → `-01XX` = −199..−100) — the internal inconsistency is
   recorded as an ism and its year outputs are not adopted.
+
 - **N4 — elided end years:** in a hyphen range whose right side is two
   digits, the end year inherits the start's century: "1914-18" → `1914/1918`,
   "1851-52" → `1851/1852`. The elided value must exceed the start year;
@@ -119,6 +122,7 @@ against the N-number.
   exactly as "XXXX-01 - 1985", notes included. ISO's `--`
   interval separator is not adopted ("by mutual agreement" only, and
   EDTF does not use it): "1985-04-12--1986" is refused.
+
 - **N5 — all-numeric dates:** "12/04/1985" is DD/MM or MM/DD; without context
   the order is *unknowable* and the result is `Ambiguous` with both readings
   — never python-edtf's silent `dayfirst=False` guess. Resolution, in
@@ -128,6 +132,7 @@ against the N-number.
   `12.04.1985` is day-first by national convention). Year-first
   (`1985/04/12`) is inherently unambiguous. Bare two-digit years
   ("12/04/85", "90") are not adopted: the century is unknowable.
+
 - **N6 — decades:** "1980s"/"1980-е" → `198X`. Two forms are inherently
   ambiguous and reported as such: "**1900s**" is the 1900–1909 decade
   (`190X`) *or* the century (`19XX`); a **bare decade** ("the 80s", "80-е")
@@ -143,6 +148,7 @@ against the N-number.
   (`DecadeOfCentury`), the idiom behind «шестидесятники». python-edtf is
   internally inconsistent here ("1800s" → `18XX` but "c1900s" → `190X~`) —
   recorded, not adopted.
+
 - **N7 — seasons:** season names map to ISO 8601-2 §4.8 sub-year grouping
   codes 21–24 (spring=21, summer=22, autumn/fall=23, winter=24; Russian
   весна/лето/осень/зима likewise), which 4.8.1 lists as independent of
@@ -150,6 +156,7 @@ against the N-number.
   **never emitted** — no deterministic English or Russian prose form maps
   to them. A season has no dates (4.8.1), so it has no predecessor or
   successor: strictly before or after one has no form (N8).
+
 - **N8 — before and after take ISO's forms:** one table of phrases, each
   row carrying its meaning, matched longest phrase first:
 
@@ -208,6 +215,7 @@ against the N-number.
   event somewhere in an open span", and overruled by 6.3, under which
   `../1917` includes the year "before" excludes and one output served
   three meanings.
+
 - **N9 — missing years are masked:** a *standalone* month with no year
   ("January", "January 12", "апрель") gets year `XXXX`: `XXXX-01`,
   `XXXX-01-12`. Never an assumed current year — the normalizer has no clock
@@ -220,6 +228,7 @@ against the N-number.
   "until" and "since" take it. python-edtf's broader masked-precision
   prose ("day in Spring 1849" → `1849-21-XX`) is not
   adopted: "a day in" is annotation, not a date.
+
 - **N10 — whole-expression qualifiers distribute:** a qualifier scoping the
   whole input applies to every component ("circa June 1940" → `1940-06~`,
   rendered in core's canonical trailing form) and, on intervals, to every
@@ -232,12 +241,14 @@ against the N-number.
   attaches the trailing qualifier to the end year only (`1868/1871?`);
   prose uncertainty scopes the whole range, so we diverge. Endpoint-local
   qualifiers stay local: "1856-ca. 1865" → `1856/1865~`.
+
 - **N11 — no substring extraction:** inputs with trailing annotations
   ("1861-67 (later print)", "1863, printed 1870", "birthday in 1872") are
   `NoMatch`, full stop. python-edtf extracts a date from all of these; that
   behavior is the single largest recorded ism family. The boundary is
   deliberate: deterministic keystroke normalization here, freeform
   extraction in the caller's triage layer.
+
 - **N12 — "unknown" is the form's problem:** "unknown", "undated", "n.d.",
   "без даты", "не датировано" → `NoMatch` with
   `NoMatchReason::ExplicitNoDate` — distinguishable from out-of-grammar
@@ -245,6 +256,7 @@ against the N-number.
   undated" rows without re-reading the input. Whether that means an EDTF
   `XXXX`, an empty column, or a required-field error is form policy, not
   normalizer policy.
+
 - **N13 — the sub-year-code / elided-range collision:** `NNNN-NN` with NN in
   21–41 is *valid EDTF* (a sub-year code: "1914-21" is spring 1914) **and**
   a plausible elided range (1914–1921). This is the one place already-valid
@@ -258,6 +270,7 @@ against the N-number.
   no elided reading exists the token is simply the sub-year date ("no
   later than 1985-21" → `[..1985-21]`). As a range endpoint a colliding
   token is refused.
+
 - **N14 — alternatives are one set, and dead readings poison:**
   "1863 or 1864" ("1863 или 1864") → `[1863,1864]`, ISO's one-of set
   (ISO 8601-2 6.2), which says exactly what was written: one of these.
@@ -282,6 +295,7 @@ against the N-number.
   Recorded so it is not re-proposed: the set was first rejected here as "a
   different claim" from two plain readings; ISO 8601-2 6.2 and 6.3 make it
   the claim.
+
 - **N15 — Roman-numeral centuries (Russian):** "XIX век", "XIX в.",
   "XVII-XIX вв." parse as centuries, including with Cyrillic lookalike
   letters (Х/х for X, etc.), which real Russian sources routinely contain.
@@ -293,6 +307,7 @@ against the N-number.
   Roman numeral is accepted as a century only when it is at least two
   letters ("I" alone is too weak a signal; "I век" is fine). Roman
   provenance is cited on results as `Note::RomanCentury`.
+
 - **N16 — range endpoints inherit the stated year:** "June-July 1940",
   "с июня по июль 1940", "12 January to 15 March 1940" — when exactly one
   endpoint lacks a year and the other states one, the year scopes both: the
@@ -313,6 +328,7 @@ against the N-number.
   to scope, so "from XXXX to 1985" stays `XXXX/1985`. A partly masked
   year (`XX85`) is a stated year that is not fully specified, so it
   refuses as above.
+
 - **N17 — cross-year winters are ambiguous:** "winter 1941-42" (also
   "-1942", "зима 1941-1942 гг.") names either ONE winter spanning the year
   boundary — EDTF's code 24 wraps, so `1941-24` already covers Dec 1941 –
@@ -320,6 +336,7 @@ against the N-number.
   reported (`CrossYearSeason`), N13-style. A non-adjacent end year
   ("winter 1941-45") has only the range reading. Winter is the only emitted
   season that wraps; the others compose as plain ranges.
+
 - **N18 — EDTF letters in either case or script:** EDTF notation is read
   in either letter case, as a whole input and as a token inside a phrase
   ("198x" → `198X`; "until 198X" → `../198X`; "198X or 1990" →
