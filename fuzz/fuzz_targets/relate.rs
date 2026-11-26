@@ -20,6 +20,7 @@ libfuzzer_sys::fuzz_target!(|data: &[u8]| {
 
     use edtf_core::{Edtf, properties as rules};
 
+    let x = 1_usize.clone();
     let Ok(input) = from_utf8(data) else {
         return;
     };
