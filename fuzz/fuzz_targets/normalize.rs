@@ -2,28 +2,27 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Coverage-guided drive of the normaliser's properties
-//! (`edtf_normalize::properties`, built under `cfg(fuzzing)`).
+//! (`edtf_normalize::properties`).
 //!
 //! Arbitrary UTF-8 is read under every option, and its readings must be
 //! honest (rule 9). The input is also split at its first newline into A and
 //! B, and in every language the composition rules run on them: range forms
 //! agree (1), "A or B" composes (2), before and after compose (3), and every
 //! emitted string re-reads as itself (5). The rules live in the crate; this
-//! target only feeds them. The module exists only under the `fuzzing` cfg
-//! cargo-fuzz builds with, so an ordinary build of this crate (as
-//! `lint:rust` runs it) compiles the target empty.
+//! target only feeds them.
 
 #![no_main]
 
-#[cfg(fuzzing)]
 libfuzzer_sys::fuzz_target!(|data: &[u8]| {
+    use core::str::from_utf8;
+
     use edtf_normalize::properties::{
         LANGUAGES, check_honest, check_idempotent, check_open_composes, check_or_composes,
         check_range_forms_agree, every_options, observe_honest, observe_open, observe_or,
         observe_range_forms, observe_reread, options,
     };
 
-    let Ok(input) = core::str::from_utf8(data) else {
+    let Ok(input) = from_utf8(data) else {
         return;
     };
     for opts in every_options() {

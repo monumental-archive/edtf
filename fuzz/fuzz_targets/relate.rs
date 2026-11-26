@@ -11,17 +11,16 @@
 //! The rules are `edtf_core::properties`, each stated there once and driven
 //! over generated values by its proptest engine; this target drives the
 //! same checks over parsed ones, including the years and masks a
-//! generator does not reach. The module exists only under the `fuzzing`
-//! cfg cargo-fuzz builds with, so an ordinary build of this crate (as
-//! `lint:rust` runs it) compiles the target empty.
+//! generator does not reach.
 
 #![no_main]
 
-#[cfg(fuzzing)]
 libfuzzer_sys::fuzz_target!(|data: &[u8]| {
+    use core::str::from_utf8;
+
     use edtf_core::{Edtf, properties as rules};
 
-    let Ok(input) = core::str::from_utf8(data) else {
+    let Ok(input) = from_utf8(data) else {
         return;
     };
     let (left_text, right_text) = input.split_once('\n').unwrap_or((input, input));

@@ -57,10 +57,6 @@ print_stderr = "warn"
 
 [dependencies]
 libfuzzer-sys = "0.4"
-
-# Every target uses the libraries only under the `fuzzing` cfg cargo-fuzz
-# builds with; an ordinary build leaves them out.
-[target.'cfg(fuzzing)'.dependencies]
 edtf-core = { path = "../crates/edtf-core" }
 edtf-normalize = { path = "../crates/edtf-normalize" }
 
