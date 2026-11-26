@@ -265,31 +265,98 @@ fn one_date(input: &str, language: Language) -> bool {
     }
 }
 
+/// `token` with its EDTF letters written as EDTF writes them (N18): in
+/// upper case, and each of the language's lookalike letters as the letter
+/// it stands for, from the table row (`edtf_letters`).
+fn edtf_letters(token: &str, language: Language) -> String {
+    let lookalikes = lang_for(language).edtf_letters;
+    token
+        .chars()
+        .map(|letter| {
+            lookalikes
+                .iter()
+                .find(|&&(lookalike, _)| lookalike == letter)
+                .map_or(letter, |&(_, edtf)| edtf)
+        })
+        .flat_map(char::to_uppercase)
+        .collect()
+}
+
+/// Whether core reads `token`, its EDTF letters folded (N18), as a date
+/// with a month, season or sub-year code: one unit, whose hyphens are its
+/// own (N4, ISO 8601-1 3.2.6).
+fn one_unit(token: &str, language: Language) -> bool {
+    matches!(
+        Edtf::parse(&edtf_letters(token, language)),
+        Ok(Edtf::Date(date)) if date.month().is_some()
+    )
+}
+
 /// Whether joining `left` and `right` by a hyphen writes an ISO date.
 ///
 /// Core reads the token formed around the dash (`left`'s last token, the
-/// hyphen, `right`'s first) as a date with a month, season or sub-year code.
+/// hyphen, `right`'s first), its EDTF letters folded as N18 reads them, as
+/// a date with a month, season or sub-year code: "1985-ХХ" is `1985-XX`.
 ///
 /// That join is a different text (#397, ISO 8601-1 3.2.6), so the unspaced
-/// forms are not compared. It is stated through core's parser, not the
-/// normaliser's, so the rule stays independent of the code it tests.
-fn joins_into_a_date(left: &str, right: &str) -> bool {
+/// forms are not compared. It is stated through core's parser and the
+/// language's table, not the normaliser's reader, so the rule stays
+/// independent of the code it tests.
+fn joins_into_a_date(left: &str, right: &str, language: Language) -> bool {
     let token = format!(
         "{}-{}",
         left.split_whitespace().last().unwrap_or_default(),
         right.split_whitespace().next().unwrap_or_default()
     );
-    matches!(Edtf::parse(&token), Ok(Edtf::Date(date)) if date.month().is_some())
+    one_unit(&token, language)
+}
+
+/// Whether `token` holds a range candidate of its own: a dash that, by
+/// N4, is not inside one unit and does not open one of the language's
+/// number suffixes (an `ordinal_suffixes` or `decade_suffixes` entry
+/// starting with `-`, at the token's end).
+///
+/// Joined unspaced to the other side, such a token gives the text a
+/// second candidate hyphen, and N4 reads every split of it that reads:
+/// "1914-9-1989" is `1914/1989-09` or `1914-09/1989`. That join is a
+/// different text from "from 1914-9 to 1989", so the unspaced forms are
+/// not compared (#419).
+fn holds_its_own_hyphen(token: &str, language: Language) -> bool {
+    let lang = lang_for(language);
+    let token = token.replace(['\u{2013}', '\u{2014}'], "-").to_lowercase();
+    let bare = lang
+        .ordinal_suffixes
+        .iter()
+        .chain(lang.decade_suffixes)
+        .filter(|suffix| suffix.starts_with('-'))
+        .find_map(|suffix| token.strip_suffix(suffix))
+        .unwrap_or(&token);
+    bare.contains('-') && !one_unit(bare, language)
+}
+
+/// Whether the unspaced join of `left` and `right` is a different text
+/// from the spaced and worded forms: it writes an ISO date across the dash
+/// ([`joins_into_a_date`]), or a side's token at the join holds a range
+/// candidate of its own ([`holds_its_own_hyphen`]).
+fn unspaced_is_another_text(left: &str, right: &str, language: Language) -> bool {
+    joins_into_a_date(left, right, language)
+        || [
+            left.split_whitespace().last(),
+            right.split_whitespace().next(),
+        ]
+        .into_iter()
+        .flatten()
+        .any(|token| holds_its_own_hyphen(token, language))
 }
 
 /// Every range form of `left` and `right`, read.
 ///
 /// `None` unless each reads alone as one unqualified date. The range words
 /// and the spaced dashes are always read; the unspaced dashes only when the
-/// join does not write an ISO date across the dash.
+/// join is the same text ([`unspaced_is_another_text`]).
 #[must_use]
 pub fn observe_range_forms(left: &str, right: &str, language: Language) -> Option<Forms> {
-    let fused = joins_into_a_date(left, right);
+    let fused = unspaced_is_another_text(left, right, language);
     (one_date(left, language) && one_date(right, language)).then(|| {
         let forms = range_forms(left, right, language)
             .into_iter()
@@ -307,7 +374,8 @@ fn is_unspaced(form: &str, left: &str, right: &str) -> bool {
 }
 
 /// Rule 1: every range form of two dates gives the same outcome; an
-/// unspaced form only where the join writes no ISO date across the dash.
+/// unspaced form only where the join writes no ISO date across the dash
+/// and adds the only range candidate to the text.
 ///
 /// # Panics
 ///
@@ -1000,14 +1068,18 @@ mod planted {
 
     #[test]
     fn an_unspaced_join_that_writes_a_date_is_not_compared() {
-        assert!(joins_into_a_date("1000", "12 january 1914"));
-        assert!(joins_into_a_date("from 00XX", "21"), "a season code");
+        let en = Language::English;
+        assert!(joins_into_a_date("1000", "12 january 1914", en));
+        assert!(joins_into_a_date("from 00XX", "21", en), "a season code");
         assert!(
-            !joins_into_a_date("1914", "1920"),
+            !joins_into_a_date("1914", "1920", en),
             "an interval, not a date"
         );
-        assert!(!joins_into_a_date("1000", "13 january 1914"), "no month 13");
-        assert!(!joins_into_a_date("1000", "january 1914"));
+        assert!(
+            !joins_into_a_date("1000", "13 january 1914", en),
+            "no month 13"
+        );
+        assert!(!joins_into_a_date("1000", "january 1914", en));
         let forms: Vec<String> = observe_range_forms("1000", "12 january 1914", Language::English)
             .into_iter()
             .flatten()
@@ -1028,6 +1100,76 @@ mod planted {
         assert!(is_unspaced("1914\u{2014}1920", "1914", "1920"));
         assert!(!is_unspaced("1914 - 1920", "1914", "1920"));
         assert!(!is_unspaced("1914 to 1920", "1914", "1920"));
+    }
+
+    /// The unspaced forms of `left` and `right`.
+    fn unspaced_forms(left: &str, right: &str) -> Vec<String> {
+        ['-', '\u{2013}', '\u{2014}']
+            .into_iter()
+            .map(|dash| format!("{left}{dash}{right}"))
+            .collect()
+    }
+
+    /// `left` and `right` read alone as dates, every unspaced form is left
+    /// out of rule 1, every other form is read, and they agree.
+    fn assert_only_unspaced_left_out(left: &str, right: &str, language: Language) {
+        let Some(forms) = observe_range_forms(left, right, language) else {
+            panic!("{left:?} {right:?} are two dates");
+        };
+        let read: Vec<&String> = forms.iter().map(|form| &form.0).collect();
+        let unspaced = unspaced_forms(left, right);
+        let mut expected = range_forms(left, right, language);
+        expected.retain(|form| !unspaced.contains(form));
+        assert_eq!(
+            read,
+            expected.iter().collect::<Vec<_>>(),
+            "{left:?} {right:?}"
+        );
+        check_range_forms_agree(&forms);
+    }
+
+    #[test]
+    fn a_join_that_writes_a_date_in_lookalike_letters_is_not_compared() {
+        // #419: the fuzz input "1985\nХХ " (Cyrillic Х). Folded as N18
+        // reads it, the join is `1985-XX`, an ISO date.
+        let ru = Language::Russian;
+        assert!(joins_into_a_date("1985", "ХХ ", ru));
+        assert!(joins_into_a_date("1985", "хх", ru), "either case");
+        assert!(joins_into_a_date("1985", "xx", Language::English), "Latin");
+        assert!(
+            !joins_into_a_date("1985", "ХХ", Language::English),
+            "English has no lookalike row"
+        );
+        assert!(!joins_into_a_date("1985", "ХIХ", ru), "a Roman numeral");
+        assert_only_unspaced_left_out("1985", "ХХ ", ru);
+    }
+
+    #[test]
+    fn a_join_beside_a_range_candidate_of_its_own_is_not_compared() {
+        // #419: the fuzz input "1914-9\n1989". "1914-9" is not a date core
+        // reads, so its hyphen is a candidate too (N4).
+        let en = Language::English;
+        let ru = Language::Russian;
+        assert!(holds_its_own_hyphen("1914-9", en));
+        assert!(holds_its_own_hyphen("1914\u{2013}9", en), "any dash");
+        assert!(holds_its_own_hyphen("9-1989", en));
+        assert!(!holds_its_own_hyphen("1914", en), "no hyphen");
+        assert!(!holds_its_own_hyphen("1914-09", en), "one unit");
+        assert!(!holds_its_own_hyphen("xxxx-01", en), "one unit, any case");
+        assert!(!holds_its_own_hyphen("1980-е", ru), "a decade suffix");
+        assert!(!holds_its_own_hyphen("19-й", ru), "an ordinal suffix");
+        assert!(holds_its_own_hyphen("1980-е", en), "not English's suffix");
+        assert!(unspaced_is_another_text("1914-9", "1989", en));
+        assert!(unspaced_is_another_text("1989", "9-1989", en));
+        assert!(!unspaced_is_another_text("1914", "1989", en));
+        assert!(!unspaced_is_another_text("1980-е", "1990", ru));
+        assert_only_unspaced_left_out("1914-9", "1989", en);
+        // The same text spaced still compares every other form.
+        assert_eq!(
+            observe_range_forms("1980-е", "1990", ru).map(|forms| forms.len()),
+            Some(range_forms("1980-е", "1990", ru).len()),
+            "a suffix's hyphen binds its number, so the join is the same text"
+        );
     }
 
     #[test]
