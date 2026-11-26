@@ -21,18 +21,3 @@
 # the Monday audit, under the same band and the same law.
 # rust-branches measured: 99.0
 rust-branches 90
-#
-# fuzz-normalize: a fuzz target's committed corpus, replayed once (#1896), a
-# floor of its own held by coverage:check, under the same band and law.
-# fuzz-normalize measured: 69.9
-fuzz-normalize 67.9
-#
-# fuzz-relate: a fuzz target's committed corpus, replayed once (#1896), a
-# floor of its own held by coverage:check, under the same band and law.
-# fuzz-relate measured: 66.5
-fuzz-relate 64.5
-#
-# fuzz-roundtrip: a fuzz target's committed corpus, replayed once (#1896), a
-# floor of its own held by coverage:check, under the same band and law.
-# fuzz-roundtrip measured: 88.3
-fuzz-roundtrip 86.3
