@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 over the public APIs of the crates this repository publishes.
 
+## [2.0.1](https://github.com/monumental-archive/edtf/compare/v2.0.0...v2.0.1) - 2026-11-28
+
+### Fixed
+
+- compare an unspaced range form only when it is one text ([#414](https://github.com/monumental-archive/edtf/pull/414))
+
+### Dependencies
+
+- update ossf/scorecard-action to v2.6.0 ([#417](https://github.com/monumental-archive/edtf/pull/417))
+- update github/codeql-action to v4.39.4 ([#427](https://github.com/monumental-archive/edtf/pull/427))
+
 ## [2.0.0](https://github.com/monumental-archive/edtf/compare/v1.3.5...v2.0.0) - 2026-11-23
 
 ### Breaking
