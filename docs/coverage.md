@@ -1,9 +1,9 @@
 # Coverage
 
 Coverage is a **ratchet**, owned by the org toolbelt rather than by this
-repository. `.coverage-floor` is derived state: the release machinery
-re-derives it at every release as `floor = measured - band`, and the floor
-only ever rises.
+repository. `.coverage-floor` is derived state, one floor per leg
+(#2143): the release machinery re-derives each at every release as
+`floor = min(90, measured - band)`, and no floor ever falls.
 
 ```bash
 mise run coverage:check   # the gate: refuses a measurement below the floor
@@ -13,8 +13,9 @@ mise run coverage:report  # writes lcov.info for the Codecov badge feed
 Do not hand-edit `.coverage-floor`. `coverage:check` refuses a floor that
 disagrees with the record inside the file, and reports it as drift rather
 than repairing it. To adopt a new measurement deliberately, run
-`mise run coverage:adopt`; to step the floor DOWN, replace the derivation
-lines with `reset: <reason>`, which a reviewer then sees.
+`mise run coverage:adopt`; to step a leg's floor DOWN, replace its
+`<leg> measured` line with `<leg> reset: <reason>`, which a reviewer then
+sees.
 
 ## What is measured, and what is not
 
